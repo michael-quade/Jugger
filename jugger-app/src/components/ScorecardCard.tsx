@@ -1,7 +1,7 @@
 import type { Match, Team, Course, RoundConfig, Player } from '../types'
 import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp } from '../utils/handicap'
 import { getPlayerName } from '../utils/pairings'
-import { computeMatchPlay, computePointsRound, type MatchPlayResult, type PointsRoundResult } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble, type MatchPlayResult, type PointsRoundResult, type ScrambleResult } from '../utils/matchplay'
 
 interface Props {
   match: Match
@@ -60,10 +60,12 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   const frontYds = front.reduce((s, h) => s + (h.yardages[config.tee] ?? 0), 0)
   const backYds  = back.reduce((s, h) => s + (h.yardages[config.tee] ?? 0), 0)
 
-  const isMatchPlay = config.format === 'team_match_play'
+  const isMatchPlay   = config.format === 'team_match_play'
   const isPointsRound = config.format === 'points_round'
-  const mpResult = isMatchPlay ? computeMatchPlay(match, course.holes, playerHdcps) : null
+  const isScramble    = config.format === 'texas_scramble'
+  const mpResult = isMatchPlay   ? computeMatchPlay(match, course.holes, playerHdcps)   : null
   const prResult = isPointsRound ? computePointsRound(match, course.holes, playerHdcps) : null
+  const srResult = isScramble    ? computeScramble(match, course.holes, playerHdcps)    : null
 
   function teamLabel(twosome: typeof match.twosome1) {
     const team = teams.find(t => t.id === twosome.teamId)
@@ -89,9 +91,11 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
         </div>
         <div className="text-right">
           <div className="font-semibold text-masters-green">{match.label}{match.isBlind ? ' (Blind)' : ''}</div>
-          <div className="text-gray-500 text-[10px]">
-            {teamLabel(match.twosome1)} vs {teamLabel(match.twosome2)}
-          </div>
+          {!isScramble && (
+            <div className="text-gray-500 text-[10px]">
+              {teamLabel(match.twosome1)} vs {teamLabel(match.twosome2)}
+            </div>
+          )}
         </div>
       </div>
 
@@ -138,38 +142,54 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
             <td /><td /><td />
           </tr>
 
-          {/* Twosome 1 players */}
-          <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-          <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-
-          {/* Result row — twosome1 perspective */}
-          {isMatchPlay && mpResult ? (
-            <MatchPlayResultRow perspective="twosome1" result={mpResult} course={course} twosome={match.twosome1} teams={teams} />
-          ) : isPointsRound && prResult ? (
-            <PointsRoundRow perspective="twosome1" result={prResult} course={course} twosome={match.twosome1} teams={teams} hasMagicBall={match.magicBall1} />
+          {isScramble ? (
+            <>
+              {/* All 4 players in sequence — no result rows */}
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              {/* Ball count indicator */}
+              <ScrambleBallCountRow holes={course.holes} />
+              {/* Team score row */}
+              {srResult && <ScrambleTeamRow result={srResult} course={course} match={match} teams={teams} />}
+            </>
           ) : (
-            <tr className="row-result">
-              <td className="player-name text-gray-400">+/− Holes</td>
-              {course.holes.map(h => <td key={h.number} />)}
-              <td /><td /><td />
-            </tr>
-          )}
+            <>
+              {/* Twosome 1 players */}
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
 
-          {/* Twosome 2 players */}
-          <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-          <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              {/* Result row — twosome1 perspective */}
+              {isMatchPlay && mpResult ? (
+                <MatchPlayResultRow perspective="twosome1" result={mpResult} course={course} twosome={match.twosome1} teams={teams} />
+              ) : isPointsRound && prResult ? (
+                <PointsRoundRow perspective="twosome1" result={prResult} course={course} twosome={match.twosome1} teams={teams} hasMagicBall={match.magicBall1} />
+              ) : (
+                <tr className="row-result">
+                  <td className="player-name text-gray-400">+/− Holes</td>
+                  {course.holes.map(h => <td key={h.number} />)}
+                  <td /><td /><td />
+                </tr>
+              )}
 
-          {/* Result row — twosome2 perspective */}
-          {isMatchPlay && mpResult ? (
-            <MatchPlayResultRow perspective="twosome2" result={mpResult} course={course} twosome={match.twosome2} teams={teams} />
-          ) : isPointsRound && prResult ? (
-            <PointsRoundRow perspective="twosome2" result={prResult} course={course} twosome={match.twosome2} teams={teams} hasMagicBall={match.magicBall2} />
-          ) : (
-            <tr className="row-result">
-              <td className="player-name text-gray-400">+/− Holes</td>
-              {course.holes.map(h => <td key={h.number} />)}
-              <td /><td /><td />
-            </tr>
+              {/* Twosome 2 players */}
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+
+              {/* Result row — twosome2 perspective */}
+              {isMatchPlay && mpResult ? (
+                <MatchPlayResultRow perspective="twosome2" result={mpResult} course={course} twosome={match.twosome2} teams={teams} />
+              ) : isPointsRound && prResult ? (
+                <PointsRoundRow perspective="twosome2" result={prResult} course={course} twosome={match.twosome2} teams={teams} hasMagicBall={match.magicBall2} />
+              ) : (
+                <tr className="row-result">
+                  <td className="player-name text-gray-400">+/− Holes</td>
+                  {course.holes.map(h => <td key={h.number} />)}
+                  <td /><td /><td />
+                </tr>
+              )}
+            </>
           )}
         </tbody>
       </table>
@@ -409,6 +429,79 @@ function PointsRoundWinnerBanner({ result, match, teams }: { result: PointsRound
         <span> {loseTotal} pts ({loseDiff >= 0 ? '+' : ''}{loseDiff} vs Q:{loseQuota})</span>
       </div>
     </div>
+  )
+}
+
+// ─── Scramble Rows ───────────────────────────────────────────────────────────
+
+const BALL_COUNT_COLORS: Record<number, string> = {
+  1: 'text-gray-400',
+  2: 'text-blue-500',
+  3: 'text-orange-500',
+  4: 'text-red-500',
+}
+
+function ScrambleBallCountRow({ holes }: { holes: Course['holes'] }) {
+  const frontTotal = holes.slice(0, 9).reduce((s, h) => s + (h.number <= 6 ? 1 : h.number <= 12 ? 2 : 3), 0)
+  const backTotal  = holes.slice(9).reduce((s, h) => s + (h.number <= 12 ? 2 : h.number <= 15 ? 3 : 4), 0)
+  return (
+    <tr>
+      <td className="player-name text-[9px] text-gray-400 italic">Best Balls</td>
+      {holes.map(h => {
+        const n = h.number <= 6 ? 1 : h.number <= 12 ? 2 : h.number <= 15 ? 3 : 4
+        return (
+          <td key={h.number} className={`text-[8px] font-bold text-center ${BALL_COUNT_COLORS[n]}`}>{n}</td>
+        )
+      })}
+      <td className="hole-out text-[8px] text-gray-400">{frontTotal}</td>
+      <td className="hole-in text-[8px] text-gray-400">{backTotal}</td>
+      <td className="hole-total text-[8px] text-gray-400">{frontTotal + backTotal}</td>
+    </tr>
+  )
+}
+
+function ScrambleTeamRow({ result, course, match, teams }: { result: ScrambleResult; course: Course; match: Match; teams: Team[] }) {
+  const team = teams.find(t => t.id === match.twosome1.teamId)
+  const color = team?.color ?? '#006747'
+
+  const frontScore = result.holeScores.slice(0, 9).reduce<number>((s, v) => s + (v ?? 0), 0)
+  const backScore  = result.holeScores.slice(9).reduce<number>((s, v) => s + (v ?? 0), 0)
+  const hasAnyFront = result.holeScores.slice(0, 9).some(v => v !== null)
+  const hasAnyBack  = result.holeScores.slice(9).some(v => v !== null)
+
+  return (
+    <tr className="row-result">
+      <td className="player-name">
+        <div className="text-[9px] font-bold" style={{ color }}>Team Score</div>
+        {result.isDone && (
+          <div className="text-[9px] font-bold" style={{ color }}>{result.total}</div>
+        )}
+      </td>
+      {course.holes.map((h, i) => {
+        const score = result.holeScores[i]
+        if (score === null) return <td key={h.number} />
+        const run = result.running[i]
+        return (
+          <td key={h.number}>
+            <div className="flex flex-col items-center gap-[1px]">
+              <span className="text-[8px] font-bold leading-none text-masters-dark">{score}</span>
+              <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
+            </div>
+          </td>
+        )
+      })}
+      <td className="hole-out">
+        {hasAnyFront && <span className="text-[8px] font-bold text-masters-dark">{frontScore}</span>}
+      </td>
+      <td className="hole-in">
+        {hasAnyBack && <span className="text-[8px] font-bold text-masters-dark">{backScore}</span>}
+      </td>
+      <td className="hole-total">
+        {result.total > 0 && (
+          <span className="text-[8px] font-bold" style={{ color }}>{result.total}</span>
+        )}
+      </td>
+    </tr>
   )
 }
 

@@ -1,6 +1,60 @@
 import type { Match, Course } from '../types'
 import { getStrokeDots, stablefordPoints } from './handicap'
 
+// ─── Texas Scramble ──────────────────────────────────────────────────────────
+
+function scrambleBallCount(holeNumber: number): number {
+  if (holeNumber <= 6)  return 1
+  if (holeNumber <= 12) return 2
+  if (holeNumber <= 15) return 3
+  return 4
+}
+
+export interface ScrambleResult {
+  holeScores: (number | null)[]  // counted net score per hole; null = not all players scored
+  running: number[]              // cumulative after each hole
+  total: number
+  holesPlayed: number
+  isDone: boolean
+}
+
+export function computeScramble(
+  match: Pick<Match, 'twosome1' | 'twosome2' | 'scores'>,
+  holes: Course['holes'],
+  playerHdcps: Record<string, number>,
+): ScrambleResult {
+  const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+  const holeScores: (number | null)[] = []
+  const running: number[] = []
+  let cum = 0
+  let holesPlayed = 0
+
+  for (const hole of holes) {
+    const netScores: number[] = []
+    let allScored = true
+    for (const pid of allPids) {
+      const gross = match.scores[pid]?.[hole.number]
+      if (gross == null) { allScored = false; break }
+      const strokes = holeStrokes(playerHdcps[pid] ?? 0, hole.hdcpOrder)
+      netScores.push(gross - strokes)
+    }
+    if (!allScored) {
+      holeScores.push(null)
+      running.push(cum)
+      continue
+    }
+    holesPlayed++
+    const count = scrambleBallCount(hole.number)
+    const sorted = [...netScores].sort((a, b) => a - b)
+    const holeScore = sorted.slice(0, count).reduce((s, v) => s + v, 0)
+    cum += holeScore
+    holeScores.push(holeScore)
+    running.push(cum)
+  }
+
+  return { holeScores, running, total: cum, holesPlayed, isDone: holesPlayed === 18 }
+}
+
 function holeStrokes(hdcp: number, hdcpOrder: number): number {
   const d = getStrokeDots(hdcp, hdcpOrder)
   return d === '..' ? 2 : d === '.' ? 1 : 0

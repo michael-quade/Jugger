@@ -6,7 +6,7 @@ import { useIsAdmin } from '../store/useAuthStore'
 import ScorecardCard from '../components/ScorecardCard'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
-import { computeMatchPlay, computePointsRound } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble } from '../utils/matchplay'
 import { Printer, Dices, Trash2 } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team } from '../types'
 
@@ -78,6 +78,32 @@ export default function ScorecardView() {
     })
   }
 
+  function recomputeScrambleTeamScores(currentMatches: typeof matches) {
+    if (!course || !config || config.format !== 'texas_scramble') return
+    const allPlayers = teams.flatMap(t => t.players)
+    const scrambleMatches = currentMatches.filter(m => m.round === config.round)
+
+    const results = scrambleMatches.map(m => {
+      const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+      const hdcps: Record<string, number> = {}
+      allPids.forEach(pid => {
+        const player = allPlayers.find(p => p.id === pid)
+        if (player) hdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+      })
+      return { match: m, result: computeScramble(m, course.holes, hdcps) }
+    })
+
+    // Only award points once all 3 teams are done
+    if (!results.every(r => r.result.isDone)) return
+
+    const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
+    const POINTS = [4, 2, 1]
+    teams.forEach(t => setTeamScore({ teamId: t.id, round: config.round, points: 0 }))
+    ranked.forEach(({ match: m }, i) => {
+      setTeamScore({ teamId: m.twosome1.teamId, round: config.round, points: POINTS[i] ?? 1 })
+    })
+  }
+
   function handleMBToggle(field: 'magicBall1' | 'magicBall2', val: boolean) {
     if (!match || !config || config.format !== 'points_round' || match.isBlind) return
     updateMatch(match.id, { [field]: val })
@@ -101,6 +127,13 @@ export default function ScorecardView() {
       simMb1 = Math.random() < 0.5
       simMb2 = Math.random() < 0.5
       updateMatch(match.id, { magicBall1: simMb1, magicBall2: simMb2 })
+    }
+
+    if (config.format === 'texas_scramble') {
+      // After simulating, read latest store state and recompute
+      const latestMatches = useTournamentStore.getState().matches
+      recomputeScrambleTeamScores(latestMatches)
+      return
     }
 
     if (config.format === 'team_match_play' || config.format === 'points_round') {
@@ -174,7 +207,7 @@ export default function ScorecardView() {
         <h1 className="text-2xl font-serif font-bold text-masters-dark">Scorecards</h1>
         {isAdmin && matches.length > 0 && (
           <div className="flex items-center gap-2">
-            {(config?.format === 'team_match_play' || config?.format === 'points_round') && teamScores.some(s => s.round === activeRound) && (
+            {(['team_match_play', 'points_round', 'texas_scramble'] as string[]).includes(config?.format ?? '') && teamScores.some(s => s.round === activeRound) && (
               <button
                 onClick={() => { if (confirm('Clear team points for this round? Match scores are kept.')) clearAllTeamScores() }}
                 className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 border border-amber-200 hover:border-amber-400 rounded px-3 py-1.5 transition-colors"
@@ -239,9 +272,16 @@ export default function ScorecardView() {
                     {scored && <span className="badge bg-masters-light text-masters-green">●</span>}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    {m.twosome1.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
-                    {' vs '}
-                    {m.twosome2.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
+                    {config?.format === 'texas_scramble'
+                      ? [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+                          .map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id)
+                          .join(', ')
+                      : <>
+                          {m.twosome1.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
+                          {' vs '}
+                          {m.twosome2.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
+                        </>
+                    }
                   </div>
                 </button>
               )
@@ -294,7 +334,12 @@ export default function ScorecardView() {
                     course={course}
                     config={config}
                     interactive={isAdmin && !match.isBlind}
-                    onScoreChange={(pid, hole, val) => setMatchScore(match.id, pid, hole, val)}
+                    onScoreChange={(pid, hole, val) => {
+                      setMatchScore(match.id, pid, hole, val)
+                      if (config.format === 'texas_scramble') {
+                        recomputeScrambleTeamScores(useTournamentStore.getState().matches)
+                      }
+                    }}
                   />
                 </div>
                 {/* Magic Ball (Round 2 regular matches only) */}
@@ -393,6 +438,49 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
     allPlayerIds.forEach((pid: string) => { playerHdcps[pid] = teamHdcp })
   }
 
+  // Scramble: show team total and per-player gross
+  if (config.format === 'texas_scramble') {
+    const srResult = computeScramble(match, course.holes, playerHdcps)
+    return (
+      <div className="card space-y-3">
+        <h3 className="section-header text-base">Score Summary</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-masters-light">
+                <th className="p-2 text-left">Player</th>
+                <th className="p-2">HDCP (60%)</th>
+                <th className="p-2">Gross</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allPlayerIds.map((pid: string) => {
+                const player = allPlayers.find((p: any) => p.id === pid)
+                if (!player) return null
+                const hdcp = playerHdcps[pid] ?? 0
+                const scores = match.scores[pid] ?? {}
+                const gross = Object.values(scores).reduce((s: number, v: any) => s + (v ?? 0), 0) as number
+                return (
+                  <tr key={pid} className="border-t">
+                    <td className="p-2 font-semibold">{player.name}</td>
+                    <td className="p-2 text-center">{hdcp}</td>
+                    <td className="p-2 text-center">{gross || '–'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        {srResult.total > 0 && (
+          <div className="bg-masters-light rounded p-3 flex items-center justify-between">
+            <span className="text-sm font-semibold text-masters-dark">Team Net Total</span>
+            <span className="text-2xl font-serif font-bold text-masters-green">{srResult.total}</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="card">
       <h3 className="section-header text-base">Score Summary</h3>
@@ -421,7 +509,7 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
               if (config.format === 'points_round') {
                 course.holes.forEach((h: any) => {
                   const g = scores[h.number]
-                  if (g != null) pts += stablefordPoints(g, h.par, 0)  // gross Stableford, no per-hole strokes
+                  if (g != null) pts += stablefordPoints(g, h.par, 0)
                 })
               }
 
