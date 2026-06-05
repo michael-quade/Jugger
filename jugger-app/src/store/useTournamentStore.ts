@@ -277,7 +277,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 8,
+      version: 9,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -348,6 +348,15 @@ export const useTournamentStore = create<TournamentState & Actions>()(
               imageUrl: def.imageUrl ?? c.imageUrl,
               imageContain: def.imageContain ?? c.imageContain,
             }
+          })
+        }
+        if (fromVersion < 9) {
+          // Force-update imageUrl/imageContain for built-in courses (switches hotlinked URLs to local assets)
+          base.courseHistory = (base.courseHistory ?? []).map(c => {
+            if (!c.id.startsWith('hist-')) return c
+            const def = INITIAL_COURSE_HISTORY.find(d => d.id === c.id)
+            if (!def) return c
+            return { ...c, imageUrl: def.imageUrl, imageContain: def.imageContain }
           })
         }
         return base as TournamentState
