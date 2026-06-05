@@ -5,10 +5,10 @@ import type { Course, HoleData, CourseTee } from '../types'
 import { Check, X, ExternalLink } from 'lucide-react'
 
 const COURSE_IMAGES: Record<string, string> = {
-  'pine-needles':      'https://www.pineneedleslodge.com/wp-content/uploads/2018/04/GolfHero.jpg',
-  'pinewild-magnolia': 'https://pinewildcc.com/wp-content/uploads/elementor/thumbs/MagnoliaCourse_01-rcc8s9wcv3uh93h102bj279nh267w0icvkfdiwd9vk.jpg',
-  'pinewild-holly':    'https://pinewildcc.com/wp-content/uploads/2024/08/HollyCourse_01.jpg',
-  'mid-south':         'https://talamoregolfresort.com/wp-content/uploads/2025/03/Mid-South-18-and-9-Greens-Aerial.jpg',
+  'pine-needles':      `${import.meta.env.BASE_URL}courses/pine-needles.jpg`,
+  'pinewild-magnolia': `${import.meta.env.BASE_URL}courses/pinewild-magnolia.jpg`,
+  'pinewild-holly':    `${import.meta.env.BASE_URL}courses/pinewild-holly.jpg`,
+  'mid-south':         `${import.meta.env.BASE_URL}courses/mid-south.jpg`,
 }
 
 const COURSE_IMAGE_POSITIONS: Record<string, string> = {
