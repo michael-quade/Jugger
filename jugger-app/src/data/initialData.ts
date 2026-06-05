@@ -142,10 +142,10 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
   },
   {
     id: 'hist-brunswick-plantation',
-    name: 'Brunswick Plantation',
+    name: 'Brunswick Plantation Resort & Golf',
     location: 'Calabash, NC',
     website: 'https://www.brunswickplantation.com',
-    imageUrl: 'https://www.brunswickplantation.com/wp-content/uploads/2022/06/6-1024x683.jpg',
+    imageUrl: '/Jugger/courses/brunswick-plantation.webp',
     playedRounds: [
       { id: 'pr-bp-2007-r2', year: 2007, round: 2 },
     ],
@@ -407,8 +407,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     name: 'Pinehurst No. 9',
     location: 'Pinehurst, NC',
     website: 'https://www.pinehurst.com/golf/courses/no-9/',
-    imageUrl: 'https://cdn-ilbbpdb.nitrocdn.com/ZPvHxDAnfjiOCTRKZzZlFwdZrjJUwSbC/assets/images/source/rev-a12baff/www.pinehurst.com/wp-content/themes/pinehurst/images/logos/PB_1895_Logo_White.svg',
-    imageContain: true,
+    imageUrl: '/Jugger/courses/pinehurst-9.jpg',
     notes: 'Originally the National Golf Club of NC; acquired by Pinehurst Resort in 2014 and redesignated as Pinehurst No. 9.',
     playedRounds: [
       { id: 'pr-ngc-2013-r1', year: 2013, round: 1 },
@@ -465,7 +464,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     name: 'Southern Pines Golf Club',
     location: 'Southern Pines, NC',
     website: 'https://www.southernpinesgolfclub.com',
-    imageUrl: 'https://www.southernpinesgolfclub.com/wp-content/uploads/2021/11/SPGC-banner-8.png',
+    imageUrl: '/Jugger/courses/southern-pines.jpg',
     playedRounds: [
       { id: 'pr-spgc-2015-r2', year: 2015, round: 2 },
       { id: 'pr-spgc-2022-r1', year: 2022, round: 1 },
@@ -513,7 +512,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     location: 'Southern Pines, NC',
     par: 71,
     website: 'https://www.pineneedleslodge.com/courses/',
-    imageUrl: 'https://www.pineneedleslodge.com/wp-content/uploads/2018/04/GolfHero.jpg',
+    imageUrl: '/Jugger/courses/pine-needles.jpg',
     tees: [
       { name: 'Ross',  rating: 71.9, slope: 138 },
       { name: 'White', rating: 70.0, slope: 133 },
@@ -529,7 +528,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     location: 'Southern Pines, NC',
     website: 'https://www.midpinesinn.com',
     notes: 'Classic Donald Ross design, sister course to Pine Needles.',
-    imageUrl: 'https://www.midpinesinn.com/wp-content/uploads/2018/05/GolfAcademySlider.jpg',
+    imageUrl: '/Jugger/courses/mid-pines.jpg',
     playedRounds: [
       { id: 'pr-mp-2023-r1', year: 2023, round: 1 },
     ],
