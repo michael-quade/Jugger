@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
+import { useSupabaseSync } from './hooks/useSupabaseSync'
 import Dashboard from './pages/Dashboard'
 import Teams from './pages/Teams'
 import Courses from './pages/Courses'
@@ -19,6 +20,7 @@ import { hashPassword } from './utils/auth'
 
 export default function App() {
   const { admins, addAdmin } = useTournamentStore()
+  useSupabaseSync()
 
   useEffect(() => {
     if (admins.length === 0) {

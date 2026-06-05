@@ -5,6 +5,8 @@ import {
   ClipboardList, Trophy, Aperture, Printer, Flag, BookOpen, TrendingUp, Archive, Crosshair,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
+import { useSyncStatus } from '../hooks/useSupabaseSync'
+import { isSupabaseEnabled } from '../lib/supabase'
 
 const NAV = [
   { to: '/',           label: 'Dashboard',   icon: LayoutDashboard },
@@ -24,6 +26,7 @@ const NAV = [
 
 export default function Layout() {
   const { year } = useTournamentStore()
+  const { connected } = useSyncStatus()
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -39,6 +42,12 @@ export default function Layout() {
               {year} Season
             </p>
           </div>
+          {isSupabaseEnabled && (
+            <div className="ml-auto flex items-center gap-1.5 text-xs text-white/60" title={connected ? 'Live sync connected' : 'Connecting…'}>
+              <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-white/30'}`} />
+              <span className="hidden sm:inline">{connected ? 'Live' : 'Syncing…'}</span>
+            </div>
+          )}
           <HeaderAdminWidget />
         </div>
       </header>
