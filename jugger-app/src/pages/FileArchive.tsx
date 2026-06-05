@@ -1,25 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   FileText, Sheet, Image as ImageIcon, File,
   ChevronDown, ChevronRight, FolderOpen, Folder,
-  Download, ExternalLink, Lock,
+  Download, ExternalLink, Lock, Trash2, Upload, CloudOff,
 } from 'lucide-react'
 import { useIsAdmin } from '../store/useAuthStore'
+import { supabase, isSupabaseEnabled } from '../lib/supabase'
+
+const BUCKET = 'jugger-archive'
 
 interface FileEntry { name: string; size: number }
 type ArchiveTree = Record<string, FileEntry[]>
 
+// ── File type helpers ─────────────────────────────────────────────────────────
+
 const EXT_GROUPS = {
-  pdf:    ['.pdf'],
-  image:  ['.jpg', '.jpeg', '.png', '.gif'],
-  excel:  ['.xls', '.xlsx', '.xlsm', '.xlk'],
-  word:   ['.doc', '.docx'],
-  text:   ['.txt'],
+  pdf:   ['.pdf'],
+  image: ['.jpg', '.jpeg', '.png', '.gif'],
+  excel: ['.xls', '.xlsx', '.xlsm', '.xlk'],
+  word:  ['.doc', '.docx'],
+  text:  ['.txt'],
 }
 
-function extOf(name: string) {
-  return name.slice(name.lastIndexOf('.')).toLowerCase()
-}
+function extOf(name: string) { return name.slice(name.lastIndexOf('.')).toLowerCase() }
 
 function isViewable(name: string) {
   const ext = extOf(name)
@@ -28,33 +31,23 @@ function isViewable(name: string) {
 
 function FileIcon({ name }: { name: string }) {
   const ext = extOf(name)
-  if (EXT_GROUPS.pdf.includes(ext))
-    return <FileText size={14} className="text-red-500 shrink-0" />
-  if (EXT_GROUPS.excel.includes(ext))
-    return <Sheet size={14} className="text-green-600 shrink-0" />
-  if (EXT_GROUPS.word.includes(ext))
-    return <FileText size={14} className="text-blue-600 shrink-0" />
-  if (EXT_GROUPS.image.includes(ext))
-    return <ImageIcon size={14} className="text-purple-500 shrink-0" />
+  if (EXT_GROUPS.pdf.includes(ext))   return <FileText size={14} className="text-red-500 shrink-0" />
+  if (EXT_GROUPS.excel.includes(ext)) return <Sheet    size={14} className="text-green-600 shrink-0" />
+  if (EXT_GROUPS.word.includes(ext))  return <FileText size={14} className="text-blue-600 shrink-0" />
+  if (EXT_GROUPS.image.includes(ext)) return <ImageIcon size={14} className="text-purple-500 shrink-0" />
   return <File size={14} className="text-gray-400 shrink-0" />
 }
 
 function ExtBadge({ name }: { name: string }) {
   const ext = extOf(name).replace('.', '').toUpperCase()
   const colors: Record<string, string> = {
-    PDF:  'bg-red-100 text-red-700',
-    XLS:  'bg-green-100 text-green-700',
-    XLSX: 'bg-green-100 text-green-700',
-    XLSM: 'bg-green-100 text-green-700',
-    XLK:  'bg-green-100 text-green-700',
-    DOC:  'bg-blue-100 text-blue-700',
-    DOCX: 'bg-blue-100 text-blue-700',
-    JPG:  'bg-purple-100 text-purple-700',
-    JPEG: 'bg-purple-100 text-purple-700',
-    PNG:  'bg-purple-100 text-purple-700',
-    GIF:  'bg-purple-100 text-purple-700',
-    TXT:  'bg-gray-100 text-gray-600',
-    MSG:  'bg-orange-100 text-orange-700',
+    PDF: 'bg-red-100 text-red-700', XLS: 'bg-green-100 text-green-700',
+    XLSX: 'bg-green-100 text-green-700', XLSM: 'bg-green-100 text-green-700',
+    XLK: 'bg-green-100 text-green-700', DOC: 'bg-blue-100 text-blue-700',
+    DOCX: 'bg-blue-100 text-blue-700', JPG: 'bg-purple-100 text-purple-700',
+    JPEG: 'bg-purple-100 text-purple-700', PNG: 'bg-purple-100 text-purple-700',
+    GIF: 'bg-purple-100 text-purple-700', TXT: 'bg-gray-100 text-gray-600',
+    MSG: 'bg-orange-100 text-orange-700',
   }
   return (
     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${colors[ext] ?? 'bg-gray-100 text-gray-500'}`}>
@@ -69,19 +62,18 @@ function fmtSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function fileUrl(year: string, name: string) {
-  return `/api/history-file/${year}/${encodeURIComponent(name)}`
-}
-
 // ── Year section ──────────────────────────────────────────────────────────────
 
 function YearSection({
-  year, files, defaultOpen, filter,
+  year, files, defaultOpen, filter, isAdmin, onDelete, fileUrl,
 }: {
   year: string
   files: FileEntry[]
   defaultOpen: boolean
   filter: string
+  isAdmin: boolean
+  onDelete: (year: string, name: string) => void
+  fileUrl: (year: string, name: string) => string
 }) {
   const [open, setOpen] = useState(defaultOpen)
 
@@ -106,7 +98,9 @@ function YearSection({
           {filter && files.length !== filtered.length && ` (of ${files.length})`}
         </span>
         <span className="ml-auto">
-          {open ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+          {open
+            ? <ChevronDown  size={13} className="text-gray-400" />
+            : <ChevronRight size={13} className="text-gray-400" />}
         </span>
       </button>
 
@@ -140,9 +134,82 @@ function YearSection({
                   <Download size={13} />
                 </a>
               )}
+              {isAdmin && (
+                <button
+                  onClick={() => onDelete(year, f.name)}
+                  title="Delete file"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  )
+}
+
+// ── Upload panel (admin only) ─────────────────────────────────────────────────
+
+function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
+  const [year, setYear] = useState(String(new Date().getFullYear()))
+  const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFiles(files: FileList) {
+    if (!supabase || !files.length) return
+    setBusy(true)
+    setStatus(null)
+    let ok = 0, fail = 0
+    for (const file of Array.from(files)) {
+      const { error } = await supabase.storage
+        .from(BUCKET)
+        .upload(`${year}/${file.name}`, file, { upsert: true })
+      if (error) { console.error(error); fail++ } else ok++
+    }
+    setBusy(false)
+    setStatus({ msg: `Uploaded ${ok} file${ok !== 1 ? 's' : ''}${fail > 0 ? `, ${fail} failed` : ''}`, ok: fail === 0 })
+    if (inputRef.current) inputRef.current.value = ''
+    if (ok > 0) onUploaded()
+  }
+
+  return (
+    <div className="card space-y-3">
+      <h3 className="section-header text-sm mb-0">Upload Files</h3>
+      <div className="flex items-center gap-3 flex-wrap">
+        <div>
+          <label className="label text-xs">Year</label>
+          <input
+            className="input w-24"
+            value={year}
+            onChange={e => setYear(e.target.value)}
+            placeholder="2026"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="label text-xs">Files</label>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            className="block text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-masters-light file:text-masters-green hover:file:bg-masters-green/20 cursor-pointer"
+            onChange={e => e.target.files && handleFiles(e.target.files)}
+            disabled={busy}
+          />
+        </div>
+      </div>
+      {busy && (
+        <p className="text-xs text-gray-500 flex items-center gap-1.5">
+          <Upload size={12} className="animate-bounce" /> Uploading…
+        </p>
+      )}
+      {status && (
+        <p className={`text-xs font-semibold ${status.ok ? 'text-masters-green' : 'text-amber-600'}`}>
+          {status.msg}
+        </p>
       )}
     </div>
   )
@@ -158,16 +225,46 @@ export default function FileArchive() {
   const [allOpen, setAllOpen] = useState(false)
   const [key,     setKey]     = useState(0)
 
+  async function loadTree() {
+    if (!supabase) return
+    setError(null)
+    try {
+      const { data: entries, error: e1 } = await supabase.storage
+        .from(BUCKET).list('', { limit: 100, sortBy: { column: 'name', order: 'asc' } })
+      if (e1) throw e1
+
+      const yearFolders = (entries ?? []).filter(e => e.id === null && /^\d{4}$/.test(e.name))
+      const tree: ArchiveTree = {}
+
+      await Promise.all(yearFolders.map(async folder => {
+        const { data: files } = await supabase!.storage
+          .from(BUCKET).list(folder.name, { limit: 500, sortBy: { column: 'name', order: 'asc' } })
+        const fileEntries = (files ?? []).filter(f => f.id !== null)
+        if (fileEntries.length > 0) {
+          tree[folder.name] = fileEntries.map(f => ({ name: f.name, size: f.metadata?.size ?? 0 }))
+        }
+      }))
+
+      setTree(tree)
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+    }
+  }
+
   useEffect(() => {
     if (!isAdmin) return
-    fetch('/api/history-files')
-      .then(r => {
-        if (!r.ok) throw new Error(`${r.status}`)
-        return r.json() as Promise<ArchiveTree>
-      })
-      .then(setTree)
-      .catch(e => setError(String(e)))
+    loadTree()
   }, [isAdmin])
+
+  function fileUrl(year: string, name: string) {
+    return supabase!.storage.from(BUCKET).getPublicUrl(`${year}/${name}`).data.publicUrl
+  }
+
+  async function handleDelete(year: string, name: string) {
+    if (!supabase || !confirm(`Delete "${name}"?`)) return
+    await supabase.storage.from(BUCKET).remove([`${year}/${name}`])
+    await loadTree()
+  }
 
   function toggleAll(open: boolean) {
     setAllOpen(open)
@@ -190,17 +287,30 @@ export default function FileArchive() {
     )
   }
 
+  if (!isSupabaseEnabled) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-serif font-bold text-masters-dark">Archive</h1>
+        <div className="card text-center py-12">
+          <CloudOff size={32} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-gray-500 font-semibold">Supabase not configured</p>
+          <p className="text-sm text-gray-400 mt-1">Add <code className="bg-gray-100 px-1 rounded">VITE_SUPABASE_URL</code> and <code className="bg-gray-100 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> to enable the archive.</p>
+        </div>
+      </div>
+    )
+  }
+
   if (error) {
-    const isNotFound = error.includes('404') || error.includes('Not Found')
+    const isMissing = error.toLowerCase().includes('not found') || error.toLowerCase().includes('does not exist')
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-serif font-bold text-masters-dark">Archive</h1>
         <div className="card text-center py-12">
           <p className="text-red-500 font-semibold">Could not load archive</p>
-          {isNotFound ? (
+          {isMissing ? (
             <p className="text-sm text-gray-400 mt-2">
-              The archive is only available when running locally.<br />
-              Run <code className="bg-gray-100 px-1 rounded">npm run dev</code> from the <code className="bg-gray-100 px-1 rounded">jugger-app/</code> directory.
+              The <code className="bg-gray-100 px-1 rounded">jugger-archive</code> storage bucket doesn't exist yet.<br />
+              Create it in your Supabase dashboard → Storage → New bucket.
             </p>
           ) : (
             <p className="text-sm text-gray-400 mt-1">Error: {error}</p>
@@ -217,7 +327,7 @@ export default function FileArchive() {
           <h1 className="text-2xl font-serif font-bold text-masters-dark">Archive</h1>
           {tree && (
             <p className="text-sm text-gray-500 mt-0.5">
-              {totalFiles} files across {years.length} years — from JuggerHistory
+              {totalFiles} files across {years.length} years
             </p>
           )}
         </div>
@@ -226,6 +336,9 @@ export default function FileArchive() {
           <button className="btn-ghost text-xs" onClick={() => toggleAll(false)}>Collapse all</button>
         </div>
       </div>
+
+      {/* Admin upload */}
+      <UploadPanel onUploaded={loadTree} />
 
       {/* Search */}
       <input
@@ -239,7 +352,7 @@ export default function FileArchive() {
       <div className="flex flex-wrap gap-3 text-xs text-gray-500">
         <span className="flex items-center gap-1"><FileText size={12} className="text-red-500" /> PDF — opens in browser</span>
         <span className="flex items-center gap-1"><FileText size={12} className="text-blue-600" /> Word — downloads</span>
-        <span className="flex items-center gap-1"><Sheet size={12} className="text-green-600" /> Excel — downloads</span>
+        <span className="flex items-center gap-1"><Sheet    size={12} className="text-green-600" /> Excel — downloads</span>
         <span className="flex items-center gap-1"><ImageIcon size={12} className="text-purple-500" /> Images — opens in browser</span>
       </div>
 
@@ -248,6 +361,10 @@ export default function FileArchive() {
           {[...Array(5)].map((_, i) => (
             <div key={i} className="h-11 rounded-lg bg-gray-100 animate-pulse" />
           ))}
+        </div>
+      ) : years.length === 0 ? (
+        <div className="card text-center py-12 text-gray-400">
+          No files uploaded yet. Use the upload panel above to add files.
         </div>
       ) : (
         <div className="space-y-2">
@@ -258,6 +375,9 @@ export default function FileArchive() {
               files={tree[year]}
               defaultOpen={allOpen || year === years[0]}
               filter={filter}
+              isAdmin={isAdmin}
+              onDelete={handleDelete}
+              fileUrl={fileUrl}
             />
           ))}
         </div>
