@@ -1,7 +1,7 @@
 import type { Match, Team, Course, RoundConfig, Player } from '../types'
 import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp } from '../utils/handicap'
 import { getPlayerName } from '../utils/pairings'
-import { computeMatchPlay, computePointsRound, computeScramble, type MatchPlayResult, type PointsRoundResult, type ScrambleResult } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, type MatchPlayResult, type PointsRoundResult, type ScrambleResult, type CaptainsChoiceResult } from '../utils/matchplay'
 
 interface Props {
   match: Match
@@ -10,6 +10,8 @@ interface Props {
   config: RoundConfig
   interactive?: boolean
   onScoreChange?: (playerId: string, hole: number, val: number | null) => void
+  onTeamHoleScoreChange?: (hole: number, val: number | null) => void
+  onTeeShotChange?: (hole: number, playerId: string | null) => void
 }
 
 const ROUND_LABELS: Record<string, string> = {
@@ -20,7 +22,7 @@ const ROUND_LABELS: Record<string, string> = {
   captains_choice:   "Captain's Choice · 15% Team HDCP · Min 3 tee balls per player",
 }
 
-export default function ScorecardCard({ match, teams, course, config, interactive, onScoreChange }: Props) {
+export default function ScorecardCard({ match, teams, course, config, interactive, onScoreChange, onTeamHoleScoreChange, onTeeShotChange }: Props) {
   const allPlayers = teams.flatMap(t => t.players)
   const teeData = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
 
@@ -60,12 +62,16 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   const frontYds = front.reduce((s, h) => s + (h.yardages[config.tee] ?? 0), 0)
   const backYds  = back.reduce((s, h) => s + (h.yardages[config.tee] ?? 0), 0)
 
-  const isMatchPlay   = config.format === 'team_match_play'
-  const isPointsRound = config.format === 'points_round'
-  const isScramble    = config.format === 'texas_scramble'
-  const mpResult = isMatchPlay   ? computeMatchPlay(match, course.holes, playerHdcps)   : null
-  const prResult = isPointsRound ? computePointsRound(match, course.holes, playerHdcps) : null
-  const srResult = isScramble    ? computeScramble(match, course.holes, playerHdcps)    : null
+  const isMatchPlay       = config.format === 'team_match_play'
+  const isPointsRound     = config.format === 'points_round'
+  const isScramble        = config.format === 'texas_scramble'
+  const isCaptainsChoice  = config.format === 'captains_choice'
+  const mpResult = isMatchPlay      ? computeMatchPlay(match, course.holes, playerHdcps)   : null
+  const prResult = isPointsRound    ? computePointsRound(match, course.holes, playerHdcps) : null
+  const srResult = isScramble       ? computeScramble(match, course.holes, playerHdcps)    : null
+  // For Captain's Choice the shared teamHdcp is the value stored for any player (all same)
+  const ccTeamHdcp = isCaptainsChoice ? (playerHdcps[allPlayerIds[0]] ?? 0) : 0
+  const ccResult   = isCaptainsChoice ? computeCaptainsChoice(match.teamHoleScores, course.holes, ccTeamHdcp) : null
 
   function teamLabel(twosome: typeof match.twosome1) {
     const team = teams.find(t => t.id === twosome.teamId)
@@ -91,10 +97,13 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
         </div>
         <div className="text-right">
           <div className="font-semibold text-masters-green">{match.label}{match.isBlind ? ' (Blind)' : ''}</div>
-          {!isScramble && (
+          {!isScramble && !isCaptainsChoice && (
             <div className="text-gray-500 text-[10px]">
               {teamLabel(match.twosome1)} vs {teamLabel(match.twosome2)}
             </div>
+          )}
+          {isCaptainsChoice && (
+            <div className="text-gray-500 text-[10px]">Team HDCP: {ccTeamHdcp}</div>
           )}
         </div>
       </div>
@@ -142,7 +151,32 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
             <td /><td /><td />
           </tr>
 
-          {isScramble ? (
+          {isCaptainsChoice ? (
+            <>
+              {/* All 4 players — tee shot selectors only, no individual scores */}
+              {([
+                [match.twosome1, 0], [match.twosome1, 1],
+                [match.twosome2, 0], [match.twosome2, 1],
+              ] as [typeof match.twosome1, 0|1][]).map(([twosome, idx]) => (
+                <CaptainsChoicePlayerRow
+                  key={twosome.playerIds[idx]}
+                  twosome={twosome} index={idx}
+                  teams={teams} course={course} match={match}
+                  interactive={!!interactive}
+                  onTeeShotChange={onTeeShotChange}
+                />
+              ))}
+              {/* Team score row */}
+              {ccResult && (
+                <CaptainsChoiceTeamRow
+                  result={ccResult} course={course} match={match} teams={teams}
+                  teamHdcp={ccTeamHdcp}
+                  interactive={!!interactive}
+                  onTeamHoleScoreChange={onTeamHoleScoreChange}
+                />
+              )}
+            </>
+          ) : isScramble ? (
             <>
               {/* All 4 players in sequence — no result rows */}
               <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
@@ -429,6 +463,168 @@ function PointsRoundWinnerBanner({ result, match, teams }: { result: PointsRound
         <span> {loseTotal} pts ({loseDiff >= 0 ? '+' : ''}{loseDiff} vs Q:{loseQuota})</span>
       </div>
     </div>
+  )
+}
+
+// ─── Captain's Choice Rows ───────────────────────────────────────────────────
+
+interface CaptainsChoicePlayerRowProps {
+  twosome: Match['twosome1']
+  index: 0 | 1
+  teams: Team[]
+  course: Course
+  match: Match
+  interactive: boolean
+  onTeeShotChange?: (hole: number, playerId: string | null) => void
+}
+
+function CaptainsChoicePlayerRow({ twosome, index, teams, course, match, interactive, onTeeShotChange }: CaptainsChoicePlayerRowProps) {
+  const pid = twosome.playerIds[index]
+  const team = teams.find(t => t.id === twosome.teamId)
+  const player = teams.flatMap(t => t.players).find(p => p.id === pid)
+  const name = player?.name ?? pid
+  const teeShotsUsed = match.teeShotsUsed ?? {}
+
+  const usedCount = Object.values(teeShotsUsed).filter(p => p === pid).length
+  const allHolesSelected = course.holes.every(h => teeShotsUsed[h.number] != null)
+  const minMet = usedCount >= 3
+  const countColor = minMet ? 'text-masters-green font-bold' : allHolesSelected ? 'text-red-500 font-bold' : 'text-gray-400'
+
+  const frontCount = course.holes.slice(0, 9).filter(h => teeShotsUsed[h.number] === pid).length
+  const backCount  = course.holes.slice(9).filter(h => teeShotsUsed[h.number] === pid).length
+
+  return (
+    <tr className="row-player">
+      <td className="player-name">
+        <span style={{ color: team?.color ?? '#333' }} className="font-bold text-[9px]">
+          {name.split(' ').map((n, i) => i === 0 ? n[0] + '. ' : n).join('')}
+        </span>
+        <span className={`ml-1 text-[9px] ${countColor}`}>{usedCount}/3</span>
+        {minMet && <span className="ml-0.5 text-masters-green text-[9px]">✓</span>}
+      </td>
+      {course.holes.map(h => {
+        const selected = teeShotsUsed[h.number] === pid
+        return (
+          <td
+            key={h.number}
+            onClick={() => {
+              if (!interactive || !onTeeShotChange) return
+              onTeeShotChange(h.number, selected ? null : pid)
+            }}
+            className={`text-center ${interactive ? 'cursor-pointer hover:bg-masters-light' : ''}`}
+          >
+            {selected && (
+              <span className="text-[9px] font-bold" style={{ color: team?.color ?? '#006747' }}>●</span>
+            )}
+          </td>
+        )
+      })}
+      <td className="hole-out">
+        {frontCount > 0 && <span className={`text-[8px] font-bold ${frontCount >= 3 ? 'text-masters-green' : 'text-gray-500'}`}>{frontCount}</span>}
+      </td>
+      <td className="hole-in">
+        {backCount > 0 && <span className={`text-[8px] font-bold ${backCount >= 3 ? 'text-masters-green' : 'text-gray-500'}`}>{backCount}</span>}
+      </td>
+      <td className="hole-total">
+        <span className={`text-[8px] font-bold ${minMet ? 'text-masters-green' : allHolesSelected ? 'text-red-500' : 'text-gray-400'}`}>{usedCount}</span>
+      </td>
+    </tr>
+  )
+}
+
+interface CaptainsChoiceTeamRowProps {
+  result: CaptainsChoiceResult
+  course: Course
+  match: Match
+  teams: Team[]
+  teamHdcp: number
+  interactive: boolean
+  onTeamHoleScoreChange?: (hole: number, val: number | null) => void
+}
+
+function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interactive, onTeamHoleScoreChange }: CaptainsChoiceTeamRowProps) {
+  const team = teams.find(t => t.id === match.twosome1.teamId)
+  const color = team?.color ?? '#006747'
+  const teamHoleScores = match.teamHoleScores ?? {}
+
+  const frontGross = course.holes.slice(0, 9).reduce((s, h) => s + (teamHoleScores[h.number] ?? 0), 0)
+  const backGross  = course.holes.slice(9).reduce((s, h) => s + (teamHoleScores[h.number] ?? 0), 0)
+  const frontNet   = result.holeNetScores.slice(0, 9).reduce<number>((s, v) => s + (v ?? 0), 0)
+  const backNet    = result.holeNetScores.slice(9).reduce<number>((s, v) => s + (v ?? 0), 0)
+  const hasAnyFront = course.holes.slice(0, 9).some(h => teamHoleScores[h.number] != null)
+  const hasAnyBack  = course.holes.slice(9).some(h => teamHoleScores[h.number] != null)
+
+  // Check all-players min tee shots met
+  const teeShotsUsed = match.teeShotsUsed ?? {}
+  const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+  const minTeesMet = allPids.every(pid => Object.values(teeShotsUsed).filter(p => p === pid).length >= 3)
+
+  return (
+    <tr className="row-result">
+      <td className="player-name">
+        <div className="text-[9px] font-bold" style={{ color }}>Team Score</div>
+        <div className="text-[8px] text-gray-400">HDCP: {teamHdcp}</div>
+        {minTeesMet && (
+          <div className="text-[8px] text-masters-green font-semibold">✓ Min tees met</div>
+        )}
+      </td>
+      {course.holes.map((h, i) => {
+        const gross = teamHoleScores[h.number]
+        const net   = result.holeNetScores[i]
+        const run   = result.running[i]
+        return (
+          <td key={h.number} className={getStrokeDots(teamHdcp, h.hdcpOrder) ? 'dot-cell' : ''}>
+            {interactive && onTeamHoleScoreChange ? (
+              <div className="flex flex-col items-center leading-none">
+                <input
+                  type="number" min={1} max={12}
+                  value={gross ?? ''}
+                  onChange={e => {
+                    const v = e.target.value === '' ? null : parseInt(e.target.value)
+                    onTeamHoleScoreChange(h.number, v)
+                  }}
+                  className="w-full border-none text-center text-xs bg-transparent"
+                />
+                {net != null && (
+                  <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
+                )}
+              </div>
+            ) : gross != null ? (
+              <div className="flex flex-col items-center leading-none">
+                <span>{gross}</span>
+                {net != null && (
+                  <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
+                )}
+              </div>
+            ) : null}
+          </td>
+        )
+      })}
+      <td className="hole-out">
+        {hasAnyFront && (
+          <div className="flex flex-col items-center leading-none">
+            <span className="text-[8px] font-bold text-masters-dark">{frontGross}</span>
+            <span className="text-[7px] text-masters-green leading-none">{frontNet}</span>
+          </div>
+        )}
+      </td>
+      <td className="hole-in">
+        {hasAnyBack && (
+          <div className="flex flex-col items-center leading-none">
+            <span className="text-[8px] font-bold text-masters-dark">{backGross}</span>
+            <span className="text-[7px] text-masters-green leading-none">{backNet}</span>
+          </div>
+        )}
+      </td>
+      <td className="hole-total">
+        {result.total !== 0 && (
+          <div className="flex flex-col items-center leading-none">
+            <span className="text-[8px] font-bold text-masters-dark">{frontGross + backGross}</span>
+            <span className="text-[8px] font-bold leading-none" style={{ color }}>{result.total}</span>
+          </div>
+        )}
+      </td>
+    </tr>
   )
 }
 

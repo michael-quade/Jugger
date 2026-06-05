@@ -6,7 +6,7 @@ import { useIsAdmin } from '../store/useAuthStore'
 import ScorecardCard from '../components/ScorecardCard'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
-import { computeMatchPlay, computePointsRound, computeScramble } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice } from '../utils/matchplay'
 import { Printer, Dices, Trash2 } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team } from '../types'
 
@@ -19,7 +19,7 @@ const ROUND_NAMES: Record<number, string> = {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [searchParams] = useSearchParams()
   const [activeRound, setActiveRound] = useState(() => Number(searchParams.get('round')) || 1)
@@ -104,6 +104,34 @@ export default function ScorecardView() {
     })
   }
 
+  function recomputeCaptainsChoiceTeamScores(currentMatches: typeof matches) {
+    if (!course || !config || config.format !== 'captains_choice') return
+    const allPlayers = teams.flatMap(t => t.players)
+    const ccMatches = currentMatches.filter(m => m.round === config.round)
+
+    const results = ccMatches.map(m => {
+      const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+      const teeData = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
+      const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
+      const r5Sum = allPids.reduce((s, pid) => {
+        const player = allPlayers.find(p => p.id === pid)
+        return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false) : 0)
+      }, 0)
+      const teamHdcp = Math.round(r5Sum * 0.15)
+      const ccRes = computeCaptainsChoice(m.teamHoleScores, course.holes, teamHdcp)
+      return { match: m, ccRes, teamHdcp }
+    })
+
+    if (!results.every(r => r.ccRes.isDone)) return
+
+    const ranked = [...results].sort((a, b) => a.ccRes.total - b.ccRes.total)
+    const POINTS = [4, 2, 1]
+    teams.forEach(t => setTeamScore({ teamId: t.id, round: config.round, points: 0 }))
+    ranked.forEach(({ match: m }, i) => {
+      setTeamScore({ teamId: m.twosome1.teamId, round: config.round, points: POINTS[i] ?? 1 })
+    })
+  }
+
   function handleMBToggle(field: 'magicBall1' | 'magicBall2', val: boolean) {
     if (!match || !config || config.format !== 'points_round' || match.isBlind) return
     updateMatch(match.id, { [field]: val })
@@ -130,9 +158,48 @@ export default function ScorecardView() {
     }
 
     if (config.format === 'texas_scramble') {
-      // After simulating, read latest store state and recompute
       const latestMatches = useTournamentStore.getState().matches
       recomputeScrambleTeamScores(latestMatches)
+      return
+    }
+
+    if (config.format === 'captains_choice') {
+      // Simulate one team score per hole and random tee shot allocations
+      const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+      const allPlayers = teams.flatMap(t => t.players)
+      const teeData = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
+      const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
+      const r5Sum = allPids.reduce((s, pid) => {
+        const player = allPlayers.find(p => p.id === pid)
+        return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false) : 0)
+      }, 0)
+      const teamHdcp = Math.round(r5Sum * 0.15)
+
+      // Simulate team scores — around par + expected net from hdcp
+      const simTeeShots: Record<number, string> = {}
+      // Distribute tee shots: each player must get at least 3; distribute randomly
+      const teeShotCounts: Record<string, number> = {}
+      allPids.forEach(pid => { teeShotCounts[pid] = 0 })
+      for (const hole of course.holes) {
+        // Prefer players who haven't hit 3 yet
+        const needMore = allPids.filter(pid => teeShotCounts[pid] < 3)
+        const pool = needMore.length > 0 ? needMore : allPids
+        const chosen = pool[Math.floor(Math.random() * pool.length)]
+        simTeeShots[hole.number] = chosen
+        teeShotCounts[chosen]++
+      }
+
+      for (const hole of course.holes) {
+        const d = getStrokeDots(teamHdcp, hole.hdcpOrder)
+        const strokes = d === '..' ? 2 : d === '.' ? 1 : 0
+        const r = Math.random()
+        const variance = r < 0.05 ? -1 : r < 0.25 ? 0 : r < 0.60 ? 1 : r < 0.85 ? 2 : 3
+        const gross = Math.max(1, hole.par + strokes + variance)
+        setTeamHoleScore(match.id, hole.number, gross)
+        setTeeShot(match.id, hole.number, simTeeShots[hole.number])
+      }
+      const latestMatches = useTournamentStore.getState().matches
+      recomputeCaptainsChoiceTeamScores(latestMatches)
       return
     }
 
@@ -207,7 +274,7 @@ export default function ScorecardView() {
         <h1 className="text-2xl font-serif font-bold text-masters-dark">Scorecards</h1>
         {isAdmin && matches.length > 0 && (
           <div className="flex items-center gap-2">
-            {(['team_match_play', 'points_round', 'texas_scramble'] as string[]).includes(config?.format ?? '') && teamScores.some(s => s.round === activeRound) && (
+            {(['team_match_play', 'points_round', 'texas_scramble', 'captains_choice'] as string[]).includes(config?.format ?? '') && teamScores.some(s => s.round === activeRound) && (
               <button
                 onClick={() => { if (confirm('Clear team points for this round? Match scores are kept.')) clearAllTeamScores() }}
                 className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 border border-amber-200 hover:border-amber-400 rounded px-3 py-1.5 transition-colors"
@@ -272,7 +339,7 @@ export default function ScorecardView() {
                     {scored && <span className="badge bg-masters-light text-masters-green">●</span>}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
-                    {config?.format === 'texas_scramble'
+                    {(config?.format === 'texas_scramble' || config?.format === 'captains_choice')
                       ? [...m.twosome1.playerIds, ...m.twosome2.playerIds]
                           .map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id)
                           .join(', ')
@@ -340,6 +407,11 @@ export default function ScorecardView() {
                         recomputeScrambleTeamScores(useTournamentStore.getState().matches)
                       }
                     }}
+                    onTeamHoleScoreChange={(hole, val) => {
+                      setTeamHoleScore(match.id, hole, val)
+                      recomputeCaptainsChoiceTeamScores(useTournamentStore.getState().matches)
+                    }}
+                    onTeeShotChange={(hole, pid) => setTeeShot(match.id, hole, pid)}
                   />
                 </div>
                 {/* Magic Ball (Round 2 regular matches only) */}
@@ -436,6 +508,65 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
     }, 0)
     const teamHdcp = Math.round(r5Sum * 0.15)
     allPlayerIds.forEach((pid: string) => { playerHdcps[pid] = teamHdcp })
+  }
+
+  // Captain's Choice: show team total and tee shot counts
+  if (config.format === 'captains_choice') {
+    const teeData = course.tees.find((t: any) => t.name === config.tee) ?? course.tees[0]
+    const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map((p: any) => p.handicapIndex)) : 0
+    const r5Sum = allPlayerIds.reduce((s: number, pid: string) => {
+      const player = allPlayers.find((p: any) => p.id === pid)
+      return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false) : 0)
+    }, 0)
+    const teamHdcp = Math.round(r5Sum * 0.15)
+    const ccResult = computeCaptainsChoice(match.teamHoleScores, course.holes, teamHdcp)
+    const teeShotsUsed = match.teeShotsUsed ?? {}
+
+    return (
+      <div className="card space-y-3">
+        <h3 className="section-header text-base">Score Summary</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-masters-light">
+                <th className="p-2 text-left">Player</th>
+                <th className="p-2">Tee Shots Used</th>
+                <th className="p-2">Min Met</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allPlayerIds.map((pid: string) => {
+                const player = allPlayers.find((p: any) => p.id === pid)
+                if (!player) return null
+                const count = Object.values(teeShotsUsed).filter(p => p === pid).length
+                const met = count >= 3
+                return (
+                  <tr key={pid} className="border-t">
+                    <td className="p-2 font-semibold">{player.name}</td>
+                    <td className="p-2 text-center font-bold">{count}</td>
+                    <td className={`p-2 text-center font-bold ${met ? 'text-masters-green' : 'text-red-500'}`}>
+                      {met ? '✓' : '✗'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between bg-masters-light rounded p-3">
+          <div>
+            <span className="text-sm font-semibold text-masters-dark">Team HDCP</span>
+            <span className="ml-2 text-sm font-bold text-masters-green">{teamHdcp}</span>
+          </div>
+          {ccResult.total !== 0 && (
+            <div className="text-right">
+              <div className="text-xs text-gray-500">Net Total</div>
+              <div className="text-2xl font-serif font-bold text-masters-green">{ccResult.total}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   // Scramble: show team total and per-player gross

@@ -135,6 +135,44 @@ export function computeMatchPlay(
   return { holeResults, running: runningArr, holesPlayed, winner, winLabel }
 }
 
+// ─── Captain's Choice ────────────────────────────────────────────────────────
+
+export interface CaptainsChoiceResult {
+  holeNetScores: (number | null)[]  // gross - strokes per hole; null = not scored
+  running: number[]                 // cumulative net after each hole
+  total: number
+  holesPlayed: number
+  isDone: boolean
+}
+
+export function computeCaptainsChoice(
+  teamHoleScores: Record<number, number | null> | undefined,
+  holes: Course['holes'],
+  teamHdcp: number,
+): CaptainsChoiceResult {
+  const holeNetScores: (number | null)[] = []
+  const running: number[] = []
+  let cum = 0
+  let holesPlayed = 0
+
+  for (const hole of holes) {
+    const gross = teamHoleScores?.[hole.number] ?? null
+    if (gross == null) {
+      holeNetScores.push(null)
+      running.push(cum)
+      continue
+    }
+    holesPlayed++
+    const strokes = holeStrokes(teamHdcp, hole.hdcpOrder)
+    const net = gross - strokes
+    cum += net
+    holeNetScores.push(net)
+    running.push(cum)
+  }
+
+  return { holeNetScores, running, total: cum, holesPlayed, isDone: holesPlayed === 18 }
+}
+
 // ─── Points Round (Gross Stableford with Quota) ───────────────────────────────
 
 export interface PointsRoundResult {

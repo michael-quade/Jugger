@@ -70,6 +70,8 @@ export interface Match {
   result?: string       // optional free-text result
   magicBall1?: boolean  // twosome1 finished with Magic Ball (Round 2 non-blind only)
   magicBall2?: boolean  // twosome2 finished with Magic Ball
+  teeShotsUsed?: Record<number, string>        // hole# -> playerId (Round 5: whose tee shot was used)
+  teamHoleScores?: Record<number, number | null> // hole# -> gross team score (Round 5)
 }
 
 export interface TeamRoundScore {

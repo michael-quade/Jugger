@@ -210,8 +210,6 @@ function HdcpTable() {
                 player: p,
                 calcs: calcPlayer(p.handicapIndex),
               }))
-              // Team 10%: ROUND(SUM(indices) * 0.1, 0)
-              const team10pct = Math.round(team.players.reduce((s, p) => s + p.handicapIndex, 0) * 0.1)
               // Cap'n Choice: ROUND(SUM(R5 final HDCPs) * 0.15, 0)
               const r5Hdcps = playerCalcs.map(pc => pc.calcs[4]?.final ?? 0)
               const captChoice = Math.round(r5Hdcps.reduce((s, v) => s + v, 0) * 0.15)
@@ -229,9 +227,6 @@ function HdcpTable() {
                           <div className="w-2.5 h-2.5 rounded-full" style={{ background: team.color }} />
                           <span className="font-bold text-xs" style={{ color: team.color }}>{team.name}</span>
                         </div>
-                        <span className="text-[10px] text-gray-500">
-                          Team 10% HDCP: <strong className="text-masters-dark">{team10pct}</strong>
-                        </span>
                         <span className="text-[10px] text-gray-500">
                           Cap'n Choice HDCP: <strong className="text-masters-dark">{captChoice}</strong>
                           <span className="text-gray-400 ml-1">(Σ R5 HDCPs {r5Hdcps.join('+')}={r5Hdcps.reduce((s,v)=>s+v,0)} × 15%)</span>

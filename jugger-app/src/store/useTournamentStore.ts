@@ -21,6 +21,8 @@ interface Actions {
   setMatches: (matches: Match[]) => void
   updateMatch: (matchId: string, updates: Partial<Match>) => void
   setMatchScore: (matchId: string, playerId: string, hole: number, score: number | null) => void
+  setTeamHoleScore: (matchId: string, hole: number, score: number | null) => void
+  setTeeShot: (matchId: string, hole: number, playerId: string | null) => void
 
   setTeamScore: (score: TeamRoundScore) => void
 
@@ -131,6 +133,24 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       updateMatch: (matchId, updates) =>
         set(state => ({
           matches: state.matches.map(m => m.id !== matchId ? m : { ...m, ...updates }),
+        })),
+
+      setTeamHoleScore: (matchId, hole, score) =>
+        set(state => ({
+          matches: state.matches.map(m =>
+            m.id !== matchId ? m : { ...m, teamHoleScores: { ...m.teamHoleScores, [hole]: score } }
+          ),
+        })),
+
+      setTeeShot: (matchId, hole, playerId) =>
+        set(state => ({
+          matches: state.matches.map(m => {
+            if (m.id !== matchId) return m
+            const updated = { ...m.teeShotsUsed }
+            if (playerId === null) delete updated[hole]
+            else updated[hole] = playerId
+            return { ...m, teeShotsUsed: updated }
+          }),
         })),
 
       setMatchScore: (matchId, playerId, hole, score) =>
@@ -248,7 +268,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             : []
           return {
             matches: state.matches.map(m => {
-              if (m.id === matchId) return { ...m, scores: {}, result: undefined, magicBall1: undefined, magicBall2: undefined }
+              if (m.id === matchId) return { ...m, scores: {}, teamHoleScores: {}, teeShotsUsed: {}, result: undefined, magicBall1: undefined, magicBall2: undefined }
               if (isRegular && m.isBlind && m.round === sourceMatch!.round) {
                 const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
                 const affected = regularPids.filter(pid => blindPids.includes(pid))
