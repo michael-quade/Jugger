@@ -1,9 +1,6 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import AdminLoginCard from '../components/AdminLoginCard'
-import AdminPanel from '../components/AdminPanel'
 import { Users, MapPin, Shuffle, Trophy, Lock, Unlock } from 'lucide-react'
 
 const ROUND_FORMATS: Record<string, string> = {
@@ -17,7 +14,6 @@ const ROUND_FORMATS: Record<string, string> = {
 export default function Dashboard() {
   const { year, setYear, teams, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps } = useTournamentStore()
   const isAdmin = useIsAdmin()
-  const [showAdminPanel, setShowAdminPanel] = useState(false)
 
   const totalMatches = matches.length
   const scoredMatches = matches.filter(m => Object.keys(m.scores).length > 0).length
@@ -29,8 +25,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
-
       {/* Title bar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -62,9 +56,6 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-
-      {/* Admin login card */}
-      <AdminLoginCard onManageAdmins={() => setShowAdminPanel(true)} />
 
       {/* Status cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, Flag, BookOpen, TrendingUp, Archive, Crosshair,
 } from 'lucide-react'
+import HeaderAdminWidget from './HeaderAdminWidget'
 
 const NAV = [
   { to: '/',           label: 'Dashboard',   icon: LayoutDashboard },
@@ -38,6 +39,7 @@ export default function Layout() {
               {year} Season
             </p>
           </div>
+          <HeaderAdminWidget />
         </div>
       </header>
 
