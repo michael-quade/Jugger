@@ -216,6 +216,29 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
         </div>
       </div>
 
+      {/* Official Scorecards */}
+      {SCORECARD_IMAGES[course.id] && (
+        <div className="card">
+          <h3 className="section-header mb-3">Official Scorecards</h3>
+          <div className={`grid gap-4 ${SCORECARD_IMAGES[course.id].length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+            {SCORECARD_IMAGES[course.id].map(({ src, label }) => (
+              <div key={src} className="space-y-1">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+                <div
+                  className="relative group cursor-zoom-in rounded overflow-hidden border border-gray-200 shadow-sm"
+                  onClick={() => setLightbox({ src, label })}
+                >
+                  <img src={src} alt={label} className="w-full object-contain bg-white" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                    <ZoomIn size={28} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Hole data tables */}
       {[front, back].map((group, gi) => {
         const groupPar = gi === 0 ? frontPar : backPar
@@ -278,29 +301,6 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
           </div>
         )
       })}
-
-      {/* Official Scorecards */}
-      {SCORECARD_IMAGES[course.id] && (
-        <div className="card">
-          <h3 className="section-header mb-3">Official Scorecards</h3>
-          <div className={`grid gap-4 ${SCORECARD_IMAGES[course.id].length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
-            {SCORECARD_IMAGES[course.id].map(({ src, label }) => (
-              <div key={src} className="space-y-1">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
-                <div
-                  className="relative group cursor-zoom-in rounded overflow-hidden border border-gray-200 shadow-sm"
-                  onClick={() => setLightbox({ src, label })}
-                >
-                  <img src={src} alt={label} className="w-full object-contain bg-white" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                    <ZoomIn size={28} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {lightbox && (
         <ScorecardLightbox src={lightbox.src} label={lightbox.label} onClose={() => setLightbox(null)} />
