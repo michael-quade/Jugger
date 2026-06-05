@@ -31,7 +31,7 @@ export default function Results() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-serif font-bold text-masters-dark">Results</h1>
+        <h1 className="text-2xl font-serif font-bold text-masters-dark">Team Results</h1>
         <Link to="/ctp" className="flex items-center gap-1.5 btn-ghost text-sm">
           <Flag size={14} /> Par 3 CTP →
         </Link>

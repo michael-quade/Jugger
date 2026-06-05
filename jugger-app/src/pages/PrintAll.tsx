@@ -72,13 +72,23 @@ export default function PrintAll() {
               {/* Pair up matches 2-per-page */}
               {chunk(roundMatches, 2).map((pair, pi) => (
                 <div key={pi} className="print-page-break bg-white border border-gray-200 mb-4 rounded no-print-border-reset">
-                  {pair.map(m => (
-                    <div key={m.id} className="scorecard-half">
-                      <ScorecardCard match={m} teams={teams} course={course} config={config} />
+                  <div className="scorecard-half">
+                    <ScorecardCard match={pair[0]} teams={teams} course={course} config={config} />
+                  </div>
+
+                  {/* Cut line */}
+                  <div style={{ display: 'flex', alignItems: 'center', margin: '0 12px', gap: 6, color: '#9ca3af' }}>
+                    <span style={{ fontSize: 13, lineHeight: 1, transform: 'rotate(270deg)', display: 'inline-block', flexShrink: 0 }}>✂</span>
+                    <div style={{ flex: 1, borderTop: '1.5px dashed #d1d5db' }} />
+                    <span style={{ fontSize: 9, letterSpacing: '0.08em', flexShrink: 0, userSelect: 'none' }}>CUT</span>
+                    <div style={{ flex: 1, borderTop: '1.5px dashed #d1d5db' }} />
+                  </div>
+
+                  {pair[1] ? (
+                    <div className="scorecard-half">
+                      <ScorecardCard match={pair[1]} teams={teams} course={course} config={config} />
                     </div>
-                  ))}
-                  {/* If odd match, add blank half */}
-                  {pair.length === 1 && (
+                  ) : (
                     <div className="scorecard-half flex items-center justify-center text-gray-200">
                       <span className="font-serif text-sm">Juggerknocker Invitational {year}</span>
                     </div>

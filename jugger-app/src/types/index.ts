@@ -67,7 +67,9 @@ export interface Match {
   twosome1: Twosome
   twosome2: Twosome
   scores: Record<string, Record<number, number | null>> // playerId -> hole# -> gross
-  result?: string // optional free-text result
+  result?: string       // optional free-text result
+  magicBall1?: boolean  // twosome1 finished with Magic Ball (Round 2 non-blind only)
+  magicBall2?: boolean  // twosome2 finished with Magic Ball
 }
 
 export interface TeamRoundScore {

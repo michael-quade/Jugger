@@ -65,6 +65,19 @@ export default function CourseHistory() {
   const [editDraft, setEditDraft] = useState<CourseHistoryEntry | null>(null)
 
   const selected = courseHistory.find(c => c.id === selectedId) ?? null
+  const [filterYear, setFilterYear] = useState<number | null>(null)
+
+  const allYears = [...new Set(
+    courseHistory.flatMap(c => c.playedRounds.map(r => r.year))
+  )].sort((a, b) => b - a)
+
+  const sortedCourses = [...courseHistory]
+    .sort((a, b) => {
+      const latestYear = (e: typeof a) =>
+        e.playedRounds.length ? Math.max(...e.playedRounds.map(r => r.year)) : 0
+      return latestYear(b) - latestYear(a)
+    })
+    .filter(c => filterYear === null || c.playedRounds.some(r => r.year === filterYear))
 
   function openDetail(id: string) {
     setSelectedId(id)
@@ -151,6 +164,31 @@ export default function CourseHistory() {
         </button>
       </div>
 
+      {allYears.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Filter by year:</span>
+          <button
+            onClick={() => setFilterYear(null)}
+            className={`px-3 py-1 rounded text-sm font-semibold transition-colors ${
+              filterYear === null ? 'bg-masters-green text-white' : 'bg-white border border-gray-300 hover:border-masters-green text-gray-600'
+            }`}
+          >
+            All
+          </button>
+          {allYears.map(y => (
+            <button
+              key={y}
+              onClick={() => setFilterYear(filterYear === y ? null : y)}
+              className={`px-3 py-1 rounded text-sm font-semibold transition-colors ${
+                filterYear === y ? 'bg-masters-green text-white' : 'bg-white border border-gray-300 hover:border-masters-green text-gray-600'
+              }`}
+            >
+              {y}
+            </button>
+          ))}
+        </div>
+      )}
+
       {courseHistory.length === 0 ? (
         <div className="card text-center py-16">
           <BookOpen size={40} className="mx-auto text-gray-200 mb-3" />
@@ -162,7 +200,7 @@ export default function CourseHistory() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courseHistory.map(c => (
+          {sortedCourses.map(c => (
             <CourseCard key={c.id} entry={c} onClick={() => openDetail(c.id)} />
           ))}
         </div>

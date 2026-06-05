@@ -15,7 +15,7 @@ const NAV = [
   { to: '/schedule',   label: 'Schedule',    icon: Calendar },
   { to: '/pairings',   label: 'Pairings',    icon: Shuffle },
   { to: '/scorecards', label: 'Scorecards',  icon: ClipboardList },
-  { to: '/results',    label: 'Results',     icon: Trophy },
+  { to: '/results',    label: 'Team Results', icon: Trophy },
   { to: '/ctp',        label: 'Par 3 CTP',   icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One', icon: Aperture },
   { to: '/print',      label: 'Print All',   icon: Printer },
@@ -27,19 +27,22 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top header */}
-      <header className="bg-masters-dark text-white no-print">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Flag size={22} className="text-masters-gold" />
+      <header className="sticky top-0 z-50 bg-masters-dark text-white no-print">
+        <div className="max-w-7xl mx-auto px-4 py-5 flex items-center gap-4">
+          <Flag size={36} className="text-masters-gold shrink-0" />
           <div>
-            <h1 className="font-serif text-lg font-bold leading-tight tracking-wide">
-              {year} Juggerknocker Invitational
+            <h1 className="font-serif text-3xl font-bold leading-tight tracking-wide">
+              Juggerknocker Invitational
             </h1>
+            <p className="text-masters-gold text-sm font-semibold tracking-widest mt-0.5 uppercase">
+              {year} Season
+            </p>
           </div>
         </div>
       </header>
 
       {/* Sub-nav */}
-      <nav className="bg-masters-green text-white shadow no-print">
+      <nav className="sticky top-[100px] z-40 bg-masters-green text-white shadow no-print">
         <div className="max-w-7xl mx-auto px-4">
           <ul className="flex flex-wrap gap-0.5 py-1">
             {NAV.map(({ to, label, icon: Icon }) => (

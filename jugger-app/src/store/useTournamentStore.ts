@@ -46,6 +46,11 @@ interface Actions {
   setDonationPaid: (id: string, paid: boolean) => void
   claimPot: (hioId: string) => void
 
+  clearMatchScores: (matchId: string) => void
+  clearAllMatchScores: () => void
+  clearAllTeamScores: () => void
+  clearTeamScoresForRound: (round: number) => void
+
   resetAll: () => void
 }
 
@@ -129,13 +134,24 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         })),
 
       setMatchScore: (matchId, playerId, hole, score) =>
-        set(state => ({
-          matches: state.matches.map(m => {
-            if (m.id !== matchId) return m
-            const playerScores = { ...(m.scores[playerId] ?? {}), [hole]: score }
-            return { ...m, scores: { ...m.scores, [playerId]: playerScores } }
-          }),
-        })),
+        set(state => {
+          const sourceMatch = state.matches.find(m => m.id === matchId)
+          const propagate = sourceMatch && !sourceMatch.isBlind
+          return {
+            matches: state.matches.map(m => {
+              const applyScore = (match: Match) => {
+                const playerScores = { ...(match.scores[playerId] ?? {}), [hole]: score }
+                return { ...match, scores: { ...match.scores, [playerId]: playerScores } }
+              }
+              if (m.id === matchId) return applyScore(m)
+              if (propagate && m.isBlind && m.round === sourceMatch!.round) {
+                const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+                if (blindPids.includes(playerId)) return applyScore(m)
+              }
+              return m
+            }),
+          }
+        }),
 
       setTeamScore: (score) =>
         set(state => {
@@ -222,6 +238,40 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             ),
           }
         }),
+
+      clearMatchScores: (matchId) =>
+        set(state => {
+          const sourceMatch = state.matches.find(m => m.id === matchId)
+          const isRegular = sourceMatch && !sourceMatch.isBlind
+          const regularPids = sourceMatch
+            ? [...sourceMatch.twosome1.playerIds, ...sourceMatch.twosome2.playerIds]
+            : []
+          return {
+            matches: state.matches.map(m => {
+              if (m.id === matchId) return { ...m, scores: {}, result: undefined, magicBall1: undefined, magicBall2: undefined }
+              if (isRegular && m.isBlind && m.round === sourceMatch!.round) {
+                const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+                const affected = regularPids.filter(pid => blindPids.includes(pid))
+                if (affected.length > 0) {
+                  const newScores = { ...m.scores }
+                  affected.forEach(pid => { delete newScores[pid] })
+                  return { ...m, scores: newScores, result: undefined }
+                }
+              }
+              return m
+            }),
+          }
+        }),
+
+      clearAllMatchScores: () =>
+        set(state => ({
+          matches: state.matches.map(m => ({ ...m, scores: {}, result: undefined, magicBall1: undefined, magicBall2: undefined })),
+        })),
+
+      clearAllTeamScores: () => set({ teamScores: [] }),
+
+      clearTeamScoresForRound: (round) =>
+        set(state => ({ teamScores: state.teamScores.filter(s => s.round !== round) })),
 
       resetAll: () => set(DEFAULT_STATE),
     }),

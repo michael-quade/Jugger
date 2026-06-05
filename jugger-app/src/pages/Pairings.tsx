@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import { generateAllPairings, getMatchesForRound, getPlayerName } from '../utils/pairings'
-import { Shuffle, Edit2, Check, X, Lock, Unlock } from 'lucide-react'
+import { Shuffle, Edit2, Check, X, Lock, Unlock, ClipboardList } from 'lucide-react'
 import type { Match, Team } from '../types'
 
 const ROUND_LABELS: Record<number, string> = {
@@ -16,6 +17,7 @@ const ROUND_LABELS: Record<number, string> = {
 export default function Pairings() {
   const { teams, matches, pairingsLocked, setMatches, updateMatch, setPairingsLocked } = useTournamentStore()
   const isAdmin = useIsAdmin()
+  const navigate = useNavigate()
   const [editMatch, setEditMatch] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Match | null>(null)
 
@@ -94,7 +96,7 @@ export default function Pairings() {
                     <div className="space-y-2">
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Regular Matches (2 pts each)</p>
                       {regular.map(m => (
-                        <MatchCard key={m.id} match={m} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} setEditDraft={setEditDraft} />
+                        <MatchCard key={m.id} match={m} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} onViewScorecard={() => navigate(`/scorecards?match=${m.id}&round=${m.round}`)} setEditDraft={setEditDraft} />
                       ))}
                     </div>
                   )}
@@ -102,7 +104,7 @@ export default function Pairings() {
                     <div className="space-y-2">
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Blind Matches (1 pt each)</p>
                       {blind.map(m => (
-                        <MatchCard key={m.id} match={m} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} setEditDraft={setEditDraft} />
+                        <MatchCard key={m.id} match={m} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} onViewScorecard={() => navigate(`/scorecards?match=${m.id}&round=${m.round}`)} setEditDraft={setEditDraft} />
                       ))}
                     </div>
                   )}
@@ -125,10 +127,11 @@ interface MatchCardProps {
   onEdit: () => void
   onSave: () => void
   onCancel: () => void
+  onViewScorecard: () => void
   setEditDraft: (m: Match | null) => void
 }
 
-function MatchCard({ match, teams, editing, editDraft, canEdit, onEdit, onSave, onCancel, setEditDraft }: MatchCardProps) {
+function MatchCard({ match, teams, editing, editDraft, canEdit, onEdit, onSave, onCancel, onViewScorecard, setEditDraft }: MatchCardProps) {
   const allPlayers = teams.flatMap(t => t.players)
 
   function getTeamColor(teamId: string) {
@@ -203,9 +206,17 @@ function MatchCard({ match, teams, editing, editDraft, canEdit, onEdit, onSave, 
           </button>
         )}
       </div>
-      {match.result && (
-        <div className="mt-2 text-xs text-gray-500 border-t pt-1">Result: {match.result}</div>
-      )}
+      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+        <button
+          onClick={onViewScorecard}
+          className="flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark font-semibold transition-colors"
+        >
+          <ClipboardList size={11} /> Scorecard
+        </button>
+        {match.result && (
+          <span className="text-xs text-gray-500 truncate">Result: {match.result}</span>
+        )}
+      </div>
     </div>
   )
 }
