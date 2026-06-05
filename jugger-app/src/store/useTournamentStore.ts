@@ -297,7 +297,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 9,
+      version: 12,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -377,6 +377,14 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             const def = INITIAL_COURSE_HISTORY.find(d => d.id === c.id)
             if (!def) return c
             return { ...c, imageUrl: def.imageUrl, imageContain: def.imageContain }
+          })
+        }
+        if (fromVersion < 12) {
+          // Refresh tees and holes from COURSES for all built-in courses (adds new tees/yardages)
+          base.courses = (base.courses ?? COURSES).map(c => {
+            const def = COURSES.find(d => d.id === c.id)
+            if (!def) return c
+            return { ...c, tees: def.tees, holes: def.holes }
           })
         }
         return base as TournamentState

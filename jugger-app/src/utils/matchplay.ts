@@ -135,6 +135,84 @@ export function computeMatchPlay(
   return { holeResults, running: runningArr, holesPlayed, winner, winLabel }
 }
 
+// ─── Individual Match Play (Round 4) ─────────────────────────────────────────
+
+export interface IndividualMatch1v1Result {
+  holeResults: Array<'w1' | 'w2' | 'h' | null>  // w1 = p1 wins
+  running: number[]                               // positive = p1 leading
+  holesPlayed: number
+  winner: 'p1' | 'p2' | 'all_square' | null
+  winLabel: string
+}
+
+export interface IndividualMatchResult {
+  matchA: IndividualMatch1v1Result  // twosome1.playerIds[0] vs twosome2.playerIds[0]
+  matchB: IndividualMatch1v1Result  // twosome1.playerIds[1] vs twosome2.playerIds[1]
+  match2v2: MatchPlayResult | null  // null for blind matches
+}
+
+function compute1v1(
+  p1Id: string,
+  p2Id: string,
+  scores: Match['scores'],
+  holes: Course['holes'],
+  playerHdcps: Record<string, number>,
+): IndividualMatch1v1Result {
+  const holeResults: Array<'w1' | 'w2' | 'h' | null> = []
+  let running = 0
+  const runningArr: number[] = []
+  let holesPlayed = 0
+
+  for (const hole of holes) {
+    const s1 = scores[p1Id]?.[hole.number]
+    const s2 = scores[p2Id]?.[hole.number]
+
+    if (s1 == null || s2 == null) {
+      holeResults.push(null)
+      runningArr.push(running)
+      continue
+    }
+
+    holesPlayed++
+    const net1 = s1 - holeStrokes(playerHdcps[p1Id] ?? 0, hole.hdcpOrder)
+    const net2 = s2 - holeStrokes(playerHdcps[p2Id] ?? 0, hole.hdcpOrder)
+
+    if (net1 < net2) { holeResults.push('w1'); running++ }
+    else if (net2 < net1) { holeResults.push('w2'); running-- }
+    else holeResults.push('h')
+    runningArr.push(running)
+  }
+
+  let winner: IndividualMatch1v1Result['winner'] = null
+  let winLabel = ''
+
+  if (holesPlayed > 0) {
+    const remaining = 18 - holesPlayed
+    const abs = Math.abs(running)
+    if (holesPlayed === 18) {
+      if (running > 0) { winner = 'p1'; winLabel = `${running} UP` }
+      else if (running < 0) { winner = 'p2'; winLabel = `${abs} UP` }
+      else { winner = 'all_square'; winLabel = 'All Square' }
+    } else if (abs > remaining) {
+      winLabel = `${abs}&${remaining}`
+      winner = running > 0 ? 'p1' : 'p2'
+    }
+  }
+
+  return { holeResults, running: runningArr, holesPlayed, winner, winLabel }
+}
+
+export function computeIndividualMatch(
+  match: Pick<Match, 'twosome1' | 'twosome2' | 'scores' | 'isBlind'>,
+  holes: Course['holes'],
+  playerHdcps: Record<string, number>,
+): IndividualMatchResult {
+  const matchA = compute1v1(match.twosome1.playerIds[0], match.twosome2.playerIds[0], match.scores, holes, playerHdcps)
+  const matchB = compute1v1(match.twosome1.playerIds[1], match.twosome2.playerIds[1], match.scores, holes, playerHdcps)
+  const match2v2 = match.isBlind ? null : computeMatchPlay(match, holes, playerHdcps)
+  return { matchA, matchB, match2v2 }
+}
+
 // ─── Captain's Choice ────────────────────────────────────────────────────────
 
 export interface CaptainsChoiceResult {

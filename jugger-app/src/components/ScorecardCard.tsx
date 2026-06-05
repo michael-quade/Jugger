@@ -1,7 +1,7 @@
 import type { Match, Team, Course, RoundConfig, Player } from '../types'
 import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp } from '../utils/handicap'
 import { getPlayerName } from '../utils/pairings'
-import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, type MatchPlayResult, type PointsRoundResult, type ScrambleResult, type CaptainsChoiceResult } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, type MatchPlayResult, type PointsRoundResult, type ScrambleResult, type CaptainsChoiceResult, type IndividualMatch1v1Result, type IndividualMatchResult } from '../utils/matchplay'
 
 interface Props {
   match: Match
@@ -65,10 +65,12 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   const isMatchPlay       = config.format === 'team_match_play'
   const isPointsRound     = config.format === 'points_round'
   const isScramble        = config.format === 'texas_scramble'
+  const isIndividualMatch = config.format === 'individual_match'
   const isCaptainsChoice  = config.format === 'captains_choice'
-  const mpResult = isMatchPlay      ? computeMatchPlay(match, course.holes, playerHdcps)   : null
-  const prResult = isPointsRound    ? computePointsRound(match, course.holes, playerHdcps) : null
-  const srResult = isScramble       ? computeScramble(match, course.holes, playerHdcps)    : null
+  const mpResult = isMatchPlay        ? computeMatchPlay(match, course.holes, playerHdcps)       : null
+  const prResult = isPointsRound      ? computePointsRound(match, course.holes, playerHdcps)     : null
+  const srResult = isScramble         ? computeScramble(match, course.holes, playerHdcps)        : null
+  const imResult = isIndividualMatch  ? computeIndividualMatch(match, course.holes, playerHdcps) : null
   // For Captain's Choice the shared teamHdcp is the value stored for any player (all same)
   const ccTeamHdcp = isCaptainsChoice ? (playerHdcps[allPlayerIds[0]] ?? 0) : 0
   const ccResult   = isCaptainsChoice ? computeCaptainsChoice(match.teamHoleScores, course.holes, ccTeamHdcp) : null
@@ -188,6 +190,21 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
               {/* Team score row */}
               {srResult && <ScrambleTeamRow result={srResult} course={course} match={match} teams={teams} />}
             </>
+          ) : isIndividualMatch && imResult ? (
+            <>
+              {/* Match A: twosome1[0] vs twosome2[0] */}
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <IndividualMatch1v1ResultRow result={imResult.matchA} p1Id={match.twosome1.playerIds[0]} p2Id={match.twosome2.playerIds[0]} course={course} teams={teams} />
+              {/* Match B: twosome1[1] vs twosome2[1] */}
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <IndividualMatch1v1ResultRow result={imResult.matchB} p1Id={match.twosome1.playerIds[1]} p2Id={match.twosome2.playerIds[1]} course={course} teams={teams} />
+              {/* 2v2 best-ball row — regular matches only */}
+              {!match.isBlind && imResult.match2v2 && (
+                <MatchPlayResultRow perspective="twosome1" result={imResult.match2v2} course={course} twosome={match.twosome1} teams={teams} rowLabel="2v2 +/−" />
+              )}
+            </>
           ) : (
             <>
               {/* Twosome 1 players */}
@@ -235,6 +252,15 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
       {isPointsRound && prResult?.winner && (
         <PointsRoundWinnerBanner result={prResult} match={match} teams={teams} />
       )}
+      {isIndividualMatch && imResult && (
+        <>
+          {imResult.matchA.winner && <IndividualMatch1v1WinnerBanner result={imResult.matchA} p1Id={match.twosome1.playerIds[0]} p2Id={match.twosome2.playerIds[0]} teams={teams} />}
+          {imResult.matchB.winner && <IndividualMatch1v1WinnerBanner result={imResult.matchB} p1Id={match.twosome1.playerIds[1]} p2Id={match.twosome2.playerIds[1]} teams={teams} />}
+          {!match.isBlind && imResult.match2v2?.winner && (
+            <MatchWinnerBanner result={imResult.match2v2} match={match} teams={teams} />
+          )}
+        </>
+      )}
 
       {/* Rules note */}
       <div className="mt-1 text-[9px] text-gray-400 italic">
@@ -252,9 +278,10 @@ interface MatchPlayResultRowProps {
   course: Course
   twosome: Match['twosome1']
   teams: Team[]
+  rowLabel?: string
 }
 
-function MatchPlayResultRow({ perspective, result, course, twosome, teams }: MatchPlayResultRowProps) {
+function MatchPlayResultRow({ perspective, result, course, twosome, teams, rowLabel }: MatchPlayResultRowProps) {
   const team = teams.find(t => t.id === twosome.teamId)
   const color = team?.color ?? '#9ca3af'
 
@@ -308,7 +335,7 @@ function MatchPlayResultRow({ perspective, result, course, twosome, teams }: Mat
   return (
     <tr className="row-result">
       <td className="player-name text-[9px] font-semibold" style={{ color }}>
-        {team?.name ?? ''} +/−
+        {rowLabel ?? `${team?.name ?? ''} +/−`}
       </td>
       {course.holes.map((h, i) => (
         <td key={h.number}>{cellContent(i)}</td>
@@ -340,6 +367,120 @@ function MatchWinnerBanner({ result, match, teams }: { result: MatchPlayResult; 
     <div className="mt-1.5 py-1 px-2 rounded text-[10px] text-center font-bold bg-masters-light border border-masters-green/30">
       <span style={{ color: winnerTeam?.color ?? '#006747' }}>{winnerTeam?.name ?? 'Team'}</span>
       <span className="text-masters-dark"> wins {result.winLabel}</span>
+    </div>
+  )
+}
+
+// ─── Individual Match Play Rows ───────────────────────────────────────────────
+
+interface IndividualMatch1v1ResultRowProps {
+  result: IndividualMatch1v1Result
+  p1Id: string
+  p2Id: string
+  course: Course
+  teams: Team[]
+}
+
+function IndividualMatch1v1ResultRow({ result, p1Id, p2Id, course, teams }: IndividualMatch1v1ResultRowProps) {
+  const allPlayers = teams.flatMap(t => t.players)
+  const p1 = allPlayers.find(p => p.id === p1Id)
+  const p2 = allPlayers.find(p => p.id === p2Id)
+  const p1Team = teams.find(t => t.players.some(p => p.id === p1Id))
+  const color = p1Team?.color ?? '#9ca3af'
+  const p1Last = p1?.name.split(' ').slice(-1)[0] ?? '?'
+  const p2Last = p2?.name.split(' ').slice(-1)[0] ?? '?'
+
+  function cellContent(i: number) {
+    const res = result.holeResults[i]
+    if (res === null) return null
+
+    const holeLabel = res === 'w1' ? 'W' : res === 'w2' ? 'L' : '—'
+    const holeClass = res === 'w1' ? 'text-masters-green' : res === 'w2' ? 'text-red-500' : 'text-gray-400'
+    const r = result.running[i]
+    const cumLabel = r > 0 ? `+${r}` : r < 0 ? `${r}` : 'AS'
+    const cumClass = r > 0 ? 'text-masters-green' : r < 0 ? 'text-red-500' : 'text-gray-400'
+
+    return (
+      <div className="flex flex-col items-center gap-[1px]">
+        <span className={`text-[8px] font-bold leading-none ${holeClass}`}>{holeLabel}</span>
+        <span className={`text-[7px] font-semibold leading-none ${cumClass}`}>{cumLabel}</span>
+      </div>
+    )
+  }
+
+  function runningDisplay(r: number) {
+    if (r > 0) return <span className="text-[8px] font-bold text-masters-green leading-none">+{r}</span>
+    if (r < 0) return <span className="text-[8px] font-bold text-red-500 leading-none">{r}</span>
+    return <span className="text-[8px] text-gray-400 leading-none">AS</span>
+  }
+
+  const frontRunning = result.holeResults[8] !== null ? result.running[8] : undefined
+
+  let totDisplay = null
+  if (result.winner) {
+    const iWon = result.winner === 'p1'
+    if (result.winner === 'all_square') {
+      totDisplay = <span className="text-[8px] text-gray-500 font-bold leading-none">AS</span>
+    } else {
+      totDisplay = (
+        <span className={`text-[8px] font-bold leading-none ${iWon ? 'text-masters-green' : 'text-red-500'}`}>
+          {result.winLabel}
+        </span>
+      )
+    }
+  } else if (result.holeResults[17] !== null) {
+    totDisplay = runningDisplay(result.running[17])
+  }
+
+  return (
+    <tr className="row-result">
+      <td className="player-name text-[9px] font-semibold" style={{ color }}>
+        {p1Last} v {p2Last}
+      </td>
+      {course.holes.map((h, i) => (
+        <td key={h.number}>{cellContent(i)}</td>
+      ))}
+      <td className="hole-out">
+        {frontRunning !== undefined && runningDisplay(frontRunning)}
+      </td>
+      <td className="hole-in" />
+      <td className="hole-total">{totDisplay}</td>
+    </tr>
+  )
+}
+
+function IndividualMatch1v1WinnerBanner({ result, p1Id, p2Id, teams }: {
+  result: IndividualMatch1v1Result
+  p1Id: string
+  p2Id: string
+  teams: Team[]
+}) {
+  if (!result.winner) return null
+  const allPlayers = teams.flatMap(t => t.players)
+  const p1 = allPlayers.find(p => p.id === p1Id)
+  const p2 = allPlayers.find(p => p.id === p2Id)
+  const p1Team = teams.find(t => t.players.some(p => p.id === p1Id))
+  const p2Team = teams.find(t => t.players.some(p => p.id === p2Id))
+  const p1Last = p1?.name.split(' ').slice(-1)[0] ?? '?'
+  const p2Last = p2?.name.split(' ').slice(-1)[0] ?? '?'
+
+  if (result.winner === 'all_square') {
+    return (
+      <div className="mt-1 py-1 px-2 rounded text-[10px] text-center font-bold bg-gray-50 border border-gray-200 text-gray-600">
+        {p1Last} vs {p2Last} — All Square
+      </div>
+    )
+  }
+
+  const winnerIsP1 = result.winner === 'p1'
+  const winnerLast = winnerIsP1 ? p1Last : p2Last
+  const loserLast  = winnerIsP1 ? p2Last : p1Last
+  const winTeam    = winnerIsP1 ? p1Team : p2Team
+
+  return (
+    <div className="mt-1 py-1 px-2 rounded text-[10px] text-center font-bold bg-masters-light border border-masters-green/30">
+      <span style={{ color: winTeam?.color ?? '#006747' }}>{winnerLast}</span>
+      <span className="text-masters-dark"> wins {result.winLabel} over {loserLast}</span>
     </div>
   )
 }

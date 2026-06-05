@@ -6,7 +6,7 @@ import { useIsAdmin } from '../store/useAuthStore'
 import ScorecardCard from '../components/ScorecardCard'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
-import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
 import { Printer, Dices, Trash2 } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team } from '../types'
 
@@ -132,6 +132,49 @@ export default function ScorecardView() {
     })
   }
 
+  function recomputeIndividualMatchTeamScores(currentMatches: typeof matches) {
+    if (!course || !config || config.format !== 'individual_match') return
+    const allPlayers = teams.flatMap(t => t.players)
+    const r4Matches = currentMatches.filter(m => m.round === config.round)
+    const teamPts: Record<string, number> = {}
+    teams.forEach(t => { teamPts[t.id] = 0 })
+
+    for (const m of r4Matches) {
+      const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+      const localHdcps: Record<string, number> = {}
+      allPids.forEach(pid => {
+        const player = allPlayers.find(p => p.id === pid)
+        if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+      })
+
+      const imRes = computeIndividualMatch(m, course.holes, localHdcps)
+
+      // 1v1 points: 1pt per win (regular) or 0.5pt (blind)
+      for (const { result, p1TeamId, p2TeamId } of [
+        { result: imRes.matchA, p1TeamId: m.twosome1.teamId, p2TeamId: m.twosome2.teamId },
+        { result: imRes.matchB, p1TeamId: m.twosome1.teamId, p2TeamId: m.twosome2.teamId },
+      ]) {
+        if (!result.winner) continue
+        const pts = m.isBlind ? 0.5 : 1
+        if (result.winner === 'p1') teamPts[p1TeamId] += pts
+        else if (result.winner === 'p2') teamPts[p2TeamId] += pts
+        else { teamPts[p1TeamId] += pts / 2; teamPts[p2TeamId] += pts / 2 }
+      }
+
+      // 2v2 point: 1pt for winner (regular only)
+      if (!m.isBlind && imRes.match2v2?.winner) {
+        const w = imRes.match2v2.winner
+        if (w === 'twosome1') teamPts[m.twosome1.teamId] += 1
+        else if (w === 'twosome2') teamPts[m.twosome2.teamId] += 1
+        else { teamPts[m.twosome1.teamId] += 0.5; teamPts[m.twosome2.teamId] += 0.5 }
+      }
+    }
+
+    teams.forEach(t => {
+      setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
+    })
+  }
+
   function handleMBToggle(field: 'magicBall1' | 'magicBall2', val: boolean) {
     if (!match || !config || config.format !== 'points_round' || match.isBlind) return
     updateMatch(match.id, { [field]: val })
@@ -200,6 +243,12 @@ export default function ScorecardView() {
       }
       const latestMatches = useTournamentStore.getState().matches
       recomputeCaptainsChoiceTeamScores(latestMatches)
+      return
+    }
+
+    if (config.format === 'individual_match') {
+      const latestMatches = useTournamentStore.getState().matches
+      recomputeIndividualMatchTeamScores(latestMatches)
       return
     }
 
@@ -274,7 +323,7 @@ export default function ScorecardView() {
         <h1 className="text-2xl font-serif font-bold text-masters-dark">Scorecards</h1>
         {isAdmin && matches.length > 0 && (
           <div className="flex items-center gap-2">
-            {(['team_match_play', 'points_round', 'texas_scramble', 'captains_choice'] as string[]).includes(config?.format ?? '') && teamScores.some(s => s.round === activeRound) && (
+            {(['team_match_play', 'points_round', 'texas_scramble', 'individual_match', 'captains_choice'] as string[]).includes(config?.format ?? '') && teamScores.some(s => s.round === activeRound) && (
               <button
                 onClick={() => { if (confirm('Clear team points for this round? Match scores are kept.')) clearAllTeamScores() }}
                 className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 border border-amber-200 hover:border-amber-400 rounded px-3 py-1.5 transition-colors"
@@ -406,6 +455,9 @@ export default function ScorecardView() {
                       if (config.format === 'texas_scramble') {
                         recomputeScrambleTeamScores(useTournamentStore.getState().matches)
                       }
+                      if (config.format === 'individual_match') {
+                        recomputeIndividualMatchTeamScores(useTournamentStore.getState().matches)
+                      }
                     }}
                     onTeamHoleScoreChange={(hole, val) => {
                       setTeamHoleScore(match.id, hole, val)
@@ -508,6 +560,97 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
     }, 0)
     const teamHdcp = Math.round(r5Sum * 0.15)
     allPlayerIds.forEach((pid: string) => { playerHdcps[pid] = teamHdcp })
+  }
+
+  // Individual Match Play: show per-player HDCP/gross/net + 1v1 and 2v2 match results
+  if (config.format === 'individual_match') {
+    const allPlayers = teams.flatMap((t: any) => t.players)
+    const imRes = computeIndividualMatch(match, course.holes, playerHdcps)
+
+    function get1v1Status(result: ReturnType<typeof computeIndividualMatch>['matchA'], p1Id: string, p2Id: string): { text: string; color: string } {
+      const p1Last = allPlayers.find((p: any) => p.id === p1Id)?.name.split(' ').slice(-1)[0] ?? '?'
+      const p2Last = allPlayers.find((p: any) => p.id === p2Id)?.name.split(' ').slice(-1)[0] ?? '?'
+      if (result.winner === 'all_square') return { text: 'All Square', color: 'text-gray-600' }
+      if (result.winner === 'p1') return { text: `${p1Last} wins ${result.winLabel}`, color: 'text-masters-green' }
+      if (result.winner === 'p2') return { text: `${p2Last} wins ${result.winLabel}`, color: 'text-masters-green' }
+      if (result.holesPlayed === 0) return { text: '—', color: 'text-gray-400' }
+      const r = result.running[result.holesPlayed - 1]
+      if (r === 0) return { text: `All Square thru ${result.holesPlayed}`, color: 'text-gray-600' }
+      const upLast = r > 0 ? p1Last : p2Last
+      return { text: `${upLast} +${Math.abs(r)} thru ${result.holesPlayed}`, color: 'text-masters-green' }
+    }
+
+    const t1Team = teams.find((t: any) => t.id === match.twosome1.teamId)
+    const t2Team = teams.find((t: any) => t.id === match.twosome2.teamId)
+
+    return (
+      <div className="card space-y-3">
+        <h3 className="section-header text-base">Score Summary</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-masters-light">
+                <th className="p-2 text-left">Player</th>
+                <th className="p-2">HDCP</th>
+                <th className="p-2">Gross</th>
+                <th className="p-2">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allPlayerIds.map((pid: string) => {
+                const player = allPlayers.find((p: any) => p.id === pid)
+                if (!player) return null
+                const hdcp = playerHdcps[pid] ?? 0
+                const scores = match.scores[pid] ?? {}
+                const gross = Object.values(scores).reduce((s: number, v: any) => s + (v ?? 0), 0) as number
+                const net = gross - hdcp
+                const playerTeam = teams.find((t: any) => t.players.some((p: any) => p.id === pid))
+                return (
+                  <tr key={pid} className="border-t">
+                    <td className="p-2 font-semibold" style={{ color: playerTeam?.color ?? '#333' }}>{player.name}</td>
+                    <td className="p-2 text-center">{hdcp}</td>
+                    <td className="p-2 text-center">{gross || '–'}</td>
+                    <td className="p-2 text-center">{gross ? net : '–'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="space-y-1.5">
+          {([
+            { label: '1v1 Match A', result: imRes.matchA, p1Id: match.twosome1.playerIds[0], p2Id: match.twosome2.playerIds[0] },
+            { label: '1v1 Match B', result: imRes.matchB, p1Id: match.twosome1.playerIds[1], p2Id: match.twosome2.playerIds[1] },
+          ] as const).map(({ label, result, p1Id, p2Id }) => {
+            const p1Last = allPlayers.find((p: any) => p.id === p1Id)?.name.split(' ').slice(-1)[0] ?? '?'
+            const p2Last = allPlayers.find((p: any) => p.id === p2Id)?.name.split(' ').slice(-1)[0] ?? '?'
+            const { text, color } = get1v1Status(result, p1Id, p2Id)
+            return (
+              <div key={label} className="flex items-center justify-between bg-masters-light rounded p-2 text-xs">
+                <span className="font-semibold text-masters-dark">
+                  {label}: <span style={{ color: t1Team?.color }}>{p1Last}</span> vs <span style={{ color: t2Team?.color }}>{p2Last}</span>
+                </span>
+                <span className={`font-bold ${color}`}>{text}</span>
+              </div>
+            )
+          })}
+          {!match.isBlind && imRes.match2v2 && (() => {
+            const w = imRes.match2v2.winner
+            const status = !w ? '—'
+              : w === 'all_square' ? 'All Square'
+              : `${teams.find((t: any) => t.id === (w === 'twosome1' ? match.twosome1.teamId : match.twosome2.teamId))?.name} wins ${imRes.match2v2.winLabel}`
+            return (
+              <div className="flex items-center justify-between bg-masters-light rounded p-2 text-xs">
+                <span className="font-semibold text-masters-dark">
+                  2v2 Best Ball: <span style={{ color: t1Team?.color }}>{t1Team?.name}</span> vs <span style={{ color: t2Team?.color }}>{t2Team?.name}</span>
+                </span>
+                <span className={`font-bold ${w && w !== 'all_square' ? 'text-masters-green' : 'text-gray-600'}`}>{status}</span>
+              </div>
+            )
+          })()}
+        </div>
+      </div>
+    )
   }
 
   // Captain's Choice: show team total and tee shot counts
