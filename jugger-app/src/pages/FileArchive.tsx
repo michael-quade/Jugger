@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import {
   FileText, Sheet, Image as ImageIcon, File,
   ChevronDown, ChevronRight, FolderOpen, Folder,
-  Download, ExternalLink,
+  Download, ExternalLink, Lock,
 } from 'lucide-react'
+import { useIsAdmin } from '../store/useAuthStore'
 
 interface FileEntry { name: string; size: number }
 type ArchiveTree = Record<string, FileEntry[]>
@@ -150,38 +151,60 @@ function YearSection({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function FileArchive() {
+  const isAdmin = useIsAdmin()
   const [tree,    setTree]    = useState<ArchiveTree | null>(null)
   const [error,   setError]   = useState<string | null>(null)
   const [filter,  setFilter]  = useState('')
   const [allOpen, setAllOpen] = useState(false)
-  const [key,     setKey]     = useState(0) // increment to force re-mount year sections
+  const [key,     setKey]     = useState(0)
 
   useEffect(() => {
+    if (!isAdmin) return
     fetch('/api/history-files')
       .then(r => {
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+        if (!r.ok) throw new Error(`${r.status}`)
         return r.json() as Promise<ArchiveTree>
       })
       .then(setTree)
       .catch(e => setError(String(e)))
-  }, [])
+  }, [isAdmin])
 
   function toggleAll(open: boolean) {
     setAllOpen(open)
     setKey(k => k + 1)
   }
 
-  const years   = tree ? Object.keys(tree).sort().reverse() : []
+  const years      = tree ? Object.keys(tree).sort().reverse() : []
   const totalFiles = tree ? Object.values(tree).reduce((s, f) => s + f.length, 0) : 0
 
+  if (!isAdmin) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-serif font-bold text-masters-dark">Archive</h1>
+        <div className="card text-center py-12">
+          <Lock size={32} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-gray-500 font-semibold">Admin access required</p>
+          <p className="text-sm text-gray-400 mt-1">Sign in as admin to view the archive.</p>
+        </div>
+      </div>
+    )
+  }
+
   if (error) {
+    const isNotFound = error.includes('404') || error.includes('Not Found')
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-serif font-bold text-masters-dark">Archive</h1>
         <div className="card text-center py-12">
           <p className="text-red-500 font-semibold">Could not load archive</p>
-          <p className="text-sm text-gray-400 mt-1">{error}</p>
-          <p className="text-xs text-gray-400 mt-3">Make sure the app is running with <code>npm run dev</code> from the <code>jugger-app/</code> directory.</p>
+          {isNotFound ? (
+            <p className="text-sm text-gray-400 mt-2">
+              The archive is only available when running locally.<br />
+              Run <code className="bg-gray-100 px-1 rounded">npm run dev</code> from the <code className="bg-gray-100 px-1 rounded">jugger-app/</code> directory.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-400 mt-1">Error: {error}</p>
+          )}
         </div>
       </div>
     )
