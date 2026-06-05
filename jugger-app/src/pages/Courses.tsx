@@ -133,10 +133,7 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
           <div className="absolute inset-0 bg-gradient-to-t from-masters-dark/70 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
             <h2 className="font-serif text-2xl font-bold drop-shadow">{course.name}</h2>
-            <p className="text-sm text-masters-gold font-semibold">
-              Par {course.par}
-              {draft.tees.map(t => ` · ${t.name}: ${t.rating}/${t.slope}`).join('')}
-            </p>
+            <p className="text-sm text-masters-gold font-semibold">Par {course.par}</p>
           </div>
           {draft.website && (
             <a
@@ -178,17 +175,44 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
         {/* Tees */}
         <div className="mt-4">
           <label className="label">Tee Options</label>
-          <div className="space-y-2">
-            {draft.tees.map((tee, i) => (
-              <div key={i} className="flex flex-wrap gap-2 items-center">
-                <input className="input w-24" value={tee.name} readOnly={!isAdmin} onChange={e => isAdmin && updateTee(i, { name: e.target.value })} placeholder="Name" />
-                <span className="text-xs text-gray-400">Rating:</span>
-                <input className="input w-20" type="number" step="0.1" value={tee.rating} readOnly={!isAdmin} onChange={e => isAdmin && updateTee(i, { rating: parseFloat(e.target.value) })} />
-                <span className="text-xs text-gray-400">Slope:</span>
-                <input className="input w-20" type="number" value={tee.slope} readOnly={!isAdmin} onChange={e => isAdmin && updateTee(i, { slope: parseInt(e.target.value) })} />
-              </div>
-            ))}
-          </div>
+          <table className="w-full text-sm mt-1">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-gray-400 border-b">
+                <th className="text-left pb-1 pr-2 font-medium">Name</th>
+                <th className="text-right pb-1 px-2 font-medium">Yards</th>
+                <th className="text-right pb-1 px-2 font-medium">Rating</th>
+                <th className="text-right pb-1 pl-2 font-medium">Slope</th>
+              </tr>
+            </thead>
+            <tbody>
+              {draft.tees.map((tee, i) => {
+                const fromHoles = draft.holes.reduce((s, h) => s + (h.yardages[tee.name] ?? 0), 0)
+                const holesWithData = draft.holes.filter(h => h.yardages[tee.name] != null).length
+                const yards = holesWithData === 18 ? fromHoles : (tee.totalYards ?? null)
+                return (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-1 pr-2">
+                      <input className="input w-24" value={tee.name} readOnly={!isAdmin}
+                        onChange={e => isAdmin && updateTee(i, { name: e.target.value })} />
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums text-gray-600 font-medium">
+                      {yards?.toLocaleString() ?? '—'}
+                    </td>
+                    <td className="py-1 px-2 text-right">
+                      <input className="input w-20 text-right" type="number" step="0.1"
+                        value={tee.rating ?? ''} readOnly={!isAdmin}
+                        onChange={e => isAdmin && updateTee(i, { rating: parseFloat(e.target.value) })} />
+                    </td>
+                    <td className="py-1 pl-2 text-right">
+                      <input className="input w-20 text-right" type="number"
+                        value={tee.slope ?? ''} readOnly={!isAdmin}
+                        onChange={e => isAdmin && updateTee(i, { slope: parseInt(e.target.value) })} />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 

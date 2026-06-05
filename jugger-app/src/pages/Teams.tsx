@@ -135,7 +135,8 @@ function HdcpTable() {
   function calcPlayer(index: number) {
     return courseRounds.map(({ round, course, tee }) => {
       if (!course || !tee) return null
-      const { slope, rating } = tee
+      const slope = tee.slope ?? 113
+      const rating = tee.rating ?? course.par
       const par = course.par
       const raw = rawCourseHdcpDisplay(index, slope, rating, par)
       const nettedRaw = nettedCourseHdcpRaw(index, slope, rating, par, minIndex)
@@ -274,7 +275,7 @@ function HdcpTable() {
               <td className={td + ' font-mono text-[10px]'}>{minIndex.toFixed(1)}</td>
               {courseRounds.map(({ round, course, tee }) => {
                 if (!course || !tee) return <Fragment key={round}><td /><td /></Fragment>
-                const baseRaw = rawCourseHdcpDisplay(minIndex, tee.slope, tee.rating, course.par)
+                const baseRaw = rawCourseHdcpDisplay(minIndex, tee.slope ?? 113, tee.rating ?? course.par, course.par)
                 return (
                   <Fragment key={round}>
                     <td className={td + ' text-[10px] border-l-2 border-l-masters-green/40'}>

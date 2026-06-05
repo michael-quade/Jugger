@@ -113,11 +113,17 @@ export default function Schedule() {
                           value={rc.tee}
                           onChange={e => updateField(rc.round, 'tee', e.target.value)}
                         >
-                          {(course?.tees ?? []).map(t => (
-                            <option key={t.name} value={t.name}>
-                              {t.name} ({t.rating}/{t.slope})
-                            </option>
-                          ))}
+                          {(course?.tees ?? []).filter(t => t.rating != null && t.slope != null).map(t => {
+                            const fromHoles = (course?.holes ?? []).reduce((s, h) => s + (h.yardages[t.name] ?? 0), 0)
+                            const holesWithData = (course?.holes ?? []).filter(h => h.yardages[t.name] != null).length
+                            const yards = holesWithData === 18 ? fromHoles : (t.totalYards ?? null)
+                            const yardsStr = yards ? ` · ${yards.toLocaleString()} yds` : ''
+                            return (
+                              <option key={t.name} value={t.name}>
+                                {t.name}{yardsStr} · {t.rating}/{t.slope}
+                              </option>
+                            )
+                          })}
                         </select>
                       ) : (
                         <span className="text-sm font-medium text-masters-dark">{rc.tee || '—'}</span>
@@ -158,9 +164,16 @@ export default function Schedule() {
                 <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 bg-masters-cream rounded p-2">
                   <span><strong>Course:</strong> {course.name}</span>
                   <span><strong>Par:</strong> {course.par}</span>
-                  {course.tees.map(t => (
-                    <span key={t.name}><strong>{t.name}:</strong> {t.rating}/{t.slope}</span>
-                  ))}
+                  {course.tees.filter(t => t.rating != null).map(t => {
+                    const fromHoles = course.holes.reduce((s, h) => s + (h.yardages[t.name] ?? 0), 0)
+                    const holesWithData = course.holes.filter(h => h.yardages[t.name] != null).length
+                    const yards = holesWithData === 18 ? fromHoles : (t.totalYards ?? null)
+                    return (
+                      <span key={t.name}>
+                        <strong>{t.name}:</strong> {yards ? `${yards.toLocaleString()} yds · ` : ''}{t.rating}/{t.slope}
+                      </span>
+                    )
+                  })}
                   {course.website && (
                     <a href={course.website} target="_blank" rel="noopener noreferrer" className="text-masters-green underline">
                       Course website ↗

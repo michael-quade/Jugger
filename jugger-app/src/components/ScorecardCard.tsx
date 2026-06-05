@@ -48,7 +48,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
       .map(pid => allPlayers.find(p => p.id === pid))
       .filter((p): p is Player => !!p)
     const r5Sum = matchPlayerList.reduce(
-      (s, p) => s + tournamentHdcp(p.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false),
+      (s, p) => s + tournamentHdcp(p.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false),
       0,
     )
     const teamHdcp = Math.round(r5Sum * 0.15)

@@ -19,12 +19,12 @@ export function getPlayerCourseHdcp(
 
   if (allTournamentPlayers.length === 0) {
     // Legacy fallback: raw course HDCP (used when netting players not available)
-    const raw = courseHandicap(player.handicapIndex, teeData.slope, teeData.rating, course.par)
+    const raw = courseHandicap(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par)
     return round === 3 ? Math.floor(raw * 0.6) : raw
   }
 
   const minIndex = Math.min(...allTournamentPlayers.map(p => p.handicapIndex))
-  return tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, round === 3)
+  return tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, round === 3)
 }
 
 export function playerQuota(courseHdcp: number): number {
@@ -127,7 +127,7 @@ export function computeAllCourseHdcps(
   if (round === 5) {
     // Individual R5 tournament HDCPs summed, then × 15% for the team
     const indivHdcps = players.map(p =>
-      tournamentHdcp(p.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false)
+      tournamentHdcp(p.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false)
     )
     const teamHdcp = Math.round(indivHdcps.reduce((s, v) => s + v, 0) * 0.15)
     players.forEach(p => { result[p.id] = teamHdcp })

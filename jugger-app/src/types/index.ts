@@ -24,8 +24,9 @@ export interface HoleData {
 
 export interface CourseTee {
   name: string
-  rating: number
-  slope: number
+  rating?: number
+  slope?: number
+  totalYards?: number  // pre-stored total when per-hole data unavailable
 }
 
 export interface Course {

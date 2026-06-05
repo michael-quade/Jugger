@@ -115,7 +115,7 @@ export default function ScorecardView() {
       const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
       const r5Sum = allPids.reduce((s, pid) => {
         const player = allPlayers.find(p => p.id === pid)
-        return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false) : 0)
+        return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false) : 0)
       }, 0)
       const teamHdcp = Math.round(r5Sum * 0.15)
       const ccRes = computeCaptainsChoice(m.teamHoleScores, course.holes, teamHdcp)
@@ -171,7 +171,7 @@ export default function ScorecardView() {
       const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
       const r5Sum = allPids.reduce((s, pid) => {
         const player = allPlayers.find(p => p.id === pid)
-        return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false) : 0)
+        return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false) : 0)
       }, 0)
       const teamHdcp = Math.round(r5Sum * 0.15)
 
@@ -504,7 +504,7 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
     const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map((p: any) => p.handicapIndex)) : 0
     const r5Sum = allPlayerIds.reduce((s: number, pid: string) => {
       const player = allPlayers.find((p: any) => p.id === pid)
-      return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false) : 0)
+      return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false) : 0)
     }, 0)
     const teamHdcp = Math.round(r5Sum * 0.15)
     allPlayerIds.forEach((pid: string) => { playerHdcps[pid] = teamHdcp })
@@ -516,7 +516,7 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
     const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map((p: any) => p.handicapIndex)) : 0
     const r5Sum = allPlayerIds.reduce((s: number, pid: string) => {
       const player = allPlayers.find((p: any) => p.id === pid)
-      return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope, teeData.rating, course.par, minIndex, false) : 0)
+      return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false) : 0)
     }, 0)
     const teamHdcp = Math.round(r5Sum * 0.15)
     const ccResult = computeCaptainsChoice(match.teamHoleScores, course.holes, teamHdcp)
