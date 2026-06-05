@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { Course, HoleData, CourseTee } from '../types'
-import { Check, X, ExternalLink } from 'lucide-react'
+import { Check, X, ExternalLink, ZoomIn } from 'lucide-react'
 
 const COURSE_IMAGES: Record<string, string> = {
   'pine-needles':      `${import.meta.env.BASE_URL}courses/pine-needles.jpg`,
@@ -13,6 +13,41 @@ const COURSE_IMAGES: Record<string, string> = {
 
 const COURSE_IMAGE_POSITIONS: Record<string, string> = {
   'mid-south': 'center 70%',
+}
+
+const SCORECARD_IMAGES: Record<string, { src: string; label: string }[]> = {
+  'pine-needles': [
+    { src: `${import.meta.env.BASE_URL}courses/scorecard-pine-needles-logo.png`, label: 'Scorecard — Yardages' },
+    { src: `${import.meta.env.BASE_URL}courses/scorecard-pine-needles.png`,      label: 'Scorecard — Rating & Slope' },
+  ],
+  'pinewild-magnolia': [
+    { src: `${import.meta.env.BASE_URL}courses/scorecard-pinewild-magnolia.jpeg`, label: 'Official Scorecard' },
+  ],
+  'pinewild-holly': [
+    { src: `${import.meta.env.BASE_URL}courses/scorecard-pinewild-holly.jpeg`, label: 'Official Scorecard' },
+  ],
+  'mid-south': [
+    { src: `${import.meta.env.BASE_URL}courses/scorecard-mid-south.jpeg`, label: 'Official Scorecard' },
+  ],
+}
+
+function ScorecardLightbox({ src, label, onClose }: { src: string; label: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <div className="relative max-w-5xl w-full" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-white font-semibold text-sm">{label}</span>
+          <button onClick={onClose} className="text-white hover:text-masters-gold">
+            <X size={22} />
+          </button>
+        </div>
+        <img src={src} alt={label} className="w-full rounded shadow-xl object-contain max-h-[80vh]" />
+      </div>
+    </div>
+  )
 }
 
 export default function Courses() {
@@ -52,6 +87,7 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
   const [draft, setDraft] = useState<Course>({ ...course })
   const [dirty, setDirty] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const [lightbox, setLightbox] = useState<{ src: string; label: string } | null>(null)
 
   const imageUrl = COURSE_IMAGES[course.id]
 
@@ -218,6 +254,33 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
           </div>
         )
       })}
+
+      {/* Official Scorecards */}
+      {SCORECARD_IMAGES[course.id] && (
+        <div className="card">
+          <h3 className="section-header mb-3">Official Scorecards</h3>
+          <div className={`grid gap-4 ${SCORECARD_IMAGES[course.id].length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+            {SCORECARD_IMAGES[course.id].map(({ src, label }) => (
+              <div key={src} className="space-y-1">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+                <div
+                  className="relative group cursor-zoom-in rounded overflow-hidden border border-gray-200 shadow-sm"
+                  onClick={() => setLightbox({ src, label })}
+                >
+                  <img src={src} alt={label} className="w-full object-contain bg-white" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                    <ZoomIn size={28} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lightbox && (
+        <ScorecardLightbox src={lightbox.src} label={lightbox.label} onClose={() => setLightbox(null)} />
+      )}
 
       {dirty && isAdmin && (
         <div className="flex gap-2">
