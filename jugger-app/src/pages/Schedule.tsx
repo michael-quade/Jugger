@@ -187,7 +187,7 @@ export default function Schedule() {
                 <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 bg-masters-cream rounded p-2">
                   <span><strong>Course:</strong> {course.name}</span>
                   <span><strong>Par:</strong> {course.par}</span>
-                  {course.tees.filter(t => t.rating != null).map(t => {
+                  {course.tees.filter(t => t.rating != null && t.name === rc.tee).map(t => {
                     const fromHoles = course.holes.reduce((s, h) => s + (h.yardages[t.name] ?? 0), 0)
                     const holesWithData = course.holes.filter(h => h.yardages[t.name] != null).length
                     const yards = holesWithData === 18 ? fromHoles : (t.totalYards ?? null)
