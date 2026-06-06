@@ -38,8 +38,16 @@ function fmt24to12(t: string): string {
 const MATCH_LABELS = ['Match A', 'Match B', 'Match C'] as const
 
 export default function Schedule() {
-  const { roundConfigs, courses, setRoundConfig } = useTournamentStore()
+  const { roundConfigs, courses, setRoundConfig, matches, teams } = useTournamentStore()
   const isAdmin = useIsAdmin()
+
+  const playerName = (id: string) => {
+    for (const t of teams) {
+      const p = t.players.find(p => p.id === id)
+      if (p) return p.name.split(' ')[0] // first name only to keep it compact
+    }
+    return id
+  }
 
   const sorted = [...roundConfigs].sort((a, b) => a.round - b.round)
 
@@ -137,23 +145,38 @@ export default function Schedule() {
                       <Clock size={11} /> Tee Times
                     </label>
                     <div className="grid grid-cols-3 gap-2">
-                      {MATCH_LABELS.map((label, idx) => (
-                        <div key={label}>
-                          <div className="text-xs text-gray-400 mb-0.5">{label}</div>
-                          {isAdmin ? (
-                            <input
-                              type="time"
-                              className="input text-sm"
-                              value={times[idx] ?? ''}
-                              onChange={e => updateTeeTime(rc.round, idx as 0 | 1 | 2, e.target.value)}
-                            />
-                          ) : (
-                            <span className="text-sm font-semibold text-masters-dark">
-                              {fmt24to12(times[idx] ?? '')}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                      {MATCH_LABELS.map((label, idx) => {
+                        const matchId = `${rc.round}${['a','b','c'][idx]}`
+                        const m = matches.find(x => x.id === matchId)
+                        return (
+                          <div key={label}>
+                            <div className="text-xs text-gray-400 mb-0.5">{label}</div>
+                            {isAdmin ? (
+                              <input
+                                type="time"
+                                className="input text-sm"
+                                value={times[idx] ?? ''}
+                                onChange={e => updateTeeTime(rc.round, idx as 0 | 1 | 2, e.target.value)}
+                              />
+                            ) : (
+                              <span className="text-sm font-semibold text-masters-dark">
+                                {fmt24to12(times[idx] ?? '')}
+                              </span>
+                            )}
+                            {m && (
+                              <div className="mt-1.5 text-xs leading-snug">
+                                <div className="font-medium text-masters-dark">
+                                  {playerName(m.twosome1.playerIds[0])} &amp; {playerName(m.twosome1.playerIds[1])}
+                                </div>
+                                <div className="text-gray-400 text-[10px]">vs</div>
+                                <div className="font-medium text-masters-dark">
+                                  {playerName(m.twosome2.playerIds[0])} &amp; {playerName(m.twosome2.playerIds[1])}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
