@@ -79,19 +79,20 @@ export default function Schedule() {
           const course = courses.find(c => c.id === rc.courseId)
           const times = rc.teeTimes ?? ['', '', '']
           return (
-            <div key={rc.round} className="card border-l-4 border-masters-green">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-[180px]">
-                  <div className="flex items-center gap-2">
-                    <span className="badge bg-masters-green text-white">Round {rc.round}</span>
-                    <h3 className="font-serif font-bold text-lg text-masters-dark">
-                      {FORMAT_LABELS[rc.format] ?? rc.format}
-                    </h3>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">{FORMAT_RULES[rc.format]}</p>
+            <div key={rc.round} className="card border-l-4 border-masters-green space-y-3">
+              {/* Header row: badge + title + rules */}
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="badge bg-masters-green text-white">Round {rc.round}</span>
+                  <h3 className="font-serif font-bold text-lg text-masters-dark">
+                    {FORMAT_LABELS[rc.format] ?? rc.format}
+                  </h3>
                 </div>
+                <p className="text-xs text-gray-500">{FORMAT_RULES[rc.format]}</p>
+              </div>
 
-                <div className="flex-1 min-w-0 space-y-3">
+              {/* Date + Tees + Tee Times */}
+              <div className="space-y-3">
                   {/* Date + Tees row */}
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div>
@@ -180,11 +181,10 @@ export default function Schedule() {
                     </div>
                   </div>
                 </div>
-              </div>
 
               {/* Course summary */}
               {course && (
-                <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 bg-masters-cream rounded p-2">
+                <div className="flex flex-wrap gap-3 text-xs text-gray-500 bg-masters-cream rounded p-2">
                   <span><strong>Course:</strong> {course.name}</span>
                   <span><strong>Par:</strong> {course.par}</span>
                   {course.tees.filter(t => t.rating != null && t.name === rc.tee).map(t => {
