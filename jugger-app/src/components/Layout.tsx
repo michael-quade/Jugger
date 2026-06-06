@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, Link } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
@@ -34,14 +34,14 @@ export default function Layout() {
       <header className="sticky top-0 z-50 bg-masters-dark text-white no-print">
         <div className="max-w-7xl mx-auto px-4 py-5 flex items-center gap-4">
           <Flag size={36} className="text-masters-gold shrink-0" />
-          <div>
+          <Link to="/" className="hover:opacity-80 transition-opacity">
             <h1 className="font-serif text-3xl font-bold leading-tight tracking-wide">
               Juggerknocker Invitational
             </h1>
             <p className="text-masters-gold text-sm font-semibold tracking-widest mt-0.5 uppercase">
               {year} Season
             </p>
-          </div>
+          </Link>
           {isSupabaseEnabled && (
             <div className="ml-auto flex items-center gap-1.5 text-xs text-white/60" title={connected ? 'Live sync connected' : 'Connecting…'}>
               <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-white/30'}`} />

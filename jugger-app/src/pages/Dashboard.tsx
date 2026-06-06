@@ -95,7 +95,7 @@ export default function Dashboard() {
             .slice()
             .sort((a, b) => a.round - b.round)
             .map(rc => (
-              <div key={rc.round} className="flex items-center gap-3 py-2">
+              <Link key={rc.round} to="/schedule" className="flex items-center gap-3 py-2 hover:bg-masters-green/5 -mx-4 px-4 transition-colors">
                 <span className="badge bg-masters-green text-white w-16 text-center">
                   Round {rc.round}
                 </span>
@@ -110,7 +110,7 @@ export default function Dashboard() {
                   const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
                   return <span className="text-xs text-masters-gold font-semibold">{h12}:{String(m).padStart(2,'0')} {ampm}</span>
                 })()}
-              </div>
+              </Link>
             ))}
         </div>
       </div>
