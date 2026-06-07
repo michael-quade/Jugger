@@ -309,6 +309,22 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="bg-masters-light font-bold">
+                  <td className="border p-1 text-center text-masters-dark">Total</td>
+                  <td className="border p-1 text-center text-masters-dark">{groupPar}</td>
+                  <td className="border p-1" />
+                  {draft.tees.map(t => {
+                    const total = group.reduce((s, h) => s + (h.yardages[t.name] ?? 0), 0)
+                    const allPresent = group.every(h => h.yardages[t.name] != null)
+                    return (
+                      <td key={t.name} className="border p-1 text-center tabular-nums text-masters-dark">
+                        {allPresent ? total.toLocaleString() : '—'}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tfoot>
             </table>
           </div>
         )
