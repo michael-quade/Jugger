@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
+import { useIsAdmin } from '../store/useAuthStore'
 import { COURSE_IMAGE_DEFAULTS, COURSE_IMAGE_CONTAIN, COURSE_NAME_OVERRIDES, COURSE_WEBSITE_OVERRIDES, COURSE_NOTES_OVERRIDES } from '../data/initialData'
 import type { CourseHistoryEntry, CourseHistoryRound, CourseTee } from '../types'
 import {
@@ -296,6 +297,7 @@ function CourseDetail({
   onBack: () => void
   onAssignRound: (round: 1 | 2 | 3 | 4 | 5) => void
 }) {
+  const isAdmin = useIsAdmin()
   const [imgErr, setImgErr] = useState(false)
   const [scImgErr, setScImgErr] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
@@ -423,7 +425,7 @@ function CourseDetail({
       </div>
 
       {/* Assign to round */}
-      <div className="card">
+      {isAdmin && <div className="card">
         <div className="flex items-center justify-between">
           <h3 className="section-header mb-0">Assign to Tournament Round</h3>
           <button
@@ -447,7 +449,7 @@ function CourseDetail({
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Scorecard attachment */}
       {scSrc && !scImgErr && (
