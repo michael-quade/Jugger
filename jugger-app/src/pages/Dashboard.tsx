@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import { Users, MapPin, Shuffle, Trophy, Lock, Unlock } from 'lucide-react'
+import { Users, MapPin, Shuffle, Trophy, Lock, Unlock, CheckCircle, AlertTriangle, X } from 'lucide-react'
 
 const ROUND_FORMATS: Record<string, string> = {
   team_match_play: 'Team Match Play',
@@ -12,8 +13,9 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, setYear, teams, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear } = useTournamentStore()
   const isAdmin = useIsAdmin()
+  const [showFinalize, setShowFinalize] = useState(false)
 
   const totalMatches = matches.length
   const scoredMatches = matches.filter(m => Object.keys(m.scores).length > 0).length
@@ -133,6 +135,55 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Finalize tournament (admin, live year only) */}
+      {isAdmin && !isViewingHistory && (
+        <div className="card border border-dashed border-gray-200">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="font-serif font-bold text-masters-dark">Finalize {year} Tournament</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Archives all {year} data and advances the site to {year + 1}. Rosters and courses are kept as a template.
+              </p>
+            </div>
+            <button
+              className="btn-ghost text-xs text-red-600 border-red-200 hover:border-red-400 hover:text-red-700 flex items-center gap-1.5 shrink-0"
+              onClick={() => setShowFinalize(true)}
+            >
+              <CheckCircle size={14} /> Finalize {year}…
+            </button>
+          </div>
+
+          {showFinalize && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-800 text-sm">Finalize {year} Juggerknocker Invitational?</p>
+                  <ul className="text-xs text-red-700 mt-1.5 space-y-0.5 list-disc list-inside">
+                    <li>All {year} data (pairings, scores, results) will be archived</li>
+                    <li>The site will advance to {year + 1}</li>
+                    <li>Rosters and course configs carry over as a starting template</li>
+                    <li>After finalizing, reload the page to start syncing for {year + 1}</li>
+                    <li>Previous year data remains viewable and editable by admins</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  className="btn-primary text-xs bg-red-600 border-red-600 hover:bg-red-700 flex items-center gap-1.5"
+                  onClick={() => { finalizeYear(); setShowFinalize(false) }}
+                >
+                  <CheckCircle size={13} /> Confirm — finalize {year} &amp; advance to {year + 1}
+                </button>
+                <button className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1" onClick={() => setShowFinalize(false)}>
+                  <X size={12} /> Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

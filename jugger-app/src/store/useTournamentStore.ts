@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { TournamentState, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation } from '../types'
+import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation } from '../types'
 import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY } from '../data/initialData'
 import { COURSES, ROUND_CONFIGS } from '../data/courseData'
 
@@ -54,11 +54,19 @@ interface Actions {
   clearTeamScoresForRound: (round: number) => void
   clearRoundMatches: (round: number) => void
 
+  finalizeYear: () => void
+  switchToYear: (year: number) => void
+  returnToLive: () => void
+
   resetAll: () => void
 }
 
 const DEFAULT_STATE: TournamentState = {
   year: new Date().getFullYear(),
+  liveYear: new Date().getFullYear(),
+  archivedYears: [],
+  isViewingHistory: false,
+  liveCache: null,
   teams: INITIAL_TEAMS,
   courses: COURSES,
   roundConfigs: ROUND_CONFIGS,
@@ -297,11 +305,90 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       clearRoundMatches: (round) =>
         set(state => ({ matches: state.matches.filter(m => m.round !== round) })),
 
+      finalizeYear: () =>
+        set(state => {
+          const snapshot: ArchivedYear = {
+            year: state.year,
+            finalizedAt: new Date().toISOString(),
+            teams: state.teams,
+            roundConfigs: state.roundConfigs,
+            matches: state.matches,
+            teamScores: state.teamScores,
+            hdcpLocked: state.hdcpLocked,
+          }
+          const newYear = state.year + 1
+          return {
+            archivedYears: [...state.archivedYears.filter(a => a.year !== state.year), snapshot],
+            liveYear: newYear,
+            year: newYear,
+            matches: [],
+            teamScores: [],
+            hdcpLocked: false,
+            isViewingHistory: false,
+            liveCache: null,
+          }
+        }),
+
+      switchToYear: (targetYear) =>
+        set(state => {
+          if (targetYear === state.liveYear) {
+            // Return to live year
+            if (!state.liveCache) return { isViewingHistory: false }
+            const updatedArchived = state.isViewingHistory
+              ? state.archivedYears.map(a => a.year === state.year
+                  ? { ...a, teams: state.teams, roundConfigs: state.roundConfigs, matches: state.matches, teamScores: state.teamScores, hdcpLocked: state.hdcpLocked }
+                  : a)
+              : state.archivedYears
+            return {
+              ...state.liveCache,
+              liveYear: state.liveYear,
+              archivedYears: updatedArchived,
+              isViewingHistory: false,
+              liveCache: null,
+            }
+          }
+          const archived = state.archivedYears.find(a => a.year === targetYear)
+          if (!archived) return state
+          // Keep original live cache when already viewing history; create it otherwise
+          const liveCache = state.isViewingHistory ? state.liveCache : {
+            year: state.year, teams: state.teams, roundConfigs: state.roundConfigs,
+            matches: state.matches, teamScores: state.teamScores, hdcpLocked: state.hdcpLocked,
+          }
+          // Save any edits to current historical year before switching
+          const archivedYears = state.isViewingHistory
+            ? state.archivedYears.map(a => a.year === state.year
+                ? { ...a, teams: state.teams, roundConfigs: state.roundConfigs, matches: state.matches, teamScores: state.teamScores, hdcpLocked: state.hdcpLocked }
+                : a)
+            : state.archivedYears
+          return {
+            year: archived.year, teams: archived.teams, roundConfigs: archived.roundConfigs,
+            matches: archived.matches, teamScores: archived.teamScores, hdcpLocked: archived.hdcpLocked,
+            liveYear: state.liveYear, archivedYears, isViewingHistory: true, liveCache,
+          }
+        }),
+
+      returnToLive: () =>
+        set(state => {
+          if (!state.liveCache) return { isViewingHistory: false }
+          const updatedArchived = state.isViewingHistory
+            ? state.archivedYears.map(a => a.year === state.year
+                ? { ...a, teams: state.teams, roundConfigs: state.roundConfigs, matches: state.matches, teamScores: state.teamScores, hdcpLocked: state.hdcpLocked }
+                : a)
+            : state.archivedYears
+          return {
+            ...state.liveCache,
+            liveYear: state.liveYear,
+            archivedYears: updatedArchived,
+            isViewingHistory: false,
+            liveCache: null,
+          }
+        }),
+
       resetAll: () => set(DEFAULT_STATE),
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 12,
+      version: 13,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -390,6 +477,13 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             if (!def) return c
             return { ...c, tees: def.tees, holes: def.holes }
           })
+        }
+        if (fromVersion < 13) {
+          const b = base as any
+          if (b.liveYear === undefined)         b.liveYear = base.year
+          if (b.archivedYears === undefined)    b.archivedYears = []
+          if (b.isViewingHistory === undefined) b.isViewingHistory = false
+          if (b.liveCache === undefined)        b.liveCache = null
         }
         return base as TournamentState
       },

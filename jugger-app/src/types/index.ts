@@ -125,8 +125,22 @@ export interface CtpDonation {
   paid: boolean
 }
 
+export interface ArchivedYear {
+  year: number
+  finalizedAt: string
+  teams: Team[]
+  roundConfigs: RoundConfig[]
+  matches: Match[]
+  teamScores: TeamRoundScore[]
+  hdcpLocked: boolean
+}
+
 export interface TournamentState {
   year: number
+  liveYear: number
+  archivedYears: ArchivedYear[]
+  isViewingHistory: boolean
+  liveCache: Omit<ArchivedYear, 'finalizedAt'> | null
   teams: Team[]
   courses: Course[]
   roundConfigs: RoundConfig[]

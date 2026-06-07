@@ -30,6 +30,7 @@ export function useSupabaseSync() {
     // ── Helpers: apply a remote row to the local store ─────────────────────
 
     function applyAppState(state: Partial<TournamentState>) {
+      if (useTournamentStore.getState().isViewingHistory) return
       remoteDepth++
       const updates: Partial<TournamentState> = {}
       for (const key of APP_STATE_KEYS) {
@@ -41,6 +42,7 @@ export function useSupabaseSync() {
     }
 
     function applyMatch(match: Match) {
+      if (useTournamentStore.getState().isViewingHistory) return
       remoteDepth++
       useTournamentStore.setState(state => ({
         matches: state.matches.some(m => m.id === match.id)
@@ -52,6 +54,7 @@ export function useSupabaseSync() {
     }
 
     function applyMatchDelete(matchId: string) {
+      if (useTournamentStore.getState().isViewingHistory) return
       remoteDepth++
       useTournamentStore.setState(state => ({ matches: state.matches.filter(m => m.id !== matchId) }))
       prevState = useTournamentStore.getState()
@@ -59,6 +62,7 @@ export function useSupabaseSync() {
     }
 
     function applyTeamScore(row: { team_id: string; round: number; points: number; notes?: string | null }) {
+      if (useTournamentStore.getState().isViewingHistory) return
       const incoming: TeamRoundScore = {
         teamId: row.team_id, round: row.round, points: row.points, notes: row.notes ?? undefined,
       }
@@ -77,6 +81,7 @@ export function useSupabaseSync() {
     }
 
     function applyTeamScoreDelete(teamId: string, round: number) {
+      if (useTournamentStore.getState().isViewingHistory) return
       remoteDepth++
       useTournamentStore.setState(state => ({
         teamScores: state.teamScores.filter(s => !(s.teamId === teamId && s.round === round)),
@@ -128,8 +133,8 @@ export function useSupabaseSync() {
     // ── Local → Supabase: push store changes ────────────────────────────────
 
     const unsubscribe = useTournamentStore.subscribe(newState => {
-      // Skip: this setState came from Supabase, not from local user action
-      if (remoteDepth > 0) { prevState = newState; return }
+      // Skip: this setState came from Supabase, or admin is viewing historical data
+      if (remoteDepth > 0 || newState.isViewingHistory) { prevState = newState; return }
 
       // Upsert changed or new matches
       if (newState.matches !== prevState.matches) {
