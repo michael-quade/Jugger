@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import { Shield, LogOut, Eye, EyeOff, Settings } from 'lucide-react'
+import { Shield, LogOut, Eye, EyeOff, Settings, ClipboardList } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
 import AdminPanel from './AdminPanel'
 
 export default function HeaderAdminWidget() {
-  const { currentAdmin, loggingIn, loginError, login, logout, clearError } = useAuthStore()
+  const { currentAdmin, currentRole, loggingIn, loginError, login, logout, clearError } = useAuthStore()
   const [open,      setOpen]      = useState(false)
   const [username,  setUsername]  = useState('')
   const [password,  setPassword]  = useState('')
@@ -27,19 +27,25 @@ export default function HeaderAdminWidget() {
   }
 
   if (currentAdmin) {
+    const isScorer = currentRole === 'scorer'
     return (
       <>
         {showPanel && <AdminPanel onClose={() => setShowPanel(false)} />}
         <div className="ml-auto flex items-center gap-3">
-          <Shield size={14} className="text-masters-gold shrink-0" />
+          {isScorer
+            ? <ClipboardList size={14} className="text-masters-gold shrink-0" />
+            : <Shield size={14} className="text-masters-gold shrink-0" />
+          }
           <span className="text-white text-sm font-semibold hidden sm:inline">{currentAdmin}</span>
-          <button
-            className="hidden sm:flex items-center gap-1 text-xs text-white/70 hover:text-masters-gold transition-colors"
-            onClick={() => setShowPanel(true)}
-          >
-            <Settings size={12} />
-            Manage
-          </button>
+          {!isScorer && (
+            <button
+              className="hidden sm:flex items-center gap-1 text-xs text-white/70 hover:text-masters-gold transition-colors"
+              onClick={() => setShowPanel(true)}
+            >
+              <Settings size={12} />
+              Manage
+            </button>
+          )}
           <button
             className="flex items-center gap-1 text-xs text-white/70 hover:text-red-400 transition-colors"
             onClick={logout}
@@ -63,14 +69,14 @@ export default function HeaderAdminWidget() {
         }`}
       >
         <Shield size={14} />
-        <span className="hidden sm:inline">Admin</span>
+        <span className="hidden sm:inline">Sign in</span>
       </button>
 
       {open && (
         <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-72 z-50 text-gray-800">
           <div className="flex items-center gap-2 mb-3">
             <Shield size={15} className="text-masters-green" />
-            <h3 className="font-semibold text-sm text-masters-dark">Admin Login</h3>
+            <h3 className="font-semibold text-sm text-masters-dark">Sign In</h3>
           </div>
           <form onSubmit={handleSubmit} className="space-y-2">
             <div>

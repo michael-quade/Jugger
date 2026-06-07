@@ -388,7 +388,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 13,
+      version: 14,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -484,6 +484,12 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           if (b.archivedYears === undefined)    b.archivedYears = []
           if (b.isViewingHistory === undefined) b.isViewingHistory = false
           if (b.liveCache === undefined)        b.liveCache = null
+        }
+        if (fromVersion < 14) {
+          base.admins = (base.admins ?? []).map((a: any) => ({
+            ...a,
+            role: a.role ?? 'admin',
+          }))
         }
         return base as TournamentState
       },

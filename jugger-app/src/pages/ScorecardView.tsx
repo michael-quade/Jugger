@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useReactToPrint } from 'react-to-print'
 import { useTournamentStore } from '../store/useTournamentStore'
-import { useIsAdmin } from '../store/useAuthStore'
+import { useIsAdmin, useCanEnterScores } from '../store/useAuthStore'
 import ScorecardCard from '../components/ScorecardCard'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
@@ -21,6 +21,7 @@ const ROUND_NAMES: Record<number, string> = {
 export default function ScorecardView() {
   const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot } = useTournamentStore()
   const isAdmin = useIsAdmin()
+  const canEnterScores = useCanEnterScores()
   const [searchParams] = useSearchParams()
   const [activeRound, setActiveRound] = useState(() => Number(searchParams.get('round')) || 1)
   const [activeMatch, setActiveMatch] = useState<string | null>(() => searchParams.get('match'))
@@ -449,7 +450,7 @@ export default function ScorecardView() {
                     teams={teams}
                     course={course}
                     config={config}
-                    interactive={isAdmin && !match.isBlind}
+                    interactive={canEnterScores && !match.isBlind}
                     onScoreChange={(pid, hole, val) => {
                       setMatchScore(match.id, pid, hole, val)
                       if (config.format === 'texas_scramble') {
@@ -485,7 +486,7 @@ export default function ScorecardView() {
                             <span className="text-xs font-semibold" style={{ color: team?.color ?? '#666' }}>
                               {team?.name ?? 'Team'}
                             </span>
-                            {isAdmin ? (
+                            {canEnterScores ? (
                               <button
                                 onClick={() => handleMBToggle(field, !val)}
                                 className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded border font-semibold transition-colors ${
@@ -510,7 +511,7 @@ export default function ScorecardView() {
 
                 <ScoreSummary match={match} teams={teams} course={course} config={config} />
 
-                {isAdmin ? (
+                {canEnterScores ? (
                   <div className="card">
                     <label className="label">Match Result</label>
                     <div className="flex gap-2">

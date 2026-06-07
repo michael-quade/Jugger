@@ -184,4 +184,5 @@ export interface CourseHistoryEntry {
 export interface AdminCredential {
   username: string
   passwordHash: string
+  role?: 'admin' | 'scorer'
 }
