@@ -11,19 +11,19 @@ import { isSupabaseEnabled } from '../lib/supabase'
 import { useIsAdmin } from '../store/useAuthStore'
 
 const NAV = [
-  { to: '/',           label: 'Dashboard',   icon: LayoutDashboard },
-  { to: '/teams',      label: 'Teams',       icon: Users },
-  { to: '/courses',    label: 'Courses',     icon: MapPin },
-  { to: '/history',    label: 'History',     icon: BookOpen },
-  { to: '/stats',      label: 'Stats',       icon: TrendingUp },
-  { to: '/archive',    label: 'Archive',     icon: Archive },
-  { to: '/schedule',   label: 'Schedule',    icon: Calendar },
-  { to: '/pairings',   label: 'Pairings',    icon: Shuffle },
-  { to: '/scorecards', label: 'Scorecards',  icon: ClipboardList },
+  { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
+  { to: '/teams',      label: 'Teams',        icon: Users },
+  { to: '/schedule',   label: 'Schedule',     icon: Calendar },
+  { to: '/pairings',   label: 'Pairings',     icon: Shuffle },
+  { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
+  { to: '/courses',    label: 'Courses',      icon: MapPin },
   { to: '/results',    label: 'Team Results', icon: Trophy },
-  { to: '/ctp',        label: 'Par 3 CTP',   icon: Crosshair },
-  { to: '/hole-in-one',label: 'Hole in One', icon: Aperture },
-  { to: '/print',      label: 'Print All',   icon: Printer },
+  { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
+  { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
+  { to: '/stats',      label: 'Stats',        icon: TrendingUp },
+  { to: '/archive',    label: 'Archive',      icon: Archive },
+  { to: '/history',    label: 'History',      icon: BookOpen },
+  { to: '/print',      label: 'Print All',    icon: Printer },
 ]
 
 export default function Layout() {
