@@ -6,16 +6,16 @@ import { generateAllPairings, getMatchesForRound, getPlayerName } from '../utils
 import { Shuffle, Edit2, Check, X, Lock, Unlock, ClipboardList } from 'lucide-react'
 import type { Match, Team } from '../types'
 
-const ROUND_LABELS: Record<number, string> = {
-  1: 'Round 1 — Team Match Play (Pine Needles)',
-  2: 'Round 2 — Points Round (Pinewild Magnolia)',
-  3: 'Round 3 — Texas Scramble (Pinewild Holly)',
-  4: 'Round 4 — Individual Match Play (Mid South)',
-  5: "Round 5 — Captain's Choice (Mid South)",
+const FORMAT_LABELS: Record<string, string> = {
+  team_match_play: 'Team Match Play',
+  points_round: 'Points Round',
+  texas_scramble: 'Texas Scramble',
+  individual_match: 'Individual Match Play',
+  captains_choice: "Captain's Choice",
 }
 
 export default function Pairings() {
-  const { teams, matches, pairingsLocked, setMatches, updateMatch, setPairingsLocked } = useTournamentStore()
+  const { teams, matches, roundConfigs, courses, pairingsLocked, setMatches, updateMatch, setPairingsLocked } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [editMatch, setEditMatch] = useState<string | null>(null)
@@ -24,7 +24,7 @@ export default function Pairings() {
   function handleGenerate() {
     if (!isAdmin) return
     if (matches.length > 0 && !confirm('This will replace existing pairings. Proceed?')) return
-    setMatches(generateAllPairings(teams))
+    setMatches(generateAllPairings(teams, roundConfigs))
   }
 
   function startEdit(match: Match) {
@@ -90,7 +90,11 @@ export default function Pairings() {
             const blind    = roundMatches.filter(m => m.isBlind)
             return (
               <div key={round}>
-                <h2 className="section-header">{ROUND_LABELS[round]}</h2>
+                <h2 className="section-header">{(() => {
+                  const rc = roundConfigs.find(r => r.round === round)
+                  const course = courses.find(c => c.id === rc?.courseId)
+                  return `Round ${round} — ${FORMAT_LABELS[rc?.format ?? ''] ?? rc?.format ?? ''}${course ? ` (${course.name})` : ''}`
+                })()}</h2>
                 <div className="grid md:grid-cols-2 gap-3">
                   {regular.length > 0 && (
                     <div className="space-y-2">

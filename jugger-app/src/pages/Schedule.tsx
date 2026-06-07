@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import type { RoundConfig } from '../types'
-import { Calendar, Clock } from 'lucide-react'
+import type { RoundConfig, RoundFormat } from '../types'
+import { Calendar, Clock, AlertTriangle, Shuffle } from 'lucide-react'
 
 const FORMAT_LABELS: Record<string, string> = {
   team_match_play: 'Team Match Play',
@@ -38,8 +39,35 @@ function fmt24to12(t: string): string {
 const MATCH_LABELS = ['Match A', 'Match B', 'Match C'] as const
 
 export default function Schedule() {
-  const { roundConfigs, courses, setRoundConfig, matches, teams } = useTournamentStore()
+  const { roundConfigs, courses, setRoundConfig, matches, teams, clearRoundMatches } = useTournamentStore()
   const isAdmin = useIsAdmin()
+
+  const [pendingFormat, setPendingFormat] = useState<{ round: number; format: RoundFormat } | null>(null)
+  const [clearedRound, setClearedRound] = useState<number | null>(null)
+
+  function handleFormatChange(round: number, newFormat: RoundFormat) {
+    const current = roundConfigs.find(r => r.round === round)
+    if (!current || newFormat === current.format) return
+    if (matches.some(m => m.round === round)) {
+      setPendingFormat({ round, format: newFormat })
+    } else {
+      applyFormatChange(round, newFormat, current)
+    }
+  }
+
+  function applyFormatChange(round: number, newFormat: RoundFormat, existing: RoundConfig) {
+    setRoundConfig({ ...existing, format: newFormat })
+    setPendingFormat(null)
+  }
+
+  function confirmFormatChange() {
+    if (!pendingFormat) return
+    const existing = roundConfigs.find(r => r.round === pendingFormat.round)
+    if (!existing) return
+    clearRoundMatches(pendingFormat.round)
+    applyFormatChange(pendingFormat.round, pendingFormat.format, existing)
+    setClearedRound(pendingFormat.round)
+  }
 
   const playerName = (id: string) => {
     for (const t of teams) {
@@ -80,15 +108,64 @@ export default function Schedule() {
           const times = rc.teeTimes ?? ['', '', '']
           return (
             <div key={rc.round} className="card border-l-4 border-masters-green space-y-3">
-              {/* Header row: badge + title + rules */}
+              {/* Header row: badge + format selector + rules */}
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="badge bg-masters-green text-white">Round {rc.round}</span>
-                  <h3 className="font-serif font-bold text-lg text-masters-dark">
-                    {FORMAT_LABELS[rc.format] ?? rc.format}
-                  </h3>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="badge bg-masters-green text-white shrink-0">Round {rc.round}</span>
+                  {isAdmin ? (
+                    <select
+                      className="font-serif font-bold text-lg text-masters-dark bg-transparent border-b-2 border-masters-green/40 focus:border-masters-green focus:outline-none cursor-pointer pr-1"
+                      value={pendingFormat?.round === rc.round ? pendingFormat.format : rc.format}
+                      onChange={e => handleFormatChange(rc.round, e.target.value as RoundFormat)}
+                    >
+                      {Object.entries(FORMAT_LABELS).map(([val, label]) => (
+                        <option key={val} value={val}>{label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <h3 className="font-serif font-bold text-lg text-masters-dark">
+                      {FORMAT_LABELS[rc.format] ?? rc.format}
+                    </h3>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500">{FORMAT_RULES[rc.format]}</p>
+                <p className="text-xs text-gray-500">{FORMAT_RULES[pendingFormat?.round === rc.round ? pendingFormat.format : rc.format]}</p>
+
+                {/* Pending format change warning */}
+                {pendingFormat?.round === rc.round && (
+                  <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3">
+                    <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-amber-800">Round {rc.round} has existing pairings</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Changing to <strong>{FORMAT_LABELS[pendingFormat.format]}</strong> will clear all pairings for this round.
+                        Scores entered so far will also be lost. You'll need to regenerate pairings afterward.
+                      </p>
+                      <div className="flex gap-2 mt-2.5 flex-wrap">
+                        <button
+                          className="btn-primary text-xs py-1 px-3 bg-amber-500 border-amber-500 hover:bg-amber-600 focus:ring-amber-300"
+                          onClick={confirmFormatChange}
+                        >
+                          Confirm — clear pairings &amp; change format
+                        </button>
+                        <button
+                          className="text-xs text-gray-500 hover:text-gray-800"
+                          onClick={() => setPendingFormat(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Post-change notice */}
+                {clearedRound === rc.round && (
+                  <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-2.5 flex items-center gap-2 text-xs text-blue-700">
+                    <Shuffle size={13} className="shrink-0 text-blue-500" />
+                    <span>Pairings cleared — go to the <strong>Pairings</strong> page to regenerate.</span>
+                    <button className="ml-auto text-blue-400 hover:text-blue-600 shrink-0" onClick={() => setClearedRound(null)}>✕</button>
+                  </div>
+                )}
               </div>
 
               {/* Date + Tees + Tee Times */}

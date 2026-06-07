@@ -1,4 +1,4 @@
-import type { Team, Match, Twosome } from '../types'
+import type { Team, Match, Twosome, RoundConfig } from '../types'
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -77,17 +77,16 @@ export function generateTeamMatches(teams: Team[], round: number): Match[] {
   }))
 }
 
-export function generateAllPairings(teams: Team[]): Match[] {
-  const matches: Match[] = []
-  // Rounds 1, 2, 4: twosome matches
-  for (const round of [1, 2, 4] as const) {
-    matches.push(...generateTwosomeMatches(teams, round))
-  }
-  // Rounds 3, 5: team formats (each team plays as a unit)
-  for (const round of [3, 5] as const) {
-    matches.push(...generateTeamMatches(teams, round))
-  }
-  return matches
+const TEAM_FORMATS = new Set(['texas_scramble', 'captains_choice'])
+
+export function generateMatchesForRound(teams: Team[], round: number, format: RoundConfig['format']): Match[] {
+  return TEAM_FORMATS.has(format)
+    ? generateTeamMatches(teams, round)
+    : generateTwosomeMatches(teams, round)
+}
+
+export function generateAllPairings(teams: Team[], roundConfigs: RoundConfig[]): Match[] {
+  return roundConfigs.flatMap(rc => generateMatchesForRound(teams, rc.round, rc.format))
 }
 
 export function getMatchesForRound(matches: Match[], round: number): Match[] {

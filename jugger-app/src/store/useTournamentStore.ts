@@ -52,6 +52,7 @@ interface Actions {
   clearAllMatchScores: () => void
   clearAllTeamScores: () => void
   clearTeamScoresForRound: (round: number) => void
+  clearRoundMatches: (round: number) => void
 
   resetAll: () => void
 }
@@ -292,6 +293,9 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       clearTeamScoresForRound: (round) =>
         set(state => ({ teamScores: state.teamScores.filter(s => s.round !== round) })),
+
+      clearRoundMatches: (round) =>
+        set(state => ({ matches: state.matches.filter(m => m.round !== round) })),
 
       resetAll: () => set(DEFAULT_STATE),
     }),
