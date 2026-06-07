@@ -90,7 +90,12 @@ export function generateAllPairings(teams: Team[], roundConfigs: RoundConfig[]):
 }
 
 export function getMatchesForRound(matches: Match[], round: number): Match[] {
-  return matches.filter(m => m.round === round)
+  return matches
+    .filter(m => m.round === round)
+    .sort((a, b) => {
+      if (a.isBlind !== b.isBlind) return a.isBlind ? 1 : -1
+      return a.label.localeCompare(b.label)
+    })
 }
 
 export function getPlayerName(teams: Team[], playerId: string): string {
