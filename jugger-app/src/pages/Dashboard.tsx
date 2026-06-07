@@ -120,7 +120,7 @@ export default function Dashboard() {
       {/* Team rosters */}
       <div className="grid md:grid-cols-3 gap-4">
         {teams.map(team => (
-          <div key={team.id} className="card border-t-4" style={{ borderTopColor: team.color }}>
+          <Link key={team.id} to="/teams" className="card border-t-4 hover:shadow-md transition-shadow" style={{ borderTopColor: team.color }}>
             <h3 className="font-serif font-bold text-lg mb-2" style={{ color: team.color }}>
               {team.name}
             </h3>
@@ -132,7 +132,7 @@ export default function Dashboard() {
                 </li>
               ))}
             </ul>
-          </div>
+          </Link>
         ))}
       </div>
 
