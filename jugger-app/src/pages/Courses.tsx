@@ -265,11 +265,11 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="bg-masters-light">
-                  <th className="border p-1 text-left">Hole</th>
-                  <th className="border p-1">Par</th>
-                  <th className="border p-1">HDCP</th>
+                  <th className="border p-1 text-center">Hole</th>
+                  <th className="border p-1 text-center">Par</th>
+                  <th className="border p-1 text-center">HDCP</th>
                   {draft.tees.map(t => (
-                    <th key={t.name} className="border p-1">{t.name} Yds</th>
+                    <th key={t.name} className="border p-1 text-center">{t.name} Yds</th>
                   ))}
                 </tr>
               </thead>
@@ -277,7 +277,7 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                 {group.map(hole => (
                   <tr key={hole.number} className="hover:bg-gray-50">
                     <td className="border p-1 font-bold text-masters-dark text-center">{hole.number}</td>
-                    <td className="border p-1">
+                    <td className="border p-1 text-center">
                       <input
                         type="number" min={3} max={5}
                         className="w-10 text-center border-none bg-transparent"
@@ -286,7 +286,7 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                         onChange={e => isAdmin && updateHole(hole.number, { par: parseInt(e.target.value) })}
                       />
                     </td>
-                    <td className="border p-1">
+                    <td className="border p-1 text-center">
                       <input
                         type="number" min={1} max={19}
                         className="w-12 text-center border-none bg-transparent"
@@ -296,7 +296,7 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                       />
                     </td>
                     {draft.tees.map(t => (
-                      <td key={t.name} className="border p-1">
+                      <td key={t.name} className="border p-1 text-center">
                         <input
                           type="number"
                           className="w-16 text-center border-none bg-transparent"
