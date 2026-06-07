@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { RoundConfig, RoundFormat } from '../types'
-import { Calendar, Clock, AlertTriangle, Shuffle } from 'lucide-react'
+import { Calendar, Clock, AlertTriangle, Shuffle, ClipboardList } from 'lucide-react'
 
 const FORMAT_LABELS: Record<string, string> = {
   team_match_play: 'Team Match Play',
@@ -250,12 +251,51 @@ export default function Schedule() {
                                 <div className="font-medium text-masters-dark">
                                   {playerName(m.twosome2.playerIds[0])} &amp; {playerName(m.twosome2.playerIds[1])}
                                 </div>
+                                <Link
+                                  to={`/scorecards?match=${m.id}&round=${m.round}`}
+                                  className="mt-1.5 flex items-center gap-1 text-masters-green hover:text-masters-dark font-semibold transition-colors"
+                                >
+                                  <ClipboardList size={10} /> Scorecard
+                                </Link>
                               </div>
                             )}
                           </div>
                         )
                       })}
                     </div>
+
+                    {/* Blind matches */}
+                    {(() => {
+                      const blinds = [1, 2, 3]
+                        .map(n => matches.find(x => x.id === `${rc.round}blind${n}`))
+                        .filter(Boolean)
+                      if (blinds.length === 0) return null
+                      return (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Blind Matches</div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {blinds.map(m => m && (
+                              <div key={m.id} className="text-xs leading-snug">
+                                <div className="text-gray-400 mb-0.5">{m.label}</div>
+                                <div className="font-medium text-masters-dark">
+                                  {playerName(m.twosome1.playerIds[0])} &amp; {playerName(m.twosome1.playerIds[1])}
+                                </div>
+                                <div className="text-gray-400 text-[10px]">vs</div>
+                                <div className="font-medium text-masters-dark">
+                                  {playerName(m.twosome2.playerIds[0])} &amp; {playerName(m.twosome2.playerIds[1])}
+                                </div>
+                                <Link
+                                  to={`/scorecards?match=${m.id}&round=${m.round}`}
+                                  className="mt-1.5 flex items-center gap-1 text-masters-green hover:text-masters-dark font-semibold transition-colors"
+                                >
+                                  <ClipboardList size={10} /> Scorecard
+                                </Link>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
 
