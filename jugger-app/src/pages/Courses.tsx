@@ -179,14 +179,20 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400 border-b">
                 <th className="text-left pb-1 pr-2 font-medium">Name</th>
-                <th className="text-right pb-1 px-2 font-medium">Yards</th>
+                <th className="text-right pb-1 px-2 font-medium">F9 <span className="normal-case font-normal">(Par {frontPar})</span></th>
+                <th className="text-right pb-1 px-2 font-medium">B9 <span className="normal-case font-normal">(Par {backPar})</span></th>
+                <th className="text-right pb-1 px-2 font-medium">Total</th>
                 <th className="text-right pb-1 px-2 font-medium">Rating</th>
                 <th className="text-right pb-1 pl-2 font-medium">Slope</th>
               </tr>
             </thead>
             <tbody>
               {draft.tees.map((tee, i) => {
-                const fromHoles = draft.holes.reduce((s, h) => s + (h.yardages[tee.name] ?? 0), 0)
+                const f9 = front.reduce((s, h) => s + (h.yardages[tee.name] ?? 0), 0)
+                const b9 = back.reduce((s, h) => s + (h.yardages[tee.name] ?? 0), 0)
+                const f9HasData = front.every(h => h.yardages[tee.name] != null)
+                const b9HasData = back.every(h => h.yardages[tee.name] != null)
+                const fromHoles = f9 + b9
                 const holesWithData = draft.holes.filter(h => h.yardages[tee.name] != null).length
                 const yards = holesWithData === 18 ? fromHoles : (tee.totalYards ?? null)
                 return (
@@ -195,7 +201,13 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                       <input className="input w-24" value={tee.name} readOnly={!isAdmin}
                         onChange={e => isAdmin && updateTee(i, { name: e.target.value })} />
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums text-gray-600 font-medium">
+                    <td className="py-1 px-2 text-right tabular-nums text-gray-500">
+                      {f9HasData ? f9.toLocaleString() : '—'}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums text-gray-500">
+                      {b9HasData ? b9.toLocaleString() : '—'}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums text-gray-700 font-semibold">
                       {yards?.toLocaleString() ?? '—'}
                     </td>
                     <td className="py-1 px-2 text-right">
