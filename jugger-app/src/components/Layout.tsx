@@ -36,7 +36,7 @@ export default function Layout() {
       {/* Top header */}
       <header className="sticky top-0 z-50 bg-masters-dark text-white no-print">
         <div className="max-w-7xl mx-auto px-4 py-5 flex items-center gap-4">
-          <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-12 w-12 shrink-0 object-contain" />
+          <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-36 w-36 shrink-0 object-contain" />
           <Link to="/" className="hover:opacity-80 transition-opacity">
             <h1 className="font-serif text-3xl font-bold leading-tight tracking-wide">
               Juggerknocker Invitational
