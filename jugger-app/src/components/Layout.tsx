@@ -2,7 +2,7 @@ import { Outlet, NavLink, Link } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
-  ClipboardList, Trophy, Aperture, Printer, Flag, BookOpen, TrendingUp, Archive, Crosshair,
+  ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
   History, ArrowRight,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
@@ -36,7 +36,7 @@ export default function Layout() {
       {/* Top header */}
       <header className="sticky top-0 z-50 bg-masters-dark text-white no-print">
         <div className="max-w-7xl mx-auto px-4 py-5 flex items-center gap-4">
-          <Flag size={36} className="text-masters-gold shrink-0" />
+          <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-12 w-12 shrink-0 object-contain" />
           <Link to="/" className="hover:opacity-80 transition-opacity">
             <h1 className="font-serif text-3xl font-bold leading-tight tracking-wide">
               Juggerknocker Invitational
