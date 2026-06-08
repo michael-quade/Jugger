@@ -182,11 +182,17 @@ export default function Dashboard() {
             <h3 className="font-serif font-bold text-lg mb-2" style={{ color: team.color }}>
               {team.name}
             </h3>
+            <div className="flex justify-between items-end mb-1 pb-1 border-b border-gray-100">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Player</span>
+              <div className="w-16 flex justify-center">
+                <img src={`${import.meta.env.BASE_URL}USGA-GHIN-logo-square.webp`} alt="GHIN Handicap Index" className="h-16 opacity-80" />
+              </div>
+            </div>
             <ul className="space-y-1">
               {team.players.map(p => (
                 <li key={p.id} className="flex justify-between text-sm">
                   <span>{p.name}</span>
-                  <span className="text-gray-500">{p.handicapIndex.toFixed(1)}</span>
+                  <div className="w-16 text-center text-gray-500">{p.handicapIndex.toFixed(1)}</div>
                 </li>
               ))}
             </ul>
