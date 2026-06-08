@@ -371,38 +371,51 @@ export default function ScorecardView() {
             {roundMatches.length === 0 && (
               <p className="text-sm text-gray-400">No matches for this round.</p>
             )}
-            {roundMatches.map(m => {
-              const scored = Object.keys(m.scores).length > 0
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => setActiveMatch(m.id)}
-                  className={`w-full text-left rounded border p-2 text-sm transition-colors ${
-                    activeMatch === m.id
-                      ? 'border-masters-green bg-masters-light'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{m.label}</span>
-                    {m.isBlind && <span className="badge bg-gray-100 text-gray-500">Blind</span>}
-                    {scored && <span className="badge bg-masters-light text-masters-green">●</span>}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {(config?.format === 'texas_scramble' || config?.format === 'captains_choice')
-                      ? [...m.twosome1.playerIds, ...m.twosome2.playerIds]
-                          .map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id)
-                          .join(', ')
-                      : <>
-                          {m.twosome1.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
-                          {' vs '}
-                          {m.twosome2.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
-                        </>
-                    }
-                  </div>
-                </button>
-              )
-            })}
+            {(() => {
+              const regularMatches = roundMatches.filter(m => !m.isBlind)
+              return roundMatches.map(m => {
+                const scored = Object.keys(m.scores).length > 0
+                const teeTimeRaw = !m.isBlind ? config?.teeTimes?.[regularMatches.indexOf(m)] : undefined
+                const teeTime = teeTimeRaw ? (() => {
+                  const [h, min] = teeTimeRaw.split(':').map(Number)
+                  const ampm = h >= 12 ? 'PM' : 'AM'
+                  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+                  return `${h12}:${String(min).padStart(2,'0')} ${ampm}`
+                })() : null
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setActiveMatch(m.id)}
+                    className={`w-full text-left rounded border p-2 text-sm transition-colors ${
+                      activeMatch === m.id
+                        ? 'border-masters-green bg-masters-light'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-semibold">{m.label}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {teeTime && <span className="text-[10px] text-masters-gold font-semibold">{teeTime}</span>}
+                        {m.isBlind && <span className="badge bg-gray-100 text-gray-500">Blind</span>}
+                        {scored && <span className="badge bg-masters-light text-masters-green">●</span>}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {(config?.format === 'texas_scramble' || config?.format === 'captains_choice')
+                        ? [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+                            .map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id)
+                            .join(', ')
+                        : <>
+                            {m.twosome1.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
+                            {' vs '}
+                            {m.twosome2.playerIds.map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id).join('/')}
+                          </>
+                      }
+                    </div>
+                  </button>
+                )
+              })
+            })()}
           </div>
 
           {/* Scorecard detail */}
