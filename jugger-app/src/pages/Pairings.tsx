@@ -40,6 +40,15 @@ export default function Pairings() {
     setEditDraft(null)
   }
 
+  if (!isAdmin) {
+    return (
+      <div className="card text-center py-16 text-gray-400">
+        <Lock size={32} className="mx-auto mb-3 text-gray-300" />
+        <p className="font-semibold">Pairings are managed by the administrator.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">

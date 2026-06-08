@@ -14,7 +14,7 @@ const NAV = [
   { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
   { to: '/teams',      label: 'Teams',        icon: Users },
   { to: '/schedule',   label: 'Schedule',     icon: Calendar },
-  { to: '/pairings',   label: 'Pairings',     icon: Shuffle },
+  { to: '/pairings',   label: 'Pairings',     icon: Shuffle,       adminOnly: true },
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
   { to: '/courses',    label: 'Courses',      icon: MapPin },
   { to: '/results',    label: 'Team Results', icon: Trophy },
@@ -75,7 +75,7 @@ export default function Layout() {
       <nav className="sticky top-[100px] z-40 bg-masters-green text-white shadow no-print">
         <div className="max-w-7xl mx-auto px-4">
           <ul className="flex flex-wrap gap-0.5 py-1">
-            {NAV.map(({ to, label, icon: Icon }) => (
+            {NAV.filter(({ adminOnly }) => !adminOnly || isAdmin).map(({ to, label, icon: Icon }) => (
               <li key={to}>
                 <NavLink
                   to={to}
