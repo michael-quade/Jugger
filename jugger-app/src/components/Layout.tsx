@@ -36,14 +36,16 @@ export default function Layout() {
       {/* Top header */}
       <header className="sticky top-0 z-50 bg-masters-dark text-white no-print">
         <div className="max-w-7xl mx-auto px-4 py-5 flex items-center gap-4">
-          <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-36 w-36 shrink-0 object-contain" />
-          <Link to="/" className="hover:opacity-80 transition-opacity">
-            <h1 className="font-serif text-3xl font-bold leading-tight tracking-wide">
-              Juggerknocker Invitational
-            </h1>
-            <p className="text-masters-gold text-sm font-semibold tracking-widest mt-0.5 uppercase">
-              {year} Season
-            </p>
+          <Link to="/" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
+            <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-36 w-36 shrink-0 object-contain" />
+            <div>
+              <h1 className="font-serif text-3xl font-bold leading-tight tracking-wide">
+                Juggerknocker Invitational
+              </h1>
+              <p className="text-masters-gold text-sm font-semibold tracking-widest mt-0.5 uppercase">
+                {year} Season
+              </p>
+            </div>
           </Link>
           {/* Admin year selector */}
           {isAdmin && archivedYears.length > 0 && (
