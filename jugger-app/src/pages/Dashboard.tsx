@@ -63,7 +63,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={<Users size={20} />} label="Players" value={teams.reduce((s, t) => s + t.players.length, 0)} to="/teams" />
         <StatCard icon={<MapPin size={20} />} label="Courses" value={4} to="/courses" />
-        <StatCard icon={<Shuffle size={20} />} label="Matches" value={`${scoredMatches}/${totalMatches}`} to="/pairings" sub={totalMatches === 0 ? 'Not generated' : undefined} />
+        <StatCard icon={<Shuffle size={20} />} label="Matches" value={`${scoredMatches}/${totalMatches}`} to="/schedule" sub={totalMatches === 0 ? 'Not generated' : undefined} />
         <StatCard icon={<Trophy size={20} />} label="Rounds" value={roundConfigs.length} to="/results" />
       </div>
 
