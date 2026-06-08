@@ -64,41 +64,37 @@ export default function Dashboard() {
       {/* Standings */}
       <div className="card overflow-x-auto">
         <h2 className="section-header">Current Standings</h2>
-        {teamScores.length === 0 ? (
-          <p className="text-gray-400 text-sm">No scores entered yet.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-masters-light">
-                <th className="p-2 text-left">Team</th>
-                {[1, 2, 3, 4, 5].map(r => (
-                  <th key={r} className="p-2 text-center">
-                    <div>R{r}</div>
-                    <div className="text-xs text-gray-400 font-normal">/{MAX_PTS[r]}</div>
-                  </th>
-                ))}
-                <th className="p-2 text-center font-bold">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map(({ team, byRound, total }, idx) => (
-                <tr key={team.id} className={idx === 0 ? 'bg-yellow-50' : ''}>
-                  <td className="p-2">
-                    <div className="flex items-center gap-2">
-                      {idx === 0 && <span className="text-masters-gold">🏆</span>}
-                      <div className="w-3 h-3 rounded-full" style={{ background: team.color }} />
-                      <span className="font-semibold">{team.name}</span>
-                    </div>
-                  </td>
-                  {byRound.map((pts, ri) => (
-                    <td key={ri} className="p-2 text-center font-semibold">{pts || 0}</td>
-                  ))}
-                  <td className="p-2 text-center font-bold text-lg text-masters-dark">{total}</td>
-                </tr>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-masters-light">
+              <th className="p-2 text-left">Team</th>
+              {[1, 2, 3, 4, 5].map(r => (
+                <th key={r} className="p-2 text-center">
+                  <div>R{r}</div>
+                  <div className="text-xs text-gray-400 font-normal">/{MAX_PTS[r]}</div>
+                </th>
               ))}
-            </tbody>
-          </table>
-        )}
+              <th className="p-2 text-center font-bold">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {standings.map(({ team, byRound, total }, idx) => (
+              <tr key={team.id} className={idx === 0 && total > 0 ? 'bg-yellow-50' : ''}>
+                <td className="p-2">
+                  <div className="flex items-center gap-2">
+                    {idx === 0 && total > 0 && <span className="text-masters-gold">🏆</span>}
+                    <div className="w-3 h-3 rounded-full" style={{ background: team.color }} />
+                    <span className="font-semibold">{team.name}</span>
+                  </div>
+                </td>
+                {byRound.map((pts, ri) => (
+                  <td key={ri} className="p-2 text-center font-semibold">{pts || 0}</td>
+                ))}
+                <td className="p-2 text-center font-bold text-lg text-masters-dark">{total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* Round Schedule & Pairings */}
