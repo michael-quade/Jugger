@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import { Users, MapPin, Shuffle, Trophy, Lock, Unlock, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import type { Match, Team } from '../types'
 
 const ROUND_FORMATS: Record<string, string> = {
   team_match_play: 'Team Match Play',
@@ -13,7 +14,7 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, liveYear, isViewingHistory, setYear, teams, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [showFinalize, setShowFinalize] = useState(false)
 
@@ -145,6 +146,63 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* Pairings summary */}
+      <div className="card">
+        <h2 className="section-header">Pairings Summary</h2>
+        {matches.length === 0 ? (
+          <p className="text-sm text-gray-400">Pairings not yet generated.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="text-xs w-full border-collapse">
+              <thead>
+                <tr className="border-b bg-masters-light">
+                  <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Round</th>
+                  <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Course</th>
+                  <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Format</th>
+                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Match A</th>
+                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Match B</th>
+                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Match C</th>
+                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide border-l border-gray-200">Blind 1</th>
+                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Blind 2</th>
+                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Blind 3</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roundConfigs.slice().sort((a, b) => a.round - b.round).map(rc => {
+                  const course = courses.find(c => c.id === rc.courseId)
+                  const isTeamFormat = rc.format === 'texas_scramble' || rc.format === 'captains_choice'
+                  return (
+                    <tr key={rc.round} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="p-2 whitespace-nowrap">
+                        <span className="badge bg-masters-green text-white">Round {rc.round}</span>
+                      </td>
+                      <td className="p-2 whitespace-nowrap font-medium text-masters-dark">{course?.name ?? rc.courseId}</td>
+                      <td className="p-2 whitespace-nowrap text-gray-500">{ROUND_FORMATS[rc.format] ?? rc.format}</td>
+                      {isTeamFormat ? (
+                        <td colSpan={6} className="p-2 text-center text-gray-400 italic">
+                          Team event — all players compete together
+                        </td>
+                      ) : (
+                        <>
+                          {(['a','b','c'] as const).map(s => {
+                            const m = matches.find(x => x.id === `${rc.round}${s}`)
+                            return <td key={s} className="p-2">{m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}</td>
+                          })}
+                          {([1,2,3] as const).map(n => {
+                            const m = matches.find(x => x.id === `${rc.round}blind${n}`)
+                            return <td key={n} className={`p-2${n === 1 ? ' border-l border-gray-200' : ''}`}>{m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}</td>
+                          })}
+                        </>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Finalize tournament (admin, live year only) */}
       {isAdmin && !isViewingHistory && (
         <div className="card border border-dashed border-gray-200">
@@ -193,6 +251,29 @@ export default function Dashboard() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function PairingCell({ match, teams }: { match: Match; teams: Team[] }) {
+  function firstName(id: string) {
+    for (const t of teams) {
+      const p = t.players.find(p => p.id === id)
+      if (p) return p.name.split(' ')[0]
+    }
+    return id
+  }
+  const color1 = teams.find(t => t.id === match.twosome1.teamId)?.color ?? '#666'
+  const color2 = teams.find(t => t.id === match.twosome2.teamId)?.color ?? '#666'
+  return (
+    <div className="text-center leading-tight">
+      <div className="font-medium" style={{ color: color1 }}>
+        {firstName(match.twosome1.playerIds[0])} &amp; {firstName(match.twosome1.playerIds[1])}
+      </div>
+      <div className="text-[9px] text-gray-400">vs</div>
+      <div className="font-medium" style={{ color: color2 }}>
+        {firstName(match.twosome2.playerIds[0])} &amp; {firstName(match.twosome2.playerIds[1])}
+      </div>
     </div>
   )
 }
