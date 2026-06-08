@@ -105,13 +105,22 @@ export default function Dashboard() {
                   <span className="font-semibold text-sm">{ROUND_FORMATS[rc.format] ?? rc.format}</span>
                   <span className="text-gray-400 text-xs ml-2">{rc.courseId.replace(/-/g, ' ')}</span>
                 </div>
-                {rc.date && <span className="text-xs text-gray-500">{new Date(rc.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>}
-                {rc.teeTimes?.[0] && (() => {
-                  const [h, m] = rc.teeTimes![0].split(':').map(Number)
-                  const ampm = h >= 12 ? 'PM' : 'AM'
-                  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
-                  return <span className="text-xs text-masters-gold font-semibold">{h12}:{String(m).padStart(2,'0')} {ampm}</span>
-                })()}
+                {rc.date && <span className="text-xs text-gray-500 shrink-0">{new Date(rc.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>}
+                {rc.teeTimes && rc.teeTimes.some(Boolean) && (
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    {rc.teeTimes.map((t, i) => {
+                      if (!t) return null
+                      const [h, m] = t.split(':').map(Number)
+                      const ampm = h >= 12 ? 'PM' : 'AM'
+                      const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+                      return (
+                        <span key={i} className="text-xs text-masters-gold font-semibold">
+                          {h12}:{String(m).padStart(2,'0')} {ampm}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
               </Link>
             ))}
         </div>
