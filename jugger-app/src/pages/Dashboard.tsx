@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import { Users, MapPin, Shuffle, Trophy, Lock, Unlock, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import { Lock, Unlock, CheckCircle, AlertTriangle, X } from 'lucide-react'
 import type { Match, Team } from '../types'
+
+const MAX_PTS: Record<number, number> = { 1: 9, 2: 15, 3: 7, 4: 12, 5: 7 }
 
 const ROUND_FORMATS: Record<string, string> = {
   team_match_play: 'Team Match Play',
@@ -19,13 +21,11 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
 
-  const totalMatches = matches.length
-  const scoredMatches = matches.filter(m => Object.keys(m.scores).length > 0).length
-
-  const standings = teams.map(t => {
-    const pts = teamScores.filter(s => s.teamId === t.id).reduce((sum, s) => sum + s.points, 0)
-    return { team: t, points: pts }
-  }).sort((a, b) => b.points - a.points)
+  const standings = teams.map(t => ({
+    team: t,
+    byRound: [1, 2, 3, 4, 5].map(r => teamScores.find(s => s.teamId === t.id && s.round === r)?.points ?? 0),
+    total: teamScores.filter(s => s.teamId === t.id).reduce((sum, s) => sum + s.points, 0),
+  })).sort((a, b) => b.total - a.total)
 
   return (
     <div className="space-y-6">
@@ -61,33 +61,43 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Status cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={<Users size={20} />} label="Players" value={teams.reduce((s, t) => s + t.players.length, 0)} to="/teams" />
-        <StatCard icon={<MapPin size={20} />} label="Courses" value={4} to="/courses" />
-        <StatCard icon={<Shuffle size={20} />} label="Matches" value={`${scoredMatches}/${totalMatches}`} to="/schedule" sub={totalMatches === 0 ? 'Not generated' : undefined} />
-        <StatCard icon={<Trophy size={20} />} label="Rounds" value={roundConfigs.length} to="/results" />
-      </div>
-
       {/* Standings */}
-      <div className="card">
+      <div className="card overflow-x-auto">
         <h2 className="section-header">Current Standings</h2>
         {teamScores.length === 0 ? (
           <p className="text-gray-400 text-sm">No scores entered yet.</p>
         ) : (
-          <div className="space-y-2">
-            {standings.map(({ team, points }, i) => (
-              <div key={team.id} className="flex items-center gap-3">
-                <span className="text-2xl font-serif font-bold text-masters-gold w-6">{i + 1}</span>
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ background: team.color }}
-                />
-                <span className="font-semibold flex-1">{team.name}</span>
-                <span className="text-lg font-bold text-masters-dark">{points} pts</span>
-              </div>
-            ))}
-          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-masters-light">
+                <th className="p-2 text-left">Team</th>
+                {[1, 2, 3, 4, 5].map(r => (
+                  <th key={r} className="p-2 text-center">
+                    <div>R{r}</div>
+                    <div className="text-xs text-gray-400 font-normal">/{MAX_PTS[r]}</div>
+                  </th>
+                ))}
+                <th className="p-2 text-center font-bold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standings.map(({ team, byRound, total }, idx) => (
+                <tr key={team.id} className={idx === 0 ? 'bg-yellow-50' : ''}>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      {idx === 0 && <span className="text-masters-gold">🏆</span>}
+                      <div className="w-3 h-3 rounded-full" style={{ background: team.color }} />
+                      <span className="font-semibold">{team.name}</span>
+                    </div>
+                  </td>
+                  {byRound.map((pts, ri) => (
+                    <td key={ri} className="p-2 text-center font-semibold">{pts || 0}</td>
+                  ))}
+                  <td className="p-2 text-center font-bold text-lg text-masters-dark">{total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
@@ -275,17 +285,3 @@ function PairingCell({ match, teams }: { match: Match; teams: Team[] }) {
   )
 }
 
-function StatCard({ icon, label, value, to, sub }: { icon: React.ReactNode, label: string, value: string | number, to: string, sub?: string }) {
-  return (
-    <Link to={to} className="card hover:border-masters-green hover:shadow transition-all">
-      <div className="flex items-start justify-between">
-        <div className="text-masters-green">{icon}</div>
-      </div>
-      <div className="mt-2">
-        <div className="text-2xl font-serif font-bold text-masters-dark">{value}</div>
-        <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{label}</div>
-        {sub && <div className="text-xs text-masters-gold mt-0.5">{sub}</div>}
-      </div>
-    </Link>
-  )
-}
