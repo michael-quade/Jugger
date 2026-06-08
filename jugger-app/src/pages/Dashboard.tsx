@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import { Users, MapPin, Shuffle, Trophy, Lock, Unlock, CheckCircle, AlertTriangle, X } from 'lucide-react'
@@ -16,6 +16,7 @@ const ROUND_FORMATS: Record<string, string> = {
 export default function Dashboard() {
   const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear } = useTournamentStore()
   const isAdmin = useIsAdmin()
+  const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
 
   const totalMatches = matches.length
@@ -90,40 +91,87 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Round schedule */}
+      {/* Round Schedule & Pairings */}
       <div className="card">
-        <h2 className="section-header">Round Schedule</h2>
-        <div className="divide-y">
-          {roundConfigs
-            .slice()
-            .sort((a, b) => a.round - b.round)
-            .map(rc => (
-              <Link key={rc.round} to="/schedule" className="flex items-center gap-3 py-2 hover:bg-masters-green/5 -mx-4 px-4 transition-colors">
-                <span className="badge bg-masters-green text-white w-16 text-center">
-                  Round {rc.round}
-                </span>
-                <div className="flex-1">
-                  <span className="font-semibold text-sm">{ROUND_FORMATS[rc.format] ?? rc.format}</span>
-                  <span className="text-gray-400 text-xs ml-2">{rc.courseId.replace(/-/g, ' ')}</span>
-                </div>
-                {rc.date && <span className="text-xs text-gray-500 shrink-0">{new Date(rc.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>}
-                {rc.teeTimes && rc.teeTimes.some(Boolean) && (
-                  <div className="flex flex-col items-end gap-0.5 shrink-0">
-                    {rc.teeTimes.map((t, i) => {
-                      if (!t) return null
-                      const [h, m] = t.split(':').map(Number)
-                      const ampm = h >= 12 ? 'PM' : 'AM'
-                      const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
-                      return (
-                        <span key={i} className="text-xs text-masters-gold font-semibold">
-                          {h12}:{String(m).padStart(2,'0')} {ampm}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-              </Link>
-            ))}
+        <h2 className="section-header">Round Schedule &amp; Pairings</h2>
+        <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+          <table className="text-xs w-full border-collapse">
+            <thead>
+              <tr className="border-b bg-masters-light">
+                <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Round</th>
+                <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Game / Course</th>
+                <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Date</th>
+                <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Tee Times</th>
+                <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide border-l border-gray-200 whitespace-nowrap">Match A</th>
+                <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Match B</th>
+                <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Match C</th>
+                <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide border-l border-gray-200 whitespace-nowrap">Blind 1</th>
+                <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Blind 2</th>
+                <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Blind 3</th>
+              </tr>
+            </thead>
+            <tbody>
+              {roundConfigs.slice().sort((a, b) => a.round - b.round).map(rc => {
+                const course = courses.find(c => c.id === rc.courseId)
+                const isTeamFormat = rc.format === 'texas_scramble' || rc.format === 'captains_choice'
+                return (
+                  <tr
+                    key={rc.round}
+                    className="border-b last:border-0 hover:bg-masters-green/5 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/scorecards?round=${rc.round}`)}
+                  >
+                    <td className="p-2 whitespace-nowrap">
+                      <span className="badge bg-masters-green text-white">Round {rc.round}</span>
+                    </td>
+                    <td className="p-2">
+                      <div className="font-semibold text-masters-dark whitespace-nowrap">{ROUND_FORMATS[rc.format] ?? rc.format}</div>
+                      <div className="text-gray-400 whitespace-nowrap">{course?.name ?? rc.courseId}</div>
+                    </td>
+                    <td className="p-2 whitespace-nowrap text-gray-500">
+                      {rc.date ? new Date(rc.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'}
+                    </td>
+                    <td className="p-2">
+                      {rc.teeTimes?.some(Boolean) ? (
+                        <div className="flex flex-col gap-0.5">
+                          {rc.teeTimes!.map((t, i) => {
+                            if (!t) return null
+                            const [h, min] = t.split(':').map(Number)
+                            const ampm = h >= 12 ? 'PM' : 'AM'
+                            const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+                            return <span key={i} className="text-masters-gold font-semibold whitespace-nowrap">{h12}:{String(min).padStart(2,'0')} {ampm}</span>
+                          })}
+                        </div>
+                      ) : <span className="text-gray-300">—</span>}
+                    </td>
+                    {isTeamFormat ? (
+                      <td colSpan={6} className="p-2 text-center text-gray-400 italic border-l border-gray-200">
+                        Team event — all players compete together
+                      </td>
+                    ) : (
+                      <>
+                        {(['a','b','c'] as const).map((s, i) => {
+                          const m = matches.find(x => x.id === `${rc.round}${s}`)
+                          return (
+                            <td key={s} className={`p-2${i === 0 ? ' border-l border-gray-200' : ''}`}>
+                              {m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}
+                            </td>
+                          )
+                        })}
+                        {([1,2,3] as const).map(n => {
+                          const m = matches.find(x => x.id === `${rc.round}blind${n}`)
+                          return (
+                            <td key={n} className={`p-2${n === 1 ? ' border-l border-gray-200' : ''}`}>
+                              {m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}
+                            </td>
+                          )
+                        })}
+                      </>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -144,63 +192,6 @@ export default function Dashboard() {
             </ul>
           </Link>
         ))}
-      </div>
-
-      {/* Pairings summary */}
-      <div className="card">
-        <h2 className="section-header">Pairings Summary</h2>
-        {matches.length === 0 ? (
-          <p className="text-sm text-gray-400">Pairings not yet generated.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="text-xs w-full border-collapse">
-              <thead>
-                <tr className="border-b bg-masters-light">
-                  <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Round</th>
-                  <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Course</th>
-                  <th className="text-left p-2 font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Format</th>
-                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Match A</th>
-                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Match B</th>
-                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Match C</th>
-                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide border-l border-gray-200">Blind 1</th>
-                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Blind 2</th>
-                  <th className="text-center p-2 font-semibold text-gray-500 uppercase tracking-wide">Blind 3</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roundConfigs.slice().sort((a, b) => a.round - b.round).map(rc => {
-                  const course = courses.find(c => c.id === rc.courseId)
-                  const isTeamFormat = rc.format === 'texas_scramble' || rc.format === 'captains_choice'
-                  return (
-                    <tr key={rc.round} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="p-2 whitespace-nowrap">
-                        <span className="badge bg-masters-green text-white">Round {rc.round}</span>
-                      </td>
-                      <td className="p-2 whitespace-nowrap font-medium text-masters-dark">{course?.name ?? rc.courseId}</td>
-                      <td className="p-2 whitespace-nowrap text-gray-500">{ROUND_FORMATS[rc.format] ?? rc.format}</td>
-                      {isTeamFormat ? (
-                        <td colSpan={6} className="p-2 text-center text-gray-400 italic">
-                          Team event — all players compete together
-                        </td>
-                      ) : (
-                        <>
-                          {(['a','b','c'] as const).map(s => {
-                            const m = matches.find(x => x.id === `${rc.round}${s}`)
-                            return <td key={s} className="p-2">{m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}</td>
-                          })}
-                          {([1,2,3] as const).map(n => {
-                            const m = matches.find(x => x.id === `${rc.round}blind${n}`)
-                            return <td key={n} className={`p-2${n === 1 ? ' border-l border-gray-200' : ''}`}>{m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}</td>
-                          })}
-                        </>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
 
       {/* Finalize tournament (admin, live year only) */}
