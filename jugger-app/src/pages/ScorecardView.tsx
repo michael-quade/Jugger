@@ -212,6 +212,31 @@ export default function ScorecardView() {
       updateMatch(match.id, { magicBall1: simMb1, magicBall2: simMb2 })
     }
 
+    // Simulate CTP winners for eligible matches (all formats)
+    if (showCtpPanel) {
+      const par3Holes = getPar3Holes(roundConfigs, courses).filter(h => h.round === activeRound)
+      const allPlayerNames = teams.flatMap(t => t.players).map(p => p.name)
+      const prizePerHole = allPlayerNames.length
+      for (const h of par3Holes) {
+        const currentEntries = useTournamentStore.getState().ctpEntries
+        const existing = currentEntries.find(e => e.year === year && e.round === h.round && e.hole === h.hole)
+        const donateToHio = Math.random() < 0.15
+        const updates: Partial<CtpEntry> = donateToHio
+          ? { donatedToHio: true, winnerName: undefined, winnerPaid: undefined, hioDonationAmount: prizePerHole }
+          : { winnerName: allPlayerNames[Math.floor(Math.random() * allPlayerNames.length)], donatedToHio: false, hioDonationAmount: undefined }
+        if (existing) {
+          updateCtpEntry(existing.id, updates)
+        } else {
+          setCtpEntries([...useTournamentStore.getState().ctpEntries, {
+            id: `ctp-${year}-r${h.round}-h${h.hole}`,
+            year, round: h.round, hole: h.hole,
+            courseName: h.courseName, yardage: h.yardage,
+            ...updates,
+          }])
+        }
+      }
+    }
+
     if (config.format === 'texas_scramble') {
       const latestMatches = useTournamentStore.getState().matches
       recomputeScrambleTeamScores(latestMatches)
@@ -328,30 +353,6 @@ export default function ScorecardView() {
       })
     }
 
-    // Simulate CTP winners for eligible matches
-    if (showCtpPanel) {
-      const par3Holes = getPar3Holes(roundConfigs, courses).filter(h => h.round === activeRound)
-      const allPlayerNames = teams.flatMap(t => t.players).map(p => p.name)
-      const prizePerHole = allPlayerNames.length
-      for (const h of par3Holes) {
-        const currentEntries = useTournamentStore.getState().ctpEntries
-        const existing = currentEntries.find(e => e.year === year && e.round === h.round && e.hole === h.hole)
-        const donateToHio = Math.random() < 0.15
-        const updates: Partial<CtpEntry> = donateToHio
-          ? { donatedToHio: true, winnerName: undefined, winnerPaid: undefined, hioDonationAmount: prizePerHole }
-          : { winnerName: allPlayerNames[Math.floor(Math.random() * allPlayerNames.length)], donatedToHio: false, hioDonationAmount: undefined }
-        if (existing) {
-          updateCtpEntry(existing.id, updates)
-        } else {
-          setCtpEntries([...useTournamentStore.getState().ctpEntries, {
-            id: `ctp-${year}-r${h.round}-h${h.hole}`,
-            year, round: h.round, hole: h.hole,
-            courseName: h.courseName, yardage: h.yardage,
-            ...updates,
-          }])
-        }
-      }
-    }
   }
 
   return (
