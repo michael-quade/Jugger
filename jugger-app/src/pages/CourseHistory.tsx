@@ -81,6 +81,7 @@ export function historyEntryToCourse(entry: CourseHistoryEntry): Course {
 
 export default function CourseHistory() {
   const { courseHistory, addCourseHistory, updateCourseHistory, deleteCourseHistory, roundConfigs, setRoundConfig, setCourse } = useTournamentStore()
+  const isAdmin = useIsAdmin()
   const [view, setView] = useState<'list' | 'detail' | 'add' | 'edit'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<CourseHistoryEntry | null>(null)
@@ -183,9 +184,11 @@ export default function CourseHistory() {
           <h1 className="text-2xl font-serif font-bold text-masters-dark">Course History</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track every course the group has played over the years.</p>
         </div>
-        <button className="btn-primary flex items-center gap-2" onClick={openAdd}>
-          <Plus size={15} /> Add Course
-        </button>
+        {isAdmin && (
+          <button className="btn-primary flex items-center gap-2" onClick={openAdd}>
+            <Plus size={15} /> Add Course
+          </button>
+        )}
       </div>
 
       {allYears.length > 0 && (
@@ -218,9 +221,11 @@ export default function CourseHistory() {
           <BookOpen size={40} className="mx-auto text-gray-200 mb-3" />
           <p className="text-gray-400 font-semibold">No courses in history yet.</p>
           <p className="text-gray-300 text-sm mt-1">Add a course to start building your record.</p>
-          <button className="btn-primary mt-4 inline-flex items-center gap-2" onClick={openAdd}>
-            <Plus size={14} /> Add First Course
-          </button>
+          {isAdmin && (
+            <button className="btn-primary mt-4 inline-flex items-center gap-2" onClick={openAdd}>
+              <Plus size={14} /> Add First Course
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
