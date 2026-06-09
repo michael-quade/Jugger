@@ -242,7 +242,7 @@ export default function CourseHistory() {
 
 function CourseCard({ entry, onClick }: { entry: CourseHistoryEntry; onClick: () => void }) {
   const [imgErr, setImgErr] = useState(false)
-  const imgSrc = entry.imageData ?? entry.imageUrl ?? COURSE_IMAGE_DEFAULTS[entry.id]
+  const imgSrc = entry.imageData ?? COURSE_IMAGE_DEFAULTS[entry.id] ?? entry.imageUrl
   const contain = entry.imageContain ?? !!COURSE_IMAGE_CONTAIN[entry.id]
   const displayName = COURSE_NAME_OVERRIDES[entry.id] ?? entry.name
   const displayNotes = COURSE_NOTES_OVERRIDES[entry.id] ?? entry.notes
@@ -330,7 +330,7 @@ function CourseDetail({
   const [scImgErr, setScImgErr] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
-  const imgSrc = entry.imageData ?? entry.imageUrl ?? COURSE_IMAGE_DEFAULTS[entry.id]
+  const imgSrc = entry.imageData ?? COURSE_IMAGE_DEFAULTS[entry.id] ?? entry.imageUrl
   const contain = entry.imageContain ?? !!COURSE_IMAGE_CONTAIN[entry.id]
   const displayName = COURSE_NAME_OVERRIDES[entry.id] ?? entry.name
   const displayWebsite = COURSE_WEBSITE_OVERRIDES[entry.id] ?? entry.website
