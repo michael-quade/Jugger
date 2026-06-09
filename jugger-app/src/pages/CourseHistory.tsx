@@ -2,11 +2,11 @@ import { useState, useRef, useCallback } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import { COURSE_IMAGE_DEFAULTS, COURSE_IMAGE_CONTAIN, COURSE_NAME_OVERRIDES, COURSE_WEBSITE_OVERRIDES, COURSE_NOTES_OVERRIDES } from '../data/initialData'
-import type { CourseHistoryEntry, CourseHistoryRound, CourseTee } from '../types'
+import type { CourseHistoryEntry, CourseHistoryRound, CourseTee, HoleData, Course } from '../types'
 import {
   Plus, ExternalLink, Trash2, Check, X, Edit2, Upload,
   ChevronDown, ChevronUp, Link as LinkIcon, BookOpen, Calendar,
-  Flag, Image as ImageIcon, FileImage,
+  Flag, Image as ImageIcon, FileImage, ZoomIn,
 } from 'lucide-react'
 
 const ROUND_LABELS: Record<number, string> = {
@@ -50,6 +50,7 @@ function blankEntry(): Omit<CourseHistoryEntry, 'id'> {
     imageUrl: '',
     imageData: undefined,
     tees: [],
+    holes: undefined,
     scorecardUrl: '',
     scorecardImageData: undefined,
     notes: '',
@@ -57,10 +58,29 @@ function blankEntry(): Omit<CourseHistoryEntry, 'id'> {
   }
 }
 
+// Convert a CourseHistoryEntry to a scoreable Course object
+export function historyEntryToCourse(entry: CourseHistoryEntry): Course {
+  return {
+    id: entry.id,
+    name: entry.name,
+    par: entry.par ?? 72,
+    website: entry.website,
+    tees: entry.tees ?? [],
+    holes: entry.holes ?? Array.from({ length: 18 }, (_, i) => ({
+      number: i + 1,
+      par: 4,
+      hdcpOrder: i + 1,
+      yardages: {},
+    })),
+    imageData: entry.imageData,
+    scorecardImageData: entry.scorecardImageData,
+  }
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CourseHistory() {
-  const { courseHistory, addCourseHistory, updateCourseHistory, deleteCourseHistory, roundConfigs, setRoundConfig } = useTournamentStore()
+  const { courseHistory, addCourseHistory, updateCourseHistory, deleteCourseHistory, roundConfigs, setRoundConfig, setCourse } = useTournamentStore()
   const [view, setView] = useState<'list' | 'detail' | 'add' | 'edit'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<CourseHistoryEntry | null>(null)
@@ -118,7 +138,10 @@ export default function CourseHistory() {
   function assignToRound(entry: CourseHistoryEntry, round: 1 | 2 | 3 | 4 | 5) {
     const existing = roundConfigs.find(r => r.round === round)
     if (!existing) return
-    setRoundConfig({ ...existing, courseId: entry.id })
+    // Promote history entry to a scoreable Course if not already in courses store
+    setCourse(historyEntryToCourse(entry))
+    const firstTee = entry.tees?.find(t => t.rating != null && t.slope != null)
+    setRoundConfig({ ...existing, courseId: entry.id, tee: firstTee?.name ?? existing.tee })
     updateCourseHistory(entry.id, {
       playedRounds: entry.playedRounds.some(r => r.year === new Date().getFullYear() && r.round === round)
         ? entry.playedRounds
@@ -301,6 +324,7 @@ function CourseDetail({
   const [imgErr, setImgErr] = useState(false)
   const [scImgErr, setScImgErr] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
+  const [lightbox, setLightbox] = useState<string | null>(null)
   const imgSrc = entry.imageData ?? entry.imageUrl ?? COURSE_IMAGE_DEFAULTS[entry.id]
   const contain = entry.imageContain ?? !!COURSE_IMAGE_CONTAIN[entry.id]
   const displayName = COURSE_NAME_OVERRIDES[entry.id] ?? entry.name
@@ -382,13 +406,31 @@ function CourseDetail({
         {entry.tees && entry.tees.length > 0 && (
           <div className="mt-4">
             <p className="label">Tees</p>
-            <div className="flex flex-wrap gap-3">
-              {entry.tees.map((t, i) => (
-                <div key={i} className="bg-masters-light rounded px-3 py-1.5 text-xs">
-                  <span className="font-semibold">{t.name}</span>
-                  <span className="text-gray-500 ml-2">{t.rating}/{t.slope}</span>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse mt-1">
+                <thead>
+                  <tr className="bg-masters-light">
+                    <th className="border p-1.5 text-left font-semibold">Name</th>
+                    <th className="border p-1.5 text-center font-semibold">Rating</th>
+                    <th className="border p-1.5 text-center font-semibold">Slope</th>
+                    {entry.tees.some(t => t.totalYards) && (
+                      <th className="border p-1.5 text-center font-semibold">Yards</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {entry.tees.map((t, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="border p-1.5 font-semibold text-masters-dark">{t.name}</td>
+                      <td className="border p-1.5 text-center">{t.rating ?? '—'}</td>
+                      <td className="border p-1.5 text-center">{t.slope ?? '—'}</td>
+                      {entry.tees!.some(t => t.totalYards) && (
+                        <td className="border p-1.5 text-center">{t.totalYards?.toLocaleString() ?? '—'}</td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -451,24 +493,87 @@ function CourseDetail({
         )}
       </div>}
 
+      {/* Hole data tables */}
+      {entry.holes && entry.holes.length > 0 && (() => {
+        const front = entry.holes!.slice(0, 9)
+        const back  = entry.holes!.slice(9)
+        const frontPar = front.reduce((s, h) => s + h.par, 0)
+        const backPar  = back.reduce((s, h) => s + h.par, 0)
+        return (
+          <>
+            {[front, back].map((group, gi) => (
+              <div key={gi} className="card overflow-x-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="section-header mb-0">{gi === 0 ? 'Front Nine (Holes 1–9)' : 'Back Nine (Holes 10–18)'}</h3>
+                  <span className="text-sm text-gray-500 font-semibold">Par {gi === 0 ? frontPar : backPar}</span>
+                </div>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-masters-light">
+                      <th className="border p-1 text-center">Hole</th>
+                      <th className="border p-1 text-center">Par</th>
+                      <th className="border p-1 text-center">HDCP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.map(h => (
+                      <tr key={h.number} className="hover:bg-gray-50">
+                        <td className="border p-1 font-bold text-masters-dark text-center">{h.number}</td>
+                        <td className="border p-1 text-center">{h.par}</td>
+                        <td className="border p-1 text-center">{h.hdcpOrder}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-masters-light font-bold">
+                      <td className="border p-1 text-center text-masters-dark">Total</td>
+                      <td className="border p-1 text-center text-masters-dark">{gi === 0 ? frontPar : backPar}</td>
+                      <td className="border p-1" />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ))}
+          </>
+        )
+      })()}
+
       {/* Scorecard attachment */}
-      {scSrc && !scImgErr && (
+      {(scSrc || entry.scorecardUrl) && (
         <div className="card">
           <h3 className="section-header">Scorecard</h3>
-          <img
-            src={scSrc}
-            alt="Scorecard"
-            className="w-full rounded border border-gray-200 max-h-96 object-contain bg-gray-50"
-            onError={() => setScImgErr(true)}
-          />
+          {scSrc && !scImgErr ? (
+            <div
+              className="relative group cursor-zoom-in rounded overflow-hidden border border-gray-200 shadow-sm"
+              onClick={() => setLightbox(scSrc)}
+            >
+              <img
+                src={scSrc}
+                alt="Scorecard"
+                className="w-full object-contain bg-gray-50 max-h-96"
+                onError={() => setScImgErr(true)}
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <ZoomIn size={28} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+              </div>
+            </div>
+          ) : entry.scorecardUrl ? (
+            <a href={entry.scorecardUrl} target="_blank" rel="noopener noreferrer" className="text-masters-green hover:underline text-sm flex items-center gap-1">
+              <ExternalLink size={13} /> View Scorecard
+            </a>
+          ) : null}
         </div>
       )}
-      {entry.scorecardUrl && scImgErr && (
-        <div className="card">
-          <h3 className="section-header">Scorecard</h3>
-          <a href={entry.scorecardUrl} target="_blank" rel="noopener noreferrer" className="text-masters-green hover:underline text-sm flex items-center gap-1">
-            <ExternalLink size={13} /> View Scorecard
-          </a>
+
+      {lightbox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setLightbox(null)}>
+          <div className="relative max-w-5xl w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white font-semibold text-sm">Scorecard</span>
+              <button onClick={() => setLightbox(null)} className="text-white hover:text-masters-gold"><X size={22} /></button>
+            </div>
+            <img src={lightbox} alt="Scorecard" className="w-full rounded shadow-xl object-contain max-h-[80vh]" />
+          </div>
         </div>
       )}
     </div>
@@ -488,7 +593,7 @@ function CourseForm({
   const [draft, setDraft] = useState<CourseHistoryEntry>({ ...initial })
   const [urlInput, setUrlInput] = useState(initial.website ?? '')
   const [urlFetching, setUrlFetching] = useState(false)
-  const [section, setSection] = useState<'basic' | 'image' | 'tees' | 'scorecard' | 'history'>('basic')
+  const [section, setSection] = useState<'basic' | 'image' | 'tees' | 'holes' | 'scorecard' | 'history'>('basic')
 
   const imgUploadRef = useRef<HTMLInputElement>(null)
   const scUploadRef = useRef<HTMLInputElement>(null)
@@ -540,10 +645,15 @@ function CourseForm({
     update({ playedRounds: draft.playedRounds.filter(r => r.id !== id) })
   }
 
+  function updateHoleInDraft(num: number, updates: Partial<HoleData>) {
+    update({ holes: (draft.holes ?? []).map(h => h.number === num ? { ...h, ...updates } : h) })
+  }
+
   const tabs = [
     { key: 'basic', label: 'Info' },
     { key: 'image', label: 'Image' },
     { key: 'tees', label: 'Tees' },
+    { key: 'holes', label: 'Holes' },
     { key: 'scorecard', label: 'Scorecard' },
     { key: 'history', label: 'History' },
   ] as const
@@ -697,6 +807,89 @@ function CourseForm({
             <button className="btn-ghost text-xs flex items-center gap-1" onClick={addTee}>
               <Plus size={12} /> Add Tee
             </button>
+          </div>
+        )}
+
+        {/* ── Holes ── */}
+        {section === 'holes' && (
+          <div className="space-y-4">
+            {!draft.holes || draft.holes.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-gray-400 mb-3">
+                  No hole data yet. Add par and HDCP order for each hole to enable accurate stroke-dot placement and CTP par-3 detection.
+                </p>
+                <button
+                  className="btn-ghost text-sm flex items-center gap-1 mx-auto"
+                  onClick={() => update({
+                    holes: Array.from({ length: 18 }, (_, i) => ({
+                      number: i + 1,
+                      par: 4,
+                      hdcpOrder: i + 1,
+                      yardages: {},
+                    }))
+                  })}
+                >
+                  <Plus size={13} /> Initialize 18 Holes
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {[draft.holes.slice(0, 9), draft.holes.slice(9)].map((group, gi) => {
+                  const groupPar = group.reduce((s, h) => s + h.par, 0)
+                  return (
+                    <div key={gi}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                          {gi === 0 ? 'Front Nine (Holes 1–9)' : 'Back Nine (Holes 10–18)'}
+                        </h4>
+                        <span className="text-xs text-gray-400">Par {groupPar}</span>
+                      </div>
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-masters-light">
+                            <th className="border p-1 text-center">Hole</th>
+                            <th className="border p-1 text-center">Par</th>
+                            <th className="border p-1 text-center">HDCP Order</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.map(hole => (
+                            <tr key={hole.number} className="hover:bg-gray-50">
+                              <td className="border p-1 font-bold text-masters-dark text-center">{hole.number}</td>
+                              <td className="border p-1 text-center">
+                                <input type="number" min={3} max={5}
+                                  className="w-10 text-center border-none bg-transparent"
+                                  value={hole.par}
+                                  onChange={e => updateHoleInDraft(hole.number, { par: parseInt(e.target.value) || hole.par })} />
+                              </td>
+                              <td className="border p-1 text-center">
+                                <input type="number" min={1} max={19}
+                                  className="w-12 text-center border-none bg-transparent"
+                                  value={hole.hdcpOrder}
+                                  onChange={e => updateHoleInDraft(hole.number, { hdcpOrder: parseInt(e.target.value) || hole.hdcpOrder })} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-masters-light font-bold">
+                            <td className="border p-1 text-center text-masters-dark">Total</td>
+                            <td className="border p-1 text-center text-masters-dark">{groupPar}</td>
+                            <td className="border p-1" />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )
+                })}
+                <button
+                  className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1"
+                  onClick={() => update({ holes: undefined })}
+                >
+                  <X size={11} /> Clear hole data
+                </button>
+              </div>
+            )}
           </div>
         )}
 

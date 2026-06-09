@@ -180,6 +180,7 @@ export interface CourseHistoryEntry {
   imageData?: string        // base64 for uploaded images
   imageContain?: boolean    // true for logos/non-landscape images
   tees?: CourseTee[]
+  holes?: HoleData[]        // per-hole par and HDCP order (no yardages)
   scorecardUrl?: string
   scorecardImageData?: string
   notes?: string

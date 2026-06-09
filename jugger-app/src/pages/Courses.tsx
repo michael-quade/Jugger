@@ -51,34 +51,11 @@ function ScorecardLightbox({ src, label, onClose }: { src: string; label: string
   )
 }
 
-// Blank 18-hole course template
-function blankCourse(): Course {
-  return {
-    id: `course-${Date.now()}`,
-    name: 'New Course',
-    par: 72,
-    website: '',
-    tees: [{ name: 'Blue', rating: 72.0, slope: 130 }],
-    holes: Array.from({ length: 18 }, (_, i) => ({
-      number: i + 1,
-      par: 4,
-      hdcpOrder: i + 1,
-      yardages: {},
-    })),
-  }
-}
-
 export default function Courses() {
   const { courses, setCourse, removeCourse } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [selected, setSelected] = useState<string>(courses[0]?.id ?? '')
   const course = courses.find(c => c.id === selected)
-
-  function handleAddCourse() {
-    const c = blankCourse()
-    setCourse(c)
-    setSelected(c.id)
-  }
 
   function handleRemoveCourse(id: string) {
     if (!confirm('Delete this course? This cannot be undone.')) return
@@ -90,7 +67,7 @@ export default function Courses() {
     <div className="space-y-6">
       <h1 className="text-2xl font-serif font-bold text-masters-dark">Course Information</h1>
 
-      {/* Course tabs + Add button */}
+      {/* Course tabs */}
       <div className="flex gap-2 flex-wrap items-center">
         {courses.map(c => (
           <button
@@ -105,14 +82,6 @@ export default function Courses() {
             {c.name}
           </button>
         ))}
-        {isAdmin && (
-          <button
-            onClick={handleAddCourse}
-            className="btn-ghost flex items-center gap-1.5 text-sm"
-          >
-            <Plus size={14} /> Add Course
-          </button>
-        )}
       </div>
 
       {course && (

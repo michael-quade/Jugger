@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
+import { historyEntryToCourse } from './CourseHistory'
 import type { RoundConfig, RoundFormat } from '../types'
 import { Calendar, Clock, AlertTriangle, Shuffle, ClipboardList } from 'lucide-react'
 
@@ -40,7 +41,15 @@ function fmt24to12(t: string): string {
 const MATCH_LABELS = ['Match A', 'Match B', 'Match C'] as const
 
 export default function Schedule() {
-  const { roundConfigs, courses, setRoundConfig, matches, teams, clearRoundMatches } = useTournamentStore()
+  const { roundConfigs, courses, courseHistory, setCourse, setRoundConfig, matches, teams, clearRoundMatches } = useTournamentStore()
+
+  // CourseHistory entries that have tee data but aren't already in the courses array
+  const courseIds = new Set(courses.map(c => c.id))
+  const eligibleHistoryCourses = courseHistory.filter(h =>
+    !courseIds.has(h.id) &&
+    h.par != null &&
+    h.tees && h.tees.some(t => t.rating != null && t.slope != null)
+  )
   const isAdmin = useIsAdmin()
 
   const [pendingFormat, setPendingFormat] = useState<{ round: number; format: RoundFormat } | null>(null)
@@ -199,16 +208,33 @@ export default function Schedule() {
                           className="input"
                           value={rc.courseId}
                           onChange={e => {
-                            const newCourse = courses.find(c => c.id === e.target.value)
-                            const firstTee = newCourse?.tees.find(t => t.rating != null && t.slope != null)
+                            const selectedId = e.target.value
+                            let resolved = courses.find(c => c.id === selectedId)
+                            if (!resolved) {
+                              const histEntry = courseHistory.find(h => h.id === selectedId)
+                              if (histEntry) {
+                                resolved = historyEntryToCourse(histEntry)
+                                setCourse(resolved)
+                              }
+                            }
+                            const firstTee = resolved?.tees.find(t => t.rating != null && t.slope != null)
                             const existing = roundConfigs.find(r => r.round === rc.round)
                             if (!existing) return
-                            setRoundConfig({ ...existing, courseId: e.target.value, tee: firstTee?.name ?? '' })
+                            setRoundConfig({ ...existing, courseId: selectedId, tee: firstTee?.name ?? '' })
                           }}
                         >
-                          {courses.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
+                          <optgroup label="Tournament Courses">
+                            {courses.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </optgroup>
+                          {eligibleHistoryCourses.length > 0 && (
+                            <optgroup label="Course History">
+                              {eligibleHistoryCourses.map(h => (
+                                <option key={h.id} value={h.id}>{h.name}</option>
+                              ))}
+                            </optgroup>
+                          )}
                         </select>
                       ) : (
                         <span className="text-sm font-medium text-masters-dark">{course?.name || '—'}</span>
