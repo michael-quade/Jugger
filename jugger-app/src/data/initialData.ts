@@ -145,7 +145,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     name: 'Brunswick Plantation Resort & Golf',
     location: 'Calabash, NC',
     website: 'https://www.brunswickplantation.com',
-    imageUrl: '/Jugger/courses/brunswick-plantation.webp',
+    imageUrl: '/courses/brunswick-plantation.webp',
     playedRounds: [
       { id: 'pr-bp-2007-r2', year: 2007, round: 2 },
     ],
@@ -407,7 +407,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     name: 'Pinehurst No. 9',
     location: 'Pinehurst, NC',
     website: 'https://www.pinehurst.com/golf/courses/no-9/',
-    imageUrl: '/Jugger/courses/pinehurst-9.jpg',
+    imageUrl: '/courses/pinehurst-9.jpg',
     notes: 'Originally the National Golf Club of NC; acquired by Pinehurst Resort in 2014 and redesignated as Pinehurst No. 9.',
     playedRounds: [
       { id: 'pr-ngc-2013-r1', year: 2013, round: 1 },
@@ -464,7 +464,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     name: 'Southern Pines Golf Club',
     location: 'Southern Pines, NC',
     website: 'https://www.southernpinesgolfclub.com',
-    imageUrl: '/Jugger/courses/southern-pines.jpg',
+    imageUrl: '/courses/southern-pines.jpg',
     playedRounds: [
       { id: 'pr-spgc-2015-r2', year: 2015, round: 2 },
       { id: 'pr-spgc-2022-r1', year: 2022, round: 1 },
@@ -512,7 +512,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     location: 'Southern Pines, NC',
     par: 71,
     website: 'https://www.pineneedleslodge.com/courses/',
-    imageUrl: '/Jugger/courses/pine-needles.jpg',
+    imageUrl: '/courses/pine-needles.jpg',
     tees: [
       { name: 'Ross',  rating: 71.9, slope: 138 },
       { name: 'White', rating: 70.0, slope: 133 },
@@ -528,7 +528,7 @@ export const INITIAL_COURSE_HISTORY: CourseHistoryEntry[] = [
     location: 'Southern Pines, NC',
     website: 'https://www.midpinesinn.com',
     notes: 'Classic Donald Ross design, sister course to Pine Needles.',
-    imageUrl: '/Jugger/courses/mid-pines.jpg',
+    imageUrl: '/courses/mid-pines.jpg',
     playedRounds: [
       { id: 'pr-mp-2023-r1', year: 2023, round: 1 },
     ],
