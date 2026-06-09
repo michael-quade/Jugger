@@ -87,7 +87,7 @@ function juggerHistoryPlugin() {
 }
 
 export default defineConfig({
-  base:    '/Jugger/',
+  base:    '/',
   plugins: [react(), juggerHistoryPlugin()],
   server:  { port: 5173, open: true },
 })
