@@ -1,21 +1,22 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { Course, HoleData, CourseTee } from '../types'
-import { Check, X, ExternalLink, ZoomIn } from 'lucide-react'
+import { Check, X, ExternalLink, ZoomIn, Plus, Trash2, Upload, ImageOff } from 'lucide-react'
 
-const COURSE_IMAGES: Record<string, string> = {
+// Static bundled images for the 4 original Pinehurst courses
+const STATIC_HERO: Record<string, string> = {
   'pine-needles':      `${import.meta.env.BASE_URL}courses/pine-needles.jpg`,
   'pinewild-magnolia': `${import.meta.env.BASE_URL}courses/pinewild-magnolia.jpg`,
   'pinewild-holly':    `${import.meta.env.BASE_URL}courses/pinewild-holly.jpg`,
   'mid-south':         `${import.meta.env.BASE_URL}courses/mid-south.jpg`,
 }
 
-const COURSE_IMAGE_POSITIONS: Record<string, string> = {
+const STATIC_HERO_POSITIONS: Record<string, string> = {
   'mid-south': 'center 70%',
 }
 
-const SCORECARD_IMAGES: Record<string, { src: string; label: string }[]> = {
+const STATIC_SCORECARDS: Record<string, { src: string; label: string }[]> = {
   'pine-needles': [
     { src: `${import.meta.env.BASE_URL}courses/scorecard-pine-needles-logo.png`, label: 'Scorecard — Yardages' },
     { src: `${import.meta.env.BASE_URL}courses/scorecard-pine-needles.png`,      label: 'Scorecard — Rating & Slope' },
@@ -50,18 +51,47 @@ function ScorecardLightbox({ src, label, onClose }: { src: string; label: string
   )
 }
 
+// Blank 18-hole course template
+function blankCourse(): Course {
+  return {
+    id: `course-${Date.now()}`,
+    name: 'New Course',
+    par: 72,
+    website: '',
+    tees: [{ name: 'Blue', rating: 72.0, slope: 130 }],
+    holes: Array.from({ length: 18 }, (_, i) => ({
+      number: i + 1,
+      par: 4,
+      hdcpOrder: i + 1,
+      yardages: {},
+    })),
+  }
+}
+
 export default function Courses() {
-  const { courses, setCourse } = useTournamentStore()
+  const { courses, setCourse, removeCourse } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [selected, setSelected] = useState<string>(courses[0]?.id ?? '')
   const course = courses.find(c => c.id === selected)
+
+  function handleAddCourse() {
+    const c = blankCourse()
+    setCourse(c)
+    setSelected(c.id)
+  }
+
+  function handleRemoveCourse(id: string) {
+    if (!confirm('Delete this course? This cannot be undone.')) return
+    removeCourse(id)
+    setSelected(courses.find(c => c.id !== id)?.id ?? '')
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-serif font-bold text-masters-dark">Course Information</h1>
 
-      {/* Course tabs */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Course tabs + Add button */}
+      <div className="flex gap-2 flex-wrap items-center">
         {courses.map(c => (
           <button
             key={c.id}
@@ -75,21 +105,49 @@ export default function Courses() {
             {c.name}
           </button>
         ))}
+        {isAdmin && (
+          <button
+            onClick={handleAddCourse}
+            className="btn-ghost flex items-center gap-1.5 text-sm"
+          >
+            <Plus size={14} /> Add Course
+          </button>
+        )}
       </div>
 
-      {/* key={course.id} forces a fresh mount (and fresh draft state) on every tab switch */}
-      {course && <CourseEditor key={course.id} course={course} onSave={setCourse} isAdmin={isAdmin} />}
+      {course && (
+        <CourseEditor
+          key={course.id}
+          course={course}
+          onSave={setCourse}
+          onRemove={() => handleRemoveCourse(course.id)}
+          isAdmin={isAdmin}
+        />
+      )}
     </div>
   )
 }
 
-function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c: Course) => void; isAdmin: boolean }) {
+// ─── CourseEditor ─────────────────────────────────────────────────────────────
+
+interface CourseEditorProps {
+  course: Course
+  onSave: (c: Course) => void
+  onRemove: () => void
+  isAdmin: boolean
+}
+
+function CourseEditor({ course, onSave, onRemove, isAdmin }: CourseEditorProps) {
   const [draft, setDraft] = useState<Course>({ ...course })
   const [dirty, setDirty] = useState(false)
-  const [imgError, setImgError] = useState(false)
+  const [heroError, setHeroError] = useState(false)
   const [lightbox, setLightbox] = useState<{ src: string; label: string } | null>(null)
+  const heroInputRef = useRef<HTMLInputElement>(null)
+  const scorecardInputRef = useRef<HTMLInputElement>(null)
 
-  const imageUrl = COURSE_IMAGES[course.id]
+  const heroSrc = draft.imageData ?? STATIC_HERO[course.id] ?? null
+  const objPosition = STATIC_HERO_POSITIONS[course.id] ?? 'center center'
+  const staticScorecards = STATIC_SCORECARDS[course.id] ?? []
 
   function update(updates: Partial<Course>) {
     setDraft(d => ({ ...d, ...updates }))
@@ -98,6 +156,14 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
 
   function updateTee(i: number, updates: Partial<CourseTee>) {
     update({ tees: draft.tees.map((t, idx) => idx === i ? { ...t, ...updates } : t) })
+  }
+
+  function addTee() {
+    update({ tees: [...draft.tees, { name: 'New Tee', rating: undefined, slope: undefined }] })
+  }
+
+  function removeTee(i: number) {
+    update({ tees: draft.tees.filter((_, idx) => idx !== i) })
   }
 
   function updateHole(num: number, updates: Partial<HoleData>) {
@@ -112,57 +178,102 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
     })
   }
 
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>, field: 'imageData' | 'scorecardImageData') {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      update({ [field]: ev.target?.result as string })
+      if (field === 'imageData') setHeroError(false)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
   const front = draft.holes.slice(0, 9)
   const back  = draft.holes.slice(9)
-
   const frontPar = front.reduce((s, h) => s + h.par, 0)
   const backPar  = back.reduce((s, h) => s + h.par, 0)
 
   return (
     <div className="space-y-4">
-      {/* Course hero image */}
-      {imageUrl && !imgError && (
-        <div className="relative rounded-lg overflow-hidden shadow-md h-52 bg-masters-dark">
+      {/* Hero image */}
+      <div className="relative rounded-lg overflow-hidden shadow-md h-52 bg-masters-dark">
+        {heroSrc && !heroError ? (
           <img
-            src={imageUrl}
+            src={heroSrc}
             alt={`${course.name} course photo`}
             className="w-full h-full object-cover"
-            style={{ objectPosition: COURSE_IMAGE_POSITIONS[course.id] ?? 'center center' }}
-            onError={() => setImgError(true)}
+            style={{ objectPosition: objPosition }}
+            onError={() => setHeroError(true)}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-masters-dark/70 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-            <h2 className="font-serif text-2xl font-bold drop-shadow">{course.name}</h2>
-            <p className="text-sm text-masters-gold font-semibold">Par {course.par}</p>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-masters-dark/60">
+            <ImageOff size={32} className="text-white/30" />
+            <p className="text-white/40 text-sm">No course photo</p>
           </div>
-          {draft.website && (
-            <a
-              href={draft.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="absolute top-3 right-3 bg-white/20 hover:bg-white/40 text-white rounded px-2 py-1 text-xs flex items-center gap-1 backdrop-blur-sm transition-colors"
-            >
-              <ExternalLink size={11} /> Visit Site
-            </a>
-          )}
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-masters-dark/70 to-transparent pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 p-4 text-white pointer-events-none">
+          <h2 className="font-serif text-2xl font-bold drop-shadow">{draft.name || 'New Course'}</h2>
+          <p className="text-sm text-masters-gold font-semibold">Par {draft.par}</p>
         </div>
-      )}
+        {draft.website && (
+          <a
+            href={draft.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute top-3 left-3 bg-white/20 hover:bg-white/40 text-white rounded px-2 py-1 text-xs flex items-center gap-1 backdrop-blur-sm transition-colors"
+          >
+            <ExternalLink size={11} /> Visit Site
+          </a>
+        )}
+        {isAdmin && (
+          <label className="absolute top-3 right-3 bg-white/20 hover:bg-white/40 text-white rounded px-2 py-1 text-xs flex items-center gap-1 backdrop-blur-sm transition-colors cursor-pointer">
+            <Upload size={11} /> {heroSrc && !heroError ? 'Change Photo' : 'Upload Photo'}
+            <input
+              ref={heroInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => handleUpload(e, 'imageData')}
+            />
+          </label>
+        )}
+      </div>
 
-      {/* Course settings card */}
+      {/* Course settings */}
       <div className="card">
         <div className="grid sm:grid-cols-3 gap-4">
           <div>
             <label className="label">Course Name</label>
-            <input className="input" value={draft.name} readOnly={!isAdmin} onChange={e => isAdmin && update({ name: e.target.value })} />
+            <input
+              className="input"
+              value={draft.name}
+              readOnly={!isAdmin}
+              onChange={e => isAdmin && update({ name: e.target.value })}
+            />
           </div>
           <div>
             <label className="label">Par</label>
-            <input className="input" type="number" value={draft.par} readOnly={!isAdmin} onChange={e => isAdmin && update({ par: parseInt(e.target.value) || draft.par })} />
+            <input
+              className="input"
+              type="number"
+              value={draft.par}
+              readOnly={!isAdmin}
+              onChange={e => isAdmin && update({ par: parseInt(e.target.value) || draft.par })}
+            />
           </div>
           <div>
             <label className="label">Website</label>
             <div className="flex gap-1">
-              <input className="input flex-1" value={draft.website ?? ''} readOnly={!isAdmin} onChange={e => isAdmin && update({ website: e.target.value })} />
+              <input
+                className="input flex-1"
+                value={draft.website ?? ''}
+                readOnly={!isAdmin}
+                placeholder="https://…"
+                onChange={e => isAdmin && update({ website: e.target.value })}
+              />
               {draft.website && (
                 <a href={draft.website} target="_blank" rel="noopener noreferrer" className="btn-ghost flex items-center gap-1">
                   <ExternalLink size={12} />
@@ -172,9 +283,16 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
           </div>
         </div>
 
-        {/* Tees */}
+        {/* Tees table */}
         <div className="mt-4">
-          <label className="label">Tee Options</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="label mb-0">Tee Options</label>
+            {isAdmin && (
+              <button onClick={addTee} className="text-xs text-masters-green hover:text-masters-dark flex items-center gap-1 font-semibold">
+                <Plus size={12} /> Add Tee
+              </button>
+            )}
+          </div>
           <table className="w-full text-sm mt-1">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400 border-b">
@@ -184,6 +302,7 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                 <th className="text-right pb-1 px-2 font-medium">Total</th>
                 <th className="text-right pb-1 px-2 font-medium">Rating</th>
                 <th className="text-right pb-1 pl-2 font-medium">Slope</th>
+                {isAdmin && <th className="pb-1 pl-2" />}
               </tr>
             </thead>
             <tbody>
@@ -220,6 +339,13 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                         value={tee.slope ?? ''} readOnly={!isAdmin}
                         onChange={e => isAdmin && updateTee(i, { slope: parseInt(e.target.value) })} />
                     </td>
+                    {isAdmin && (
+                      <td className="py-1 pl-2 text-right">
+                        <button onClick={() => removeTee(i)} title="Remove tee">
+                          <Trash2 size={13} className="text-gray-300 hover:text-red-500" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -228,12 +354,49 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
         </div>
       </div>
 
-      {/* Official Scorecards */}
-      {SCORECARD_IMAGES[course.id] && (
-        <div className="card">
-          <h3 className="section-header mb-3">Official Scorecards</h3>
-          <div className={`grid gap-4 ${SCORECARD_IMAGES[course.id].length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
-            {SCORECARD_IMAGES[course.id].map(({ src, label }) => (
+      {/* Official Scorecard */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="section-header mb-0">Official Scorecard</h3>
+          {isAdmin && (
+            <label className="text-xs text-masters-green hover:text-masters-dark flex items-center gap-1 cursor-pointer font-semibold">
+              <Upload size={11} />
+              {draft.scorecardImageData ? 'Replace' : 'Upload Scorecard'}
+              <input
+                ref={scorecardInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => handleUpload(e, 'scorecardImageData')}
+              />
+            </label>
+          )}
+        </div>
+
+        {/* Uploaded scorecard takes precedence over static ones */}
+        {draft.scorecardImageData ? (
+          <div className="space-y-2">
+            <div
+              className="relative group cursor-zoom-in rounded overflow-hidden border border-gray-200 shadow-sm"
+              onClick={() => setLightbox({ src: draft.scorecardImageData!, label: 'Official Scorecard' })}
+            >
+              <img src={draft.scorecardImageData} alt="Official Scorecard" className="w-full object-contain bg-white" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <ZoomIn size={28} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+              </div>
+            </div>
+            {isAdmin && (
+              <button
+                className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1"
+                onClick={() => update({ scorecardImageData: undefined })}
+              >
+                <Trash2 size={11} /> Remove uploaded scorecard
+              </button>
+            )}
+          </div>
+        ) : staticScorecards.length > 0 ? (
+          <div className={`grid gap-4 ${staticScorecards.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+            {staticScorecards.map(({ src, label }) => (
               <div key={src} className="space-y-1">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
                 <div
@@ -248,8 +411,10 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-gray-400 italic">No scorecard uploaded yet.</p>
+        )}
+      </div>
 
       {/* Hole data tables */}
       {[front, back].map((group, gi) => {
@@ -278,32 +443,23 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
                   <tr key={hole.number} className="hover:bg-gray-50">
                     <td className="border p-1 font-bold text-masters-dark text-center">{hole.number}</td>
                     <td className="border p-1 text-center">
-                      <input
-                        type="number" min={3} max={5}
+                      <input type="number" min={3} max={5}
                         className="w-10 text-center border-none bg-transparent"
-                        value={hole.par}
-                        readOnly={!isAdmin}
-                        onChange={e => isAdmin && updateHole(hole.number, { par: parseInt(e.target.value) })}
-                      />
+                        value={hole.par} readOnly={!isAdmin}
+                        onChange={e => isAdmin && updateHole(hole.number, { par: parseInt(e.target.value) })} />
                     </td>
                     <td className="border p-1 text-center">
-                      <input
-                        type="number" min={1} max={19}
+                      <input type="number" min={1} max={19}
                         className="w-12 text-center border-none bg-transparent"
-                        value={hole.hdcpOrder}
-                        readOnly={!isAdmin}
-                        onChange={e => isAdmin && updateHole(hole.number, { hdcpOrder: parseInt(e.target.value) })}
-                      />
+                        value={hole.hdcpOrder} readOnly={!isAdmin}
+                        onChange={e => isAdmin && updateHole(hole.number, { hdcpOrder: parseInt(e.target.value) })} />
                     </td>
                     {draft.tees.map(t => (
                       <td key={t.name} className="border p-1 text-center">
-                        <input
-                          type="number"
+                        <input type="number"
                           className="w-16 text-center border-none bg-transparent"
-                          value={hole.yardages[t.name] ?? ''}
-                          readOnly={!isAdmin}
-                          onChange={e => isAdmin && updateYardage(hole.number, t.name, parseInt(e.target.value) || 0)}
-                        />
+                          value={hole.yardages[t.name] ?? ''} readOnly={!isAdmin}
+                          onChange={e => isAdmin && updateYardage(hole.number, t.name, parseInt(e.target.value) || 0)} />
                       </td>
                     ))}
                   </tr>
@@ -334,13 +490,26 @@ function CourseEditor({ course, onSave, isAdmin }: { course: Course; onSave: (c:
         <ScorecardLightbox src={lightbox.src} label={lightbox.label} onClose={() => setLightbox(null)} />
       )}
 
-      {dirty && isAdmin && (
-        <div className="flex gap-2">
-          <button className="btn-primary flex items-center gap-1" onClick={() => { onSave(draft); setDirty(false) }}>
-            <Check size={14} /> Save Changes
-          </button>
-          <button className="btn-ghost flex items-center gap-1" onClick={() => { setDraft({ ...course }); setDirty(false) }}>
-            <X size={14} /> Discard
+      {/* Save / Discard / Delete */}
+      {isAdmin && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex gap-2">
+            {dirty && (
+              <>
+                <button className="btn-primary flex items-center gap-1" onClick={() => { onSave(draft); setDirty(false) }}>
+                  <Check size={14} /> Save Changes
+                </button>
+                <button className="btn-ghost flex items-center gap-1" onClick={() => { setDraft({ ...course }); setDirty(false) }}>
+                  <X size={14} /> Discard
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            className="btn-danger flex items-center gap-1 text-sm"
+            onClick={onRemove}
+          >
+            <Trash2 size={13} /> Delete Course
           </button>
         </div>
       )}

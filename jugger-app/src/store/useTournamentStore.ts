@@ -18,6 +18,8 @@ interface Actions {
   updateTeamColor: (teamId: string, color: string) => void
 
   setCourse: (course: Course) => void
+  addCourse: (course: Course) => void
+  removeCourse: (courseId: string) => void
   setRoundConfig: (config: RoundConfig) => void
 
   setMatches: (matches: Match[]) => void
@@ -169,6 +171,12 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             ? state.courses.map(c => c.id === course.id ? course : c)
             : [...state.courses, course],
         })),
+
+      addCourse: (course) =>
+        set(state => ({ courses: [...state.courses, course] })),
+
+      removeCourse: (courseId) =>
+        set(state => ({ courses: state.courses.filter(c => c.id !== courseId) })),
 
       setRoundConfig: (config) =>
         set(state => ({

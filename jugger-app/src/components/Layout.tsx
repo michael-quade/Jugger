@@ -22,7 +22,7 @@ const NAV = [
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
   { to: '/stats',      label: 'Stats',        icon: TrendingUp },
   { to: '/archive',    label: 'Archive',      icon: Archive },
-  { to: '/history',    label: 'History',      icon: BookOpen },
+  { to: '/history',    label: 'Course History', icon: BookOpen },
   { to: '/print',      label: 'Print All',    icon: Printer },
 ]
 

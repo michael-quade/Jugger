@@ -39,6 +39,8 @@ export interface Course {
   website?: string
   tees: CourseTee[]
   holes: HoleData[]
+  imageData?: string        // base64 uploaded hero photo
+  scorecardImageData?: string  // base64 uploaded scorecard
 }
 
 export type RoundFormat =
