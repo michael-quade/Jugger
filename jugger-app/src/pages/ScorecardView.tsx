@@ -828,6 +828,7 @@ interface RoundInfo {
   format: string
   course: string
   description: string
+  totalPoints: number
   scoring: { label: string; detail: string }[]
   points: { label: string; value: string }[]
 }
@@ -836,6 +837,7 @@ const ROUND_INFO: Record<number, RoundInfo> = {
   1: {
     format: 'Team Match Play',
     course: 'Pine Needles · Thursday PM',
+    totalPoints: 9,
     description: 'Two-vs-two twosome format. Each team puts up their best NET score per hole. The twosome with the lowest net wins the hole. Most holes won wins the match.',
     scoring: [
       { label: 'NET scoring', detail: 'Gross score minus per-hole handicap strokes' },
@@ -850,6 +852,7 @@ const ROUND_INFO: Record<number, RoundInfo> = {
   2: {
     format: 'Points Round (Stableford)',
     course: 'Pinewild Magnolia · Friday AM',
+    totalPoints: 15,
     description: 'Gross Stableford points format. Each player earns points based on their gross score relative to par. The twosome with the higher combined points vs. their quota wins.',
     scoring: [
       { label: 'Albatross (−3)', detail: '10 pts' },
@@ -869,6 +872,7 @@ const ROUND_INFO: Record<number, RoundInfo> = {
   3: {
     format: 'Texas Scramble',
     course: 'Pinewild Holly · Friday PM',
+    totalPoints: 7,
     description: 'All 4 players tee off, choose the best drive, then each plays from that spot. 60% of each player\'s course HDCP applied. Best-ball count increases as the round progresses.',
     scoring: [
       { label: 'Holes 1–6', detail: 'Best 1 ball' },
@@ -885,6 +889,7 @@ const ROUND_INFO: Record<number, RoundInfo> = {
   4: {
     format: 'Individual Match Play',
     course: 'Mid South · Saturday AM',
+    totalPoints: 12,
     description: 'Each player plays their own ball with NET scoring. Two sub-matches run simultaneously: each player\'s individual result plus a twosome best-ball result per pairing.',
     scoring: [
       { label: 'NET scoring', detail: 'Gross minus full course HDCP strokes per hole' },
@@ -900,6 +905,7 @@ const ROUND_INFO: Record<number, RoundInfo> = {
   5: {
     format: "Captain's Choice",
     course: 'Mid South · Saturday PM',
+    totalPoints: 7,
     description: 'The team captain selects which shot to play after all players tee off. HDCP is 15% of the combined team handicap. Minimum 3 tee shots per player must be used across the round.',
     scoring: [
       { label: 'Team HDCP', detail: 'floor(sum of all 4 player course HDCPs × 15%)' },
@@ -938,7 +944,7 @@ function RoundInfoBanner({ round }: { round: number }) {
           </ul>
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Points Available</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">{info.totalPoints} Team Points Available</p>
           <div className="flex flex-wrap gap-2">
             {info.points.map(p => (
               <div key={p.label} className="bg-white border border-masters-green/30 rounded px-2 py-1 text-xs">
