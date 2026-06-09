@@ -59,8 +59,12 @@ export default function Stats() {
   const { teams } = useTournamentStore()
   const allPlayers = teams.flatMap(t => t.players)
 
-  // Build display names from store
-  const playerName = (id: string) => allPlayers.find(p => p.id === id)?.name ?? id
+  // Build display names from store — use original name if this slot is currently a substitute
+  const playerName = (id: string) => {
+    const p = allPlayers.find(pl => pl.id === id)
+    if (!p) return id
+    return p.isSubstitute ? (p.originalName ?? p.name) : p.name
+  }
 
   // Visible player IDs
   const [visible, setVisible] = useState<Set<string>>(

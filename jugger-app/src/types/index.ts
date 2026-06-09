@@ -6,6 +6,9 @@ export interface Player {
   hdcpLocked: boolean
   hdcp2009gross?: number // used for Round 2 quota
   courseHdcpOverrides?: Record<string, number> // courseId -> override value
+  isSubstitute?: boolean
+  originalName?: string
+  originalHandicapIndex?: number
 }
 
 export interface Team {

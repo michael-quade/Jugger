@@ -2,26 +2,22 @@ import { useState, Fragment } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { Player } from '../types'
-import { Lock, Unlock, Plus, Trash2, Edit2, Check, X } from 'lucide-react'
+import { Lock, Unlock, Plus, Trash2, Edit2, Check, X, RotateCcw } from 'lucide-react'
 import {
   rawCourseHdcpDisplay, tournamentHdcp, nettedCourseHdcpRaw, apply18Cap,
 } from '../utils/handicap'
 
 export default function Teams() {
-  const { teams, hdcpLocked, lockHandicaps, updatePlayer, addPlayer, removePlayer, updateTeamName } = useTournamentStore()
+  const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [editName, setEditName] = useState<{ teamId: string; playerId: string; val: string } | null>(null)
   const [editTeamName, setEditTeamName] = useState<{ teamId: string; val: string } | null>(null)
-
-  function addSubstitute(teamId: string) {
-    const newPlayer: Player = {
-      id: `sub-${Date.now()}`,
-      name: 'New Player',
-      handicapIndex: 15.0,
-      hdcpLocked: false,
-    }
-    addPlayer(teamId, newPlayer)
-  }
+  const [subForm, setSubForm] = useState<{
+    teamId: string
+    replacingId: string
+    subName: string
+    subHdcp: string
+  } | null>(null)
 
   return (
     <div className="space-y-6">
@@ -88,17 +84,75 @@ export default function Teams() {
                   setEditName={setEditName}
                   onUpdatePlayer={(id, updates) => updatePlayer(team.id, id, updates)}
                   onRemove={() => removePlayer(team.id, player.id)}
+                  onRevert={() => revertSubstitute(team.id, player.id)}
                 />
               ))}
             </div>
 
             {isAdmin && !hdcpLocked && (
-              <button
-                className="btn-ghost w-full flex items-center justify-center gap-1 text-sm"
-                onClick={() => addSubstitute(team.id)}
-              >
-                <Plus size={14} /> Add Substitute
-              </button>
+              subForm?.teamId === team.id ? (
+                <div className="border border-masters-green/30 rounded-lg p-3 space-y-2 bg-masters-green/5">
+                  <p className="text-xs font-bold text-masters-dark">Add Substitute</p>
+                  <div>
+                    <label className="label">Replacing</label>
+                    <select
+                      className="input text-sm w-full"
+                      value={subForm.replacingId}
+                      onChange={e => setSubForm({ ...subForm, replacingId: e.target.value })}
+                    >
+                      <option value="">— Select player —</option>
+                      {team.players.filter(p => !p.isSubstitute).map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label">Sub Name</label>
+                      <input
+                        className="input text-sm w-full"
+                        placeholder="Full name"
+                        value={subForm.subName}
+                        onChange={e => setSubForm({ ...subForm, subName: e.target.value })}
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="label">HDCP Index</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        max={54}
+                        className="input text-sm w-full"
+                        placeholder="e.g. 12.4"
+                        value={subForm.subHdcp}
+                        onChange={e => setSubForm({ ...subForm, subHdcp: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-primary text-xs flex items-center gap-1"
+                      disabled={!subForm.replacingId || !subForm.subName.trim()}
+                      onClick={() => {
+                        substitutePlayer(team.id, subForm.replacingId, subForm.subName.trim(), parseFloat(subForm.subHdcp) || 0)
+                        setSubForm(null)
+                      }}
+                    >
+                      <Check size={12} /> Confirm Sub
+                    </button>
+                    <button className="btn-ghost text-xs" onClick={() => setSubForm(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="btn-ghost w-full flex items-center justify-center gap-1 text-sm"
+                  onClick={() => setSubForm({ teamId: team.id, replacingId: '', subName: '', subHdcp: '' })}
+                >
+                  <Plus size={14} /> Add Substitute
+                </button>
+              )
             )}
           </div>
         ))}
@@ -294,7 +348,7 @@ function HdcpTable() {
 }
 
 function PlayerRow({
-  player, teamId, hdcpLocked, isAdmin, editName, setEditName, onUpdatePlayer, onRemove
+  player, teamId, hdcpLocked, isAdmin, editName, setEditName, onUpdatePlayer, onRemove, onRevert
 }: {
   player: Player
   teamId: string
@@ -304,12 +358,13 @@ function PlayerRow({
   setEditName: (v: { teamId: string; playerId: string; val: string } | null) => void
   onUpdatePlayer: (id: string, updates: Partial<Player>) => void
   onRemove: () => void
+  onRevert: () => void
 }) {
   const isEditing = isAdmin && editName?.teamId === teamId && editName?.playerId === player.id
   const canEdit = isAdmin && !hdcpLocked
 
   return (
-    <div className="border border-gray-200 rounded p-2 space-y-1">
+    <div className={`border rounded p-2 space-y-1 ${player.isSubstitute ? 'border-amber-300 bg-amber-50/50' : 'border-gray-200'}`}>
       {/* Name row */}
       {isEditing ? (
         <div className="flex items-center gap-1">
@@ -327,11 +382,25 @@ function PlayerRow({
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           <span className="font-semibold text-sm flex-1">{player.name}</span>
-          {isAdmin && (
+          {player.isSubstitute && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800 font-bold uppercase tracking-wide shrink-0">
+              SUB
+            </span>
+          )}
+          {isAdmin && !player.isSubstitute && (
             <button onClick={() => setEditName({ teamId, playerId: player.id, val: player.name })}>
               <Edit2 size={12} className="text-gray-400 hover:text-masters-green" />
+            </button>
+          )}
+          {isAdmin && player.isSubstitute && (
+            <button
+              onClick={onRevert}
+              title={`Revert to ${player.originalName}`}
+              className="flex items-center gap-0.5 text-[10px] text-amber-700 hover:text-amber-900 font-semibold"
+            >
+              <RotateCcw size={10} /> Revert
             </button>
           )}
           {isAdmin && (
@@ -340,6 +409,9 @@ function PlayerRow({
             </button>
           )}
         </div>
+      )}
+      {player.isSubstitute && player.originalName && (
+        <div className="text-[10px] text-amber-700 italic">replacing {player.originalName}</div>
       )}
 
       {/* HDCP row */}

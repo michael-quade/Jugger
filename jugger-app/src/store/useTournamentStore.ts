@@ -12,6 +12,8 @@ interface Actions {
   updatePlayer: (teamId: string, playerId: string, updates: Partial<Player>) => void
   addPlayer: (teamId: string, player: Player) => void
   removePlayer: (teamId: string, playerId: string) => void
+  substitutePlayer: (teamId: string, playerId: string, subName: string, subHdcp: number) => void
+  revertSubstitute: (teamId: string, playerId: string) => void
   updateTeamName: (teamId: string, name: string) => void
   updateTeamColor: (teamId: string, color: string) => void
 
@@ -114,6 +116,44 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         set(state => ({
           teams: state.teams.map(t =>
             t.id !== teamId ? t : { ...t, players: t.players.filter(p => p.id !== playerId) }
+          ),
+        })),
+
+      substitutePlayer: (teamId, playerId, subName, subHdcp) =>
+        set(state => ({
+          teams: state.teams.map(t =>
+            t.id !== teamId ? t : {
+              ...t,
+              players: t.players.map(p =>
+                p.id !== playerId ? p : {
+                  ...p,
+                  name: subName,
+                  handicapIndex: subHdcp,
+                  isSubstitute: true,
+                  originalName: p.isSubstitute ? p.originalName : p.name,
+                  originalHandicapIndex: p.isSubstitute ? p.originalHandicapIndex : p.handicapIndex,
+                }
+              ),
+            }
+          ),
+        })),
+
+      revertSubstitute: (teamId, playerId) =>
+        set(state => ({
+          teams: state.teams.map(t =>
+            t.id !== teamId ? t : {
+              ...t,
+              players: t.players.map(p =>
+                p.id !== playerId ? p : {
+                  ...p,
+                  name: p.originalName ?? p.name,
+                  handicapIndex: p.originalHandicapIndex ?? p.handicapIndex,
+                  isSubstitute: false,
+                  originalName: undefined,
+                  originalHandicapIndex: undefined,
+                }
+              ),
+            }
           ),
         })),
 
@@ -307,6 +347,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       finalizeYear: () =>
         set(state => {
+          // Archive WITH subs intact (accurate historical record)
           const snapshot: ArchivedYear = {
             year: state.year,
             finalizedAt: new Date().toISOString(),
@@ -316,9 +357,20 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             teamScores: state.teamScores,
             hdcpLocked: state.hdcpLocked,
           }
+          // Restore original players for next year's template
+          const restoredTeams = state.teams.map(t => ({
+            ...t,
+            players: t.players
+              .filter(p => !p.id.startsWith('sub-'))
+              .map(p => p.isSubstitute
+                ? { ...p, name: p.originalName!, handicapIndex: p.originalHandicapIndex!, isSubstitute: false, originalName: undefined, originalHandicapIndex: undefined }
+                : p
+              ),
+          }))
           const newYear = state.year + 1
           return {
             archivedYears: [...state.archivedYears.filter(a => a.year !== state.year), snapshot],
+            teams: restoredTeams,
             liveYear: newYear,
             year: newYear,
             matches: [],
