@@ -171,8 +171,8 @@ export default function Schedule() {
 
               {/* Date + Tees + Tee Times */}
               <div className="space-y-3">
-                  {/* Date + Tees row */}
-                  <div className="grid sm:grid-cols-2 gap-3">
+                  {/* Date + Course + Tees row */}
+                  <div className="grid sm:grid-cols-3 gap-3">
                     <div>
                       <label className="label flex items-center gap-1">
                         <Calendar size={11} /> Date
@@ -190,6 +190,28 @@ export default function Schedule() {
                             ? new Date(rc.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
                             : '—'}
                         </span>
+                      )}
+                    </div>
+                    <div>
+                      <label className="label">Course</label>
+                      {isAdmin ? (
+                        <select
+                          className="input"
+                          value={rc.courseId}
+                          onChange={e => {
+                            const newCourse = courses.find(c => c.id === e.target.value)
+                            const firstTee = newCourse?.tees.find(t => t.rating != null && t.slope != null)
+                            const existing = roundConfigs.find(r => r.round === rc.round)
+                            if (!existing) return
+                            setRoundConfig({ ...existing, courseId: e.target.value, tee: firstTee?.name ?? '' })
+                          }}
+                        >
+                          {courses.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-sm font-medium text-masters-dark">{course?.name || '—'}</span>
                       )}
                     </div>
                     <div>
