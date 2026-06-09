@@ -479,7 +479,15 @@ export default function ScorecardView() {
                         <Dices size={13} /> Simulate Scores
                       </button>
                       <button
-                        onClick={() => { clearMatchScores(match.id); clearTeamScoresForRound(match.round) }}
+                        onClick={() => {
+                          clearMatchScores(match.id)
+                          clearTeamScoresForRound(match.round)
+                          if (showCtpPanel) {
+                            setCtpEntries(useTournamentStore.getState().ctpEntries.filter(
+                              e => !(e.year === year && e.round === activeRound)
+                            ))
+                          }
+                        }}
                         className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-3 py-1.5 transition-colors"
                       >
                         <Trash2 size={12} /> Clear Scores
