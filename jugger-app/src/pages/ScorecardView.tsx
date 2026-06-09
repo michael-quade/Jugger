@@ -535,6 +535,15 @@ export default function ScorecardView() {
                     onTeeShotChange={(hole, pid) => setTeeShot(match.id, hole, pid)}
                   />
                 </div>
+                {/* Par 3 CTP entry — Match C for twosome rounds, last team for team rounds */}
+                {showCtpPanel && (
+                  <CtpPanel
+                    round={activeRound}
+                    canEdit={canEnterScores}
+                    canMarkPaid={isAdmin}
+                  />
+                )}
+
                 {/* Magic Ball (Round 2 regular matches only) */}
                 {config.format === 'points_round' && !match.isBlind && (
                   <div className="card space-y-2">
@@ -575,15 +584,6 @@ export default function ScorecardView() {
                       })}
                     </div>
                   </div>
-                )}
-
-                {/* Par 3 CTP entry — Match C for twosome rounds, last team for team rounds */}
-                {showCtpPanel && (
-                  <CtpPanel
-                    round={activeRound}
-                    canEdit={canEnterScores}
-                    canMarkPaid={isAdmin}
-                  />
                 )}
 
                 <ScoreSummary match={match} teams={teams} course={course} config={config} />
