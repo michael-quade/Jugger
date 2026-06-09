@@ -4,11 +4,12 @@ import { useReactToPrint } from 'react-to-print'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin, useCanEnterScores } from '../store/useAuthStore'
 import ScorecardCard from '../components/ScorecardCard'
+import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
-import { Printer, Dices, Trash2 } from 'lucide-react'
-import type { Match, Course, RoundConfig, Team } from '../types'
+import { Printer, Dices, Trash2, Flag } from 'lucide-react'
+import type { Match, Course, RoundConfig, Team, CtpEntry } from '../types'
 
 const ROUND_NAMES: Record<number, string> = {
   1: 'Round 1 — Team Match Play',
@@ -19,7 +20,7 @@ const ROUND_NAMES: Record<number, string> = {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const canEnterScores = useCanEnterScores()
   const [searchParams] = useSearchParams()
@@ -27,10 +28,20 @@ export default function ScorecardView() {
   const [activeMatch, setActiveMatch] = useState<string | null>(() => searchParams.get('match'))
   const printRef = useRef<HTMLDivElement>(null)
 
+  const defaultCtpTeamId = teams[teams.length - 1]?.id ?? ''
+  const [ctpTeamIds, setCtpTeamIds] = useState<Record<number, string>>({ 3: defaultCtpTeamId, 5: defaultCtpTeamId })
+
   const roundMatches = getMatchesForRound(matches, activeRound)
   const config = roundConfigs.find(r => r.round === activeRound)
   const course = courses.find(c => c.id === config?.courseId)
   const match = matches.find(m => m.id === activeMatch)
+
+  const isTeamFmt = config?.format === 'texas_scramble' || config?.format === 'captains_choice'
+  const effectiveCtpTeamId = ctpTeamIds[activeRound] ?? defaultCtpTeamId
+  const showCtpPanel = !!(match && !match.isBlind && (
+    (!isTeamFmt && match.id === `${activeRound}c`) ||
+    (isTeamFmt && match.id === `${activeRound}-${effectiveCtpTeamId}`)
+  ))
 
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
@@ -316,6 +327,31 @@ export default function ScorecardView() {
         setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
       })
     }
+
+    // Simulate CTP winners for eligible matches
+    if (showCtpPanel) {
+      const par3Holes = getPar3Holes(roundConfigs, courses).filter(h => h.round === activeRound)
+      const allPlayerNames = teams.flatMap(t => t.players).map(p => p.name)
+      const prizePerHole = allPlayerNames.length
+      for (const h of par3Holes) {
+        const currentEntries = useTournamentStore.getState().ctpEntries
+        const existing = currentEntries.find(e => e.year === year && e.round === h.round && e.hole === h.hole)
+        const donateToHio = Math.random() < 0.15
+        const updates: Partial<CtpEntry> = donateToHio
+          ? { donatedToHio: true, winnerName: undefined, winnerPaid: undefined, hioDonationAmount: prizePerHole }
+          : { winnerName: allPlayerNames[Math.floor(Math.random() * allPlayerNames.length)], donatedToHio: false, hioDonationAmount: undefined }
+        if (existing) {
+          updateCtpEntry(existing.id, updates)
+        } else {
+          setCtpEntries([...useTournamentStore.getState().ctpEntries, {
+            id: `ctp-${year}-r${h.round}-h${h.hole}`,
+            year, round: h.round, hole: h.hole,
+            courseName: h.courseName, yardage: h.yardage,
+            ...updates,
+          }])
+        }
+      }
+    }
   }
 
   return (
@@ -435,7 +471,7 @@ export default function ScorecardView() {
                 )}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   {isAdmin && !match.isBlind && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={handleSimulate}
                         className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 rounded px-3 py-1.5 font-semibold transition-colors"
@@ -457,6 +493,25 @@ export default function ScorecardView() {
                     <Printer size={14} /> Print Scorecard
                   </button>
                 </div>
+
+                {/* Admin: assign which team's scorecard shows CTP entry (team formats) */}
+                {isAdmin && isTeamFmt && (
+                  <div className="flex items-center gap-2 text-xs bg-gray-50 border border-dashed border-gray-200 rounded p-2">
+                    <Flag size={12} className="text-masters-green shrink-0" />
+                    <span className="text-gray-500">CTP entry shown on team playing last:</span>
+                    <select
+                      className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white"
+                      value={ctpTeamIds[activeRound] ?? ''}
+                      onChange={e => setCtpTeamIds(prev => ({ ...prev, [activeRound]: e.target.value }))}
+                    >
+                      {roundMatches.map(m => {
+                        const teamId = m.id.replace(`${activeRound}-`, '')
+                        const team = teams.find(t => t.id === teamId)
+                        return <option key={m.id} value={teamId}>{team?.name ?? teamId}</option>
+                      })}
+                    </select>
+                  </div>
+                )}
                 <div ref={printRef}>
                   <ScorecardCard
                     match={match}
@@ -520,6 +575,15 @@ export default function ScorecardView() {
                       })}
                     </div>
                   </div>
+                )}
+
+                {/* Par 3 CTP entry — Match C for twosome rounds, last team for team rounds */}
+                {showCtpPanel && (
+                  <CtpPanel
+                    round={activeRound}
+                    canEdit={canEnterScores}
+                    canMarkPaid={isAdmin}
+                  />
                 )}
 
                 <ScoreSummary match={match} teams={teams} course={course} config={config} />
