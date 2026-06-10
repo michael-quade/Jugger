@@ -386,62 +386,79 @@ function IndividualMatch1v1ResultRow({ result, p1Id, p2Id, course, teams }: Indi
   const p1 = allPlayers.find(p => p.id === p1Id)
   const p2 = allPlayers.find(p => p.id === p2Id)
   const p1Team = teams.find(t => t.players.some(p => p.id === p1Id))
-  const color = p1Team?.color ?? '#9ca3af'
+  const p2Team = teams.find(t => t.players.some(p => p.id === p2Id))
+  const p1Color = p1Team?.color ?? '#9ca3af'
+  const p2Color = p2Team?.color ?? '#9ca3af'
   const p1Last = p1?.name.split(' ').slice(-1)[0] ?? '?'
   const p2Last = p2?.name.split(' ').slice(-1)[0] ?? '?'
+
+  function initials(name: string | undefined): string {
+    const parts = (name ?? '').trim().split(/\s+/)
+    if (parts.length === 0 || !parts[0]) return '?'
+    if (parts.length === 1) return parts[0][0].toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
+
+  const p1Init = initials(p1?.name)
+  const p2Init = initials(p2?.name)
+
+  function standing(r: number): { label: string; color: string } {
+    if (r > 0) return { label: `${p1Init} ${r}UP`, color: p1Color }
+    if (r < 0) return { label: `${p2Init} ${Math.abs(r)}UP`, color: p2Color }
+    return { label: 'AS', color: '#9ca3af' }
+  }
 
   function cellContent(i: number) {
     const res = result.holeResults[i]
     if (res === null) return null
 
-    const holeLabel = res === 'w1' ? 'W' : res === 'w2' ? 'L' : '—'
-    const holeClass = res === 'w1' ? 'text-masters-green' : res === 'w2' ? 'text-red-500' : 'text-gray-400'
-    const r = result.running[i]
-    const cumLabel = r > 0 ? `+${r}` : r < 0 ? `${r}` : 'AS'
-    const cumClass = r > 0 ? 'text-masters-green' : r < 0 ? 'text-red-500' : 'text-gray-400'
+    const holeLabel = res === 'w1' ? p1Init : res === 'w2' ? p2Init : '—'
+    const holeColor = res === 'w1' ? p1Color : res === 'w2' ? p2Color : '#9ca3af'
+    const { label: cumLabel, color: cumColor } = standing(result.running[i])
 
     return (
       <div className="flex flex-col items-center gap-[1px]">
-        <span className={`text-[8px] font-bold leading-none ${holeClass}`}>{holeLabel}</span>
-        <span className={`text-[7px] font-semibold leading-none ${cumClass}`}>{cumLabel}</span>
+        <span className="text-[8px] font-bold leading-none" style={{ color: holeColor }}>{holeLabel}</span>
+        <span className="text-[6px] font-semibold leading-none" style={{ color: cumColor }}>{cumLabel}</span>
       </div>
     )
   }
 
-  function runningDisplay(r: number) {
-    if (r > 0) return <span className="text-[8px] font-bold text-masters-green leading-none">+{r}</span>
-    if (r < 0) return <span className="text-[8px] font-bold text-red-500 leading-none">{r}</span>
-    return <span className="text-[8px] text-gray-400 leading-none">AS</span>
+  function standingChip(r: number) {
+    const { label, color } = standing(r)
+    return <span className="text-[7px] font-bold leading-none" style={{ color }}>{label}</span>
   }
 
   const frontRunning = result.holeResults[8] !== null ? result.running[8] : undefined
 
   let totDisplay = null
   if (result.winner) {
-    const iWon = result.winner === 'p1'
     if (result.winner === 'all_square') {
       totDisplay = <span className="text-[8px] text-gray-500 font-bold leading-none">AS</span>
     } else {
+      const winnerIsP1 = result.winner === 'p1'
+      const winColor = winnerIsP1 ? p1Color : p2Color
+      const winInit  = winnerIsP1 ? p1Init  : p2Init
       totDisplay = (
-        <span className={`text-[8px] font-bold leading-none ${iWon ? 'text-masters-green' : 'text-red-500'}`}>
-          {result.winLabel}
+        <span className="text-[7px] font-bold leading-none" style={{ color: winColor }}>
+          {winInit} {result.winLabel}
         </span>
       )
     }
   } else if (result.holeResults[17] !== null) {
-    totDisplay = runningDisplay(result.running[17])
+    totDisplay = standingChip(result.running[17])
   }
 
   return (
     <tr className="row-result">
-      <td className="player-name text-[9px] font-semibold" style={{ color }}>
+      <td className="player-name text-[9px] font-semibold" style={{ color: p1Color }}>
         {p1Last} v {p2Last}
       </td>
       {course.holes.map((h, i) => (
         <td key={h.number}>{cellContent(i)}</td>
       ))}
       <td className="hole-out">
-        {frontRunning !== undefined && runningDisplay(frontRunning)}
+        {frontRunning !== undefined && standingChip(frontRunning)}
       </td>
       <td className="hole-in" />
       <td className="hole-total">{totDisplay}</td>
@@ -473,14 +490,21 @@ function IndividualMatch1v1WinnerBanner({ result, p1Id, p2Id, teams }: {
   }
 
   const winnerIsP1 = result.winner === 'p1'
-  const winnerLast = winnerIsP1 ? p1Last : p2Last
-  const loserLast  = winnerIsP1 ? p2Last : p1Last
+  const winnerName = winnerIsP1 ? p1?.name : p2?.name
+  const loserName  = winnerIsP1 ? p2?.name : p1?.name
   const winTeam    = winnerIsP1 ? p1Team : p2Team
+
+  function initials(name: string | undefined): string {
+    const parts = (name ?? '').trim().split(/\s+/)
+    if (parts.length === 0 || !parts[0]) return '?'
+    if (parts.length === 1) return parts[0][0].toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
 
   return (
     <div className="mt-1 py-1 px-2 rounded text-[10px] text-center font-bold bg-masters-light border border-masters-green/30">
-      <span style={{ color: winTeam?.color ?? '#006747' }}>{winnerLast}</span>
-      <span className="text-masters-dark"> wins {result.winLabel} over {loserLast}</span>
+      <span style={{ color: winTeam?.color ?? '#006747' }}>{initials(winnerName)}</span>
+      <span className="text-masters-dark"> wins {result.winLabel} over {initials(loserName)}</span>
     </div>
   )
 }
