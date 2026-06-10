@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import { Lock, Unlock, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import { Lock, Unlock, CheckCircle, AlertTriangle, X, Trophy } from 'lucide-react'
 import type { Match, Team } from '../types'
+import { computeChampion } from '../utils/champion'
 
 const MAX_PTS: Record<number, number> = { 1: 9, 2: 15, 3: 7, 4: 12, 5: 7 }
 
@@ -26,6 +27,9 @@ export default function Dashboard() {
     byRound: [1, 2, 3, 4, 5].map(r => teamScores.find(s => s.teamId === t.id && s.round === r)?.points ?? 0),
     total: teamScores.filter(s => s.teamId === t.id).reduce((sum, s) => sum + s.points, 0),
   })).sort((a, b) => b.total - a.total)
+
+  const rounds = roundConfigs.map(rc => rc.round)
+  const { champion, isComplete: tournamentComplete } = computeChampion(teams, teamScores, rounds)
 
   return (
     <div className="space-y-6">
@@ -61,6 +65,9 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Champion hero banner */}
+      {champion && <ChampionHero team={champion} year={year} isComplete={tournamentComplete} />}
+
       {/* Standings */}
       <div className="card overflow-x-auto">
         <h2 className="section-header">Current Standings</h2>
@@ -78,13 +85,23 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody>
-            {standings.map(({ team, byRound, total }, idx) => (
-              <tr key={team.id} className={idx === 0 && total > 0 ? 'bg-yellow-50' : ''}>
+            {standings.map(({ team, byRound, total }, idx) => {
+              const isChampion = champion?.id === team.id
+              return (
+              <tr key={team.id} className={isChampion ? 'bg-yellow-50' : idx === 0 && total > 0 ? 'bg-yellow-50/50' : ''}>
                 <td className="p-2">
-                  <div className="flex items-center gap-2">
-                    {idx === 0 && total > 0 && <span className="text-masters-gold">🏆</span>}
-                    <div className="w-3 h-3 rounded-full" style={{ background: team.color }} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {isChampion
+                      ? <Trophy size={14} className="text-masters-gold shrink-0" />
+                      : idx === 0 && total > 0 && <span className="text-masters-gold">🏆</span>
+                    }
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ background: team.color }} />
                     <span className="font-semibold">{team.name}</span>
+                    {isChampion && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: team.color + '22', color: team.color }}>
+                        {tournamentComplete ? 'Champions' : 'Clinched'}
+                      </span>
+                    )}
                   </div>
                 </td>
                 {byRound.map((pts, ri) => (
@@ -92,7 +109,8 @@ export default function Dashboard() {
                 ))}
                 <td className="p-2 text-center font-bold text-lg text-masters-dark">{total}</td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -254,6 +272,49 @@ export default function Dashboard() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function ChampionHero({ team, year, isComplete }: { team: Team; year: number; isComplete: boolean }) {
+  return (
+    <div
+      className="rounded-xl overflow-hidden shadow-xl"
+      style={{
+        background: `radial-gradient(ellipse at 50% 20%, ${team.color}44 0%, #0d1f17 65%)`,
+        border: `2px solid ${team.color}`,
+      }}
+    >
+      <div className="px-6 py-10 text-center space-y-3 relative">
+        <div className="absolute top-4 left-5 text-masters-gold/40 text-xl select-none">★</div>
+        <div className="absolute top-4 right-5 text-masters-gold/40 text-xl select-none">★</div>
+
+        <p className="text-[10px] uppercase tracking-[0.4em] font-bold text-masters-gold/80">
+          Juggerknocker Invitational · {year}
+        </p>
+
+        <div className="flex justify-center py-1">
+          <Trophy size={60} className="text-masters-gold drop-shadow-lg" />
+        </div>
+
+        <div
+          className="text-5xl font-serif font-bold leading-tight"
+          style={{ color: team.color, textShadow: `0 0 40px ${team.color}66` }}
+        >
+          {team.name}
+        </div>
+
+        <p className="text-xl font-bold uppercase tracking-widest text-masters-gold">
+          Tournament Champions
+        </p>
+
+        {!isComplete && (
+          <p className="text-sm text-white/50 italic pt-1">
+            Mathematically eliminated all opponents
+          </p>
+        )}
+      </div>
+      <div className="h-1" style={{ background: team.color }} />
     </div>
   )
 }

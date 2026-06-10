@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useReactToPrint } from 'react-to-print'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin, useCanEnterScores } from '../store/useAuthStore'
@@ -8,8 +8,9 @@ import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
-import { Printer, Dices, Trash2, Flag } from 'lucide-react'
+import { Printer, Dices, Trash2, Flag, Trophy } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry } from '../types'
+import { computeChampion } from '../utils/champion'
 
 const ROUND_NAMES: Record<number, string> = {
   1: 'Round 1 — Team Match Play',
@@ -27,6 +28,8 @@ export default function ScorecardView() {
   const [activeRound, setActiveRound] = useState(() => Number(searchParams.get('round')) || 1)
   const [activeMatch, setActiveMatch] = useState<string | null>(() => searchParams.get('match'))
   const printRef = useRef<HTMLDivElement>(null)
+
+  const [championModal, setChampionModal] = useState<{ team: Team; isComplete: boolean } | null>(null)
 
   const defaultCtpTeamId = teams[teams.length - 1]?.id ?? ''
   const [ctpTeamIds, setCtpTeamIds] = useState<Record<number, string>>({ 3: defaultCtpTeamId, 5: defaultCtpTeamId })
@@ -240,10 +243,7 @@ export default function ScorecardView() {
     if (config.format === 'texas_scramble') {
       const latestMatches = useTournamentStore.getState().matches
       recomputeScrambleTeamScores(latestMatches)
-      return
-    }
-
-    if (config.format === 'captains_choice') {
+    } else if (config.format === 'captains_choice') {
       // Simulate one team score per hole and random tee shot allocations
       const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
       const allPlayers = teams.flatMap(t => t.players)
@@ -278,18 +278,12 @@ export default function ScorecardView() {
         setTeamHoleScore(match.id, hole.number, gross)
         setTeeShot(match.id, hole.number, simTeeShots[hole.number])
       }
-      const latestMatches = useTournamentStore.getState().matches
-      recomputeCaptainsChoiceTeamScores(latestMatches)
-      return
-    }
-
-    if (config.format === 'individual_match') {
+      const latestMatchesCC = useTournamentStore.getState().matches
+      recomputeCaptainsChoiceTeamScores(latestMatchesCC)
+    } else if (config.format === 'individual_match') {
       const latestMatches = useTournamentStore.getState().matches
       recomputeIndividualMatchTeamScores(latestMatches)
-      return
-    }
-
-    if (config.format === 'team_match_play' || config.format === 'points_round') {
+    } else if (config.format === 'team_match_play' || config.format === 'points_round') {
       // Recompute team scores for this round from ALL scored matches.
       // simScores covers the current match's players; blind matches that share
       // those players also get the fresh scores overlaid.
@@ -353,9 +347,22 @@ export default function ScorecardView() {
       })
     }
 
+    // Check for tournament clinch after every simulate
+    const latestScores = useTournamentStore.getState().teamScores
+    const { champion, isComplete } = computeChampion(teams, latestScores, roundConfigs.map(rc => rc.round))
+    if (champion) setChampionModal({ team: champion, isComplete })
   }
 
   return (
+    <>
+    {championModal && (
+      <ChampionModal
+        team={championModal.team}
+        year={year}
+        isComplete={championModal.isComplete}
+        onClose={() => setChampionModal(null)}
+      />
+    )}
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-serif font-bold text-masters-dark">Scorecards</h1>
@@ -620,6 +627,72 @@ export default function ScorecardView() {
           </div>
         </div>
       )}
+    </div>
+    </>
+  )
+}
+
+function ChampionModal({ team, year, isComplete, onClose }: { team: Team; year: number; isComplete: boolean; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onClick={onClose}
+    >
+      <div
+        className="rounded-xl overflow-hidden shadow-2xl max-w-sm w-full"
+        style={{
+          background: `radial-gradient(ellipse at 50% 20%, ${team.color}44 0%, #0d1f17 65%)`,
+          border: `2px solid ${team.color}`,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-6 py-8 text-center space-y-3 relative">
+          <div className="absolute top-3 left-4 text-masters-gold/40 text-lg select-none">★</div>
+          <div className="absolute top-3 right-4 text-masters-gold/40 text-lg select-none">★</div>
+
+          <p className="text-[10px] uppercase tracking-[0.4em] font-bold text-masters-gold/80">
+            Juggerknocker Invitational · {year}
+          </p>
+
+          <div className="flex justify-center py-1">
+            <Trophy size={52} className="text-masters-gold drop-shadow-lg" />
+          </div>
+
+          <div
+            className="text-4xl font-serif font-bold leading-tight"
+            style={{ color: team.color, textShadow: `0 0 30px ${team.color}66` }}
+          >
+            {team.name}
+          </div>
+
+          <p className="text-lg font-bold uppercase tracking-widest text-masters-gold">
+            Tournament Champions
+          </p>
+
+          {!isComplete && (
+            <p className="text-xs text-white/50 italic">Mathematically clinched</p>
+          )}
+        </div>
+
+        <div className="h-px mx-6" style={{ background: `${team.color}44` }} />
+
+        <div className="px-6 py-4 flex gap-3 justify-center">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded border border-white/20 text-white/70 text-sm hover:border-white/40 hover:text-white transition-colors"
+          >
+            Dismiss
+          </button>
+          <Link
+            to="/"
+            onClick={onClose}
+            className="px-4 py-2 rounded text-sm font-bold text-white transition-opacity hover:opacity-90"
+            style={{ background: team.color }}
+          >
+            View Dashboard
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }
