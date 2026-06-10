@@ -93,40 +93,36 @@ export function useSupabaseSync() {
     // ── Real-time subscriptions ─────────────────────────────────────────────
 
     const channel = db.channel('jugger-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state',
-          filter: `id=eq.${APP_STATE_ID}` }, payload => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
         const row = payload.new as any
-        if (row?.state) applyAppState(row.state)
+        if (row?.id === APP_STATE_ID && row?.state) applyAppState(row.state)
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches',
-          filter: `tournament_year=eq.${YEAR}` }, payload => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, payload => {
         const row = payload.new as any
-        if (row?.match_json) applyMatch(row.match_json)
+        if (row?.tournament_year === YEAR && row?.match_json) applyMatch(row.match_json)
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches',
-          filter: `tournament_year=eq.${YEAR}` }, payload => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, payload => {
         const row = payload.new as any
-        if (row?.match_json) applyMatch(row.match_json)
+        if (row?.tournament_year === YEAR && row?.match_json) applyMatch(row.match_json)
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'matches' }, payload => {
         const row = payload.old as any
         if (row?.match_id && row?.tournament_year === YEAR) applyMatchDelete(row.match_id)
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_scores',
-          filter: `tournament_year=eq.${YEAR}` }, payload => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_scores' }, payload => {
         const row = payload.new as any
-        if (row) applyTeamScore(row)
+        if (row?.tournament_year === YEAR) applyTeamScore(row)
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_scores',
-          filter: `tournament_year=eq.${YEAR}` }, payload => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_scores' }, payload => {
         const row = payload.new as any
-        if (row) applyTeamScore(row)
+        if (row?.tournament_year === YEAR) applyTeamScore(row)
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'team_scores' }, payload => {
         const row = payload.old as any
         if (row?.tournament_year === YEAR) applyTeamScoreDelete(row.team_id, row.round)
       })
       .subscribe(status => {
+        console.log('[supabase] realtime status:', status)
         useSyncStatus.setState({ connected: status === 'SUBSCRIBED' })
       })
 
