@@ -401,9 +401,9 @@ export default function ScorecardView() {
           Generate pairings first to view scorecards.
         </div>
       ) : (
-        <div className="grid lg:grid-cols-4 gap-4">
-          {/* Match list */}
-          <div className="lg:col-span-1 space-y-2">
+        <div className="flex gap-4 items-start">
+          {/* Match list — fixed narrow sidebar */}
+          <div className="shrink-0 w-40 space-y-2">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{ROUND_NAMES[activeRound]}</p>
             {roundMatches.length === 0 && (
               <p className="text-sm text-gray-400">No matches for this round.</p>
@@ -456,7 +456,7 @@ export default function ScorecardView() {
           </div>
 
           {/* Scorecard detail */}
-          <div className="lg:col-span-3">
+          <div className="flex-1 min-w-0">
             {!match || !config || !course ? (
               <div className="card text-center py-12 text-gray-400">
                 Select a match to view/enter scores.
