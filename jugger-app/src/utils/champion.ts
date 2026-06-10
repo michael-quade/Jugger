@@ -1,4 +1,4 @@
-import type { Team, TeamRoundScore } from '../types'
+import type { Team, TeamRoundScore, ArchivedYear } from '../types'
 
 // Max points one team can earn per round
 // R1: 2 regular×2 + 2 blind×1 = 6
@@ -17,10 +17,14 @@ export interface ChampionResult {
   isComplete: boolean
 }
 
+// defendingChampionId: the team that holds the title going into this year.
+// On a tied final, the defender retains (Ryder Cup rule).
+// During the tournament, the defender clinches on >= (tie = their win); others need strict >.
 export function computeChampion(
   teams: Team[],
   teamScores: TeamRoundScore[],
   rounds: number[],
+  defendingChampionId?: string,
 ): ChampionResult {
   if (teams.length === 0 || teamScores.length === 0 || rounds.length === 0) {
     return { champion: null, isComplete: false }
@@ -38,13 +42,21 @@ export function computeChampion(
   const sorted = [...totals].sort((a, b) => b.total - a.total)
   const leader = sorted[0]
 
-  // All rounds done: declare winner if no tie
+  // All rounds done: outright winner, or defending champion retains on tie
   if (isComplete) {
     const tied = sorted.filter(t => t.total === leader.total)
-    return { champion: tied.length === 1 ? leader.team : null, isComplete: true }
+    if (tied.length === 1) return { champion: leader.team, isComplete: true }
+    if (defendingChampionId) {
+      const defender = tied.find(t => t.team.id === defendingChampionId)
+      if (defender) return { champion: defender.team, isComplete: true }
+    }
+    return { champion: null, isComplete: true }
   }
 
-  // Clinch: leader's guaranteed minimum > every opponent's theoretical maximum
+  const leaderIsDefender = leader.team.id === defendingChampionId
+
+  // Clinch: leader's guaranteed floor vs every opponent's theoretical ceiling.
+  // Defender wins on tie, so use >= for them; others need strict >.
   const clinched = sorted.slice(1).every(other => {
     const minRemForLeader = rounds
       .filter(r => !teamScores.some(s => s.teamId === leader.team.id && s.round === r))
@@ -53,8 +65,28 @@ export function computeChampion(
       .filter(r => !teamScores.some(s => s.teamId === other.team.id && s.round === r))
       .reduce((sum, r) => sum + (MAX_PER_ROUND[r] ?? 0), 0)
 
-    return leader.total + minRemForLeader > other.total + maxRemForOther
+    return leaderIsDefender
+      ? leader.total + minRemForLeader >= other.total + maxRemForOther
+      : leader.total + minRemForLeader > other.total + maxRemForOther
   })
 
   return { champion: clinched ? leader.team : null, isComplete: false }
+}
+
+// Finds the defending champion's team ID by looking at the previous year's archived data.
+// Returns undefined if no previous year exists or if it ended in an unresolved tie.
+export function getDefendingChampionId(
+  archivedYears: ArchivedYear[],
+  currentYear: number,
+): string | undefined {
+  const prevYear = archivedYears.find(y => y.year === currentYear - 1)
+  if (!prevYear) return undefined
+
+  const { teams, teamScores, roundConfigs } = prevYear
+  if (!teams?.length || !teamScores?.length || !roundConfigs?.length) return undefined
+
+  const rounds = roundConfigs.map(rc => rc.round as number)
+  // No recursive defense for the previous year — just find the outright highest scorer
+  const result = computeChampion(teams, teamScores, rounds)
+  return result.champion?.id
 }

@@ -10,7 +10,7 @@ import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } 
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
 import { Printer, Dices, Trash2, Flag, Trophy } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry } from '../types'
-import { computeChampion } from '../utils/champion'
+import { computeChampion, getDefendingChampionId } from '../utils/champion'
 
 const ROUND_NAMES: Record<number, string> = {
   1: 'Round 1 — Team Match Play',
@@ -21,7 +21,7 @@ const ROUND_NAMES: Record<number, string> = {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const canEnterScores = useCanEnterScores()
   const [searchParams] = useSearchParams()
@@ -347,10 +347,188 @@ export default function ScorecardView() {
       })
     }
 
-    // Check for tournament clinch after every simulate
+    checkAndShowChampion()
+  }
+
+  function checkAndShowChampion() {
     const latestScores = useTournamentStore.getState().teamScores
-    const { champion, isComplete } = computeChampion(teams, latestScores, roundConfigs.map(rc => rc.round))
+    const defendingId = getDefendingChampionId(archivedYears, year)
+    const { champion, isComplete } = computeChampion(teams, latestScores, roundConfigs.map(rc => rc.round), defendingId)
     if (champion) setChampionModal({ team: champion, isComplete })
+  }
+
+  // ── Simulate an entire round (all matches) ──────────────────────────────
+
+  function simulateAndScoreRound(round: number) {
+    const rc = roundConfigs.find(cfg => cfg.round === round)
+    const crs = courses.find(c => c.id === rc?.courseId)
+    if (!rc || !crs) return
+
+    const allPlayers = teams.flatMap(t => t.players)
+    const regularMatches = getMatchesForRound(matches, round).filter(m => !m.isBlind)
+
+    // Score each match
+    for (const m of regularMatches) {
+      if (rc.format === 'captains_choice') {
+        const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const teeData = crs.tees.find(t => t.name === rc.tee) ?? crs.tees[0]
+        const minIdx = allPlayers.length ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
+        const r5Sum = allPids.reduce((s, pid) => {
+          const player = allPlayers.find(p => p.id === pid)
+          return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? crs.par, crs.par, minIdx, false) : 0)
+        }, 0)
+        const teamHdcp = Math.round(r5Sum * 0.15)
+        const teeShotCounts: Record<string, number> = {}
+        allPids.forEach(pid => { teeShotCounts[pid] = 0 })
+        for (const hole of crs.holes) {
+          const needMore = allPids.filter(pid => teeShotCounts[pid] < 3)
+          const pool = needMore.length ? needMore : allPids
+          const chosen = pool[Math.floor(Math.random() * pool.length)]
+          setTeeShot(m.id, hole.number, chosen)
+          teeShotCounts[chosen]++
+          const d = getStrokeDots(teamHdcp, hole.hdcpOrder)
+          const strokes = d === '..' ? 2 : d === '.' ? 1 : 0
+          const r = Math.random()
+          const variance = r < 0.05 ? -1 : r < 0.25 ? 0 : r < 0.60 ? 1 : r < 0.85 ? 2 : 3
+          setTeamHoleScore(m.id, hole.number, Math.max(1, hole.par + strokes + variance))
+        }
+      } else {
+        const simScores = simulateMatchScores(m, crs, rc, teams)
+        Object.entries(simScores).forEach(([pid, holes]) => {
+          Object.entries(holes).forEach(([hole, score]) => setMatchScore(m.id, pid, Number(hole), score))
+        })
+        if (rc.format === 'points_round') {
+          updateMatch(m.id, { magicBall1: Math.random() < 0.5, magicBall2: Math.random() < 0.5 })
+        }
+      }
+    }
+
+    // CTP
+    const par3Holes = getPar3Holes(roundConfigs, courses).filter(h => h.round === round)
+    const allPlayerNames = allPlayers.map(p => p.name)
+    for (const h of par3Holes) {
+      const existing = useTournamentStore.getState().ctpEntries.find(
+        e => e.year === year && e.round === h.round && e.hole === h.hole
+      )
+      const donateToHio = Math.random() < 0.15
+      const updates: Partial<CtpEntry> = donateToHio
+        ? { donatedToHio: true, winnerName: undefined, winnerPaid: undefined, hioDonationAmount: allPlayerNames.length }
+        : { winnerName: allPlayerNames[Math.floor(Math.random() * allPlayerNames.length)], donatedToHio: false, hioDonationAmount: undefined }
+      if (existing) {
+        updateCtpEntry(existing.id, updates)
+      } else {
+        setCtpEntries([...useTournamentStore.getState().ctpEntries, {
+          id: `ctp-${year}-r${h.round}-h${h.hole}`, year, round: h.round, hole: h.hole,
+          courseName: h.courseName, yardage: h.yardage, ...updates,
+        }])
+      }
+    }
+
+    // Recompute team scores
+    const latestMatches = useTournamentStore.getState().matches
+    const roundMatchesAll = latestMatches.filter(m => m.round === round)
+
+    if (rc.format === 'texas_scramble') {
+      const results = roundMatchesAll.map(m => {
+        const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const hdcps: Record<string, number> = {}
+        allPids.forEach(pid => {
+          const player = allPlayers.find(p => p.id === pid)
+          if (player) hdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers)
+        })
+        return { match: m, result: computeScramble(m, crs.holes, hdcps) }
+      })
+      if (results.every(r => r.result.isDone)) {
+        const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
+        teams.forEach(t => setTeamScore({ teamId: t.id, round, points: 0 }))
+        ranked.forEach(({ match: m }, i) => setTeamScore({ teamId: m.twosome1.teamId, round, points: [4, 2, 1][i] ?? 1 }))
+      }
+    } else if (rc.format === 'captains_choice') {
+      const results = roundMatchesAll.map(m => {
+        const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const teeData = crs.tees.find(t => t.name === rc.tee) ?? crs.tees[0]
+        const minIdx = allPlayers.length ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
+        const r5Sum = allPids.reduce((s, pid) => {
+          const player = allPlayers.find(p => p.id === pid)
+          return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? crs.par, crs.par, minIdx, false) : 0)
+        }, 0)
+        return { match: m, ccRes: computeCaptainsChoice(m.teamHoleScores, crs.holes, Math.round(r5Sum * 0.15)) }
+      })
+      if (results.every(r => r.ccRes.isDone)) {
+        const ranked = [...results].sort((a, b) => a.ccRes.total - b.ccRes.total)
+        teams.forEach(t => setTeamScore({ teamId: t.id, round, points: 0 }))
+        ranked.forEach(({ match: m }, i) => setTeamScore({ teamId: m.twosome1.teamId, round, points: [4, 2, 1][i] ?? 1 }))
+      }
+    } else if (rc.format === 'individual_match') {
+      const teamPts: Record<string, number> = {}
+      teams.forEach(t => { teamPts[t.id] = 0 })
+      for (const m of roundMatchesAll) {
+        const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const localHdcps: Record<string, number> = {}
+        allPids.forEach(pid => {
+          const player = allPlayers.find(p => p.id === pid)
+          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers)
+        })
+        const imRes = computeIndividualMatch(m, crs.holes, localHdcps)
+        for (const { result, p1TeamId, p2TeamId } of [
+          { result: imRes.matchA, p1TeamId: m.twosome1.teamId, p2TeamId: m.twosome2.teamId },
+          { result: imRes.matchB, p1TeamId: m.twosome1.teamId, p2TeamId: m.twosome2.teamId },
+        ]) {
+          if (!result.winner) continue
+          const pts = m.isBlind ? 0.5 : 1
+          if (result.winner === 'p1') teamPts[p1TeamId] += pts
+          else if (result.winner === 'p2') teamPts[p2TeamId] += pts
+          else { teamPts[p1TeamId] += pts / 2; teamPts[p2TeamId] += pts / 2 }
+        }
+        if (!m.isBlind && imRes.match2v2?.winner) {
+          const w = imRes.match2v2.winner
+          if (w === 'twosome1') teamPts[m.twosome1.teamId] += 1
+          else if (w === 'twosome2') teamPts[m.twosome2.teamId] += 1
+          else { teamPts[m.twosome1.teamId] += 0.5; teamPts[m.twosome2.teamId] += 0.5 }
+        }
+      }
+      teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    } else {
+      // team_match_play or points_round
+      const teamPts: Record<string, number> = {}
+      teams.forEach(t => { teamPts[t.id] = 0 })
+      for (const m of roundMatchesAll) {
+        const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const allFullyScored = allPids.every(pid => crs.holes.every(h => m.scores[pid]?.[h.number] != null))
+        if (!allFullyScored) continue
+        const localHdcps: Record<string, number> = {}
+        allPids.forEach(pid => {
+          const player = allPlayers.find(p => p.id === pid)
+          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers)
+        })
+        const winner = rc.format === 'points_round'
+          ? computePointsRound(m, crs.holes, localHdcps).winner
+          : computeMatchPlay(m, crs.holes, localHdcps).winner
+        const pts = m.isBlind ? 1 : 2
+        if (winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
+        else if (winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
+        else if (winner === 'all_square') {
+          teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2
+        }
+        if (rc.format === 'points_round' && !m.isBlind) {
+          if (m.magicBall1) teamPts[m.twosome1.teamId] += 1
+          if (m.magicBall2) teamPts[m.twosome2.teamId] += 1
+        }
+      }
+      teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    }
+  }
+
+  function handleSimulateRound(round: number) {
+    simulateAndScoreRound(round)
+    checkAndShowChampion()
+  }
+
+  function handleSimulateAll() {
+    for (const rc of roundConfigs) {
+      if (matches.some(m => m.round === rc.round)) simulateAndScoreRound(rc.round)
+    }
+    checkAndShowChampion()
   }
 
   return (
@@ -367,7 +545,7 @@ export default function ScorecardView() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-serif font-bold text-masters-dark">Scorecards</h1>
         {isAdmin && matches.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {(['team_match_play', 'points_round', 'texas_scramble', 'individual_match', 'captains_choice'] as string[]).includes(config?.format ?? '') && teamScores.some(s => s.round === activeRound) && (
               <button
                 onClick={() => { if (confirm('Clear team points for this round? Match scores are kept.')) clearAllTeamScores() }}
@@ -376,6 +554,12 @@ export default function ScorecardView() {
                 <Trash2 size={12} /> Clear Team Pts
               </button>
             )}
+            <button
+              onClick={handleSimulateAll}
+              className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 rounded px-3 py-1.5 font-semibold transition-colors"
+            >
+              <Dices size={13} /> Simulate All Rounds
+            </button>
             <button
               onClick={() => { if (confirm('Clear ALL scores and results from every match?')) { clearAllMatchScores(); clearAllTeamScores() } }}
               className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-3 py-1.5 transition-colors"
@@ -388,17 +572,30 @@ export default function ScorecardView() {
 
       {/* Round tabs */}
       <div className="flex gap-2 flex-wrap">
-        {[1, 2, 3, 4, 5].map(r => (
-          <button
-            key={r}
-            onClick={() => { setActiveRound(r); setActiveMatch(null) }}
-            className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
-              activeRound === r ? 'bg-masters-green text-white' : 'bg-white border border-gray-300 hover:border-masters-green'
-            }`}
-          >
-            Round {r}
-          </button>
-        ))}
+        {[1, 2, 3, 4, 5].map(r => {
+          const hasRoundMatches = matches.some(m => m.round === r)
+          return (
+            <div key={r} className="flex items-center gap-0.5">
+              <button
+                onClick={() => { setActiveRound(r); setActiveMatch(null) }}
+                className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
+                  activeRound === r ? 'bg-masters-green text-white' : 'bg-white border border-gray-300 hover:border-masters-green'
+                }`}
+              >
+                Round {r}
+              </button>
+              {isAdmin && hasRoundMatches && (
+                <button
+                  onClick={() => handleSimulateRound(r)}
+                  title={`Simulate all Round ${r} matches`}
+                  className="p-1 rounded text-amber-500 hover:text-amber-700 hover:bg-amber-50 transition-colors"
+                >
+                  <Dices size={13} />
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       <RoundInfoBanner round={activeRound} />
@@ -640,46 +837,33 @@ function ChampionModal({ team, year, isComplete, onClose }: { team: Team; year: 
     >
       <div
         className="rounded-xl overflow-hidden shadow-2xl max-w-sm w-full"
-        style={{
-          background: `radial-gradient(ellipse at 50% 20%, ${team.color}44 0%, #0d1f17 65%)`,
-          border: `2px solid ${team.color}`,
-        }}
+        style={{ background: 'linear-gradient(180deg, #060d08 0%, #0b1610 100%)', border: `2px solid ${team.color}` }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="px-6 py-8 text-center space-y-3 relative">
-          <div className="absolute top-3 left-4 text-masters-gold/40 text-lg select-none">★</div>
-          <div className="absolute top-3 right-4 text-masters-gold/40 text-lg select-none">★</div>
+        <div className="h-1.5" style={{ background: `linear-gradient(90deg, transparent, ${team.color}, transparent)` }} />
 
-          <p className="text-[10px] uppercase tracking-[0.4em] font-bold text-masters-gold/80">
-            Juggerknocker Invitational · {year}
+        <div className="px-6 py-7 text-center space-y-2">
+          <p className="text-base font-semibold text-white tracking-wide">
+            {year} Juggerknocker Invitational Champions
           </p>
-
-          <div className="flex justify-center py-1">
-            <Trophy size={52} className="text-masters-gold drop-shadow-lg" />
-          </div>
-
-          <div
-            className="text-4xl font-serif font-bold leading-tight"
-            style={{ color: team.color, textShadow: `0 0 30px ${team.color}66` }}
+          <div className="py-2 text-7xl leading-none select-none">🏆</div>
+          <p
+            className="text-4xl font-serif font-bold text-white"
+            style={{ textShadow: `0 0 30px ${team.color}` }}
           >
             {team.name}
-          </div>
-
-          <p className="text-lg font-bold uppercase tracking-widest text-masters-gold">
-            Tournament Champions
           </p>
-
           {!isComplete && (
-            <p className="text-xs text-white/50 italic">Mathematically clinched</p>
+            <p className="text-xs text-white/60 italic">Mathematically clinched</p>
           )}
         </div>
 
-        <div className="h-px mx-6" style={{ background: `${team.color}44` }} />
+        <div className="h-1.5" style={{ background: `linear-gradient(90deg, transparent, ${team.color}, transparent)` }} />
 
-        <div className="px-6 py-4 flex gap-3 justify-center">
+        <div className="px-6 py-4 flex gap-3 justify-center bg-black/20">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded border border-white/20 text-white/70 text-sm hover:border-white/40 hover:text-white transition-colors"
+            className="px-4 py-2 rounded border border-white/25 text-white/80 text-sm hover:border-white/50 hover:text-white transition-colors"
           >
             Dismiss
           </button>

@@ -4,7 +4,7 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import { Lock, Unlock, CheckCircle, AlertTriangle, X, Trophy } from 'lucide-react'
 import type { Match, Team } from '../types'
-import { computeChampion } from '../utils/champion'
+import { computeChampion, getDefendingChampionId } from '../utils/champion'
 
 const MAX_PTS: Record<number, number> = { 1: 9, 2: 15, 3: 7, 4: 12, 5: 7 }
 
@@ -17,7 +17,7 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
@@ -29,7 +29,8 @@ export default function Dashboard() {
   })).sort((a, b) => b.total - a.total)
 
   const rounds = roundConfigs.map(rc => rc.round)
-  const { champion, isComplete: tournamentComplete } = computeChampion(teams, teamScores, rounds)
+  const defendingChampionId = getDefendingChampionId(archivedYears, year)
+  const { champion, isComplete: tournamentComplete } = computeChampion(teams, teamScores, rounds, defendingChampionId)
 
   return (
     <div className="space-y-6">
@@ -280,41 +281,27 @@ function ChampionHero({ team, year, isComplete }: { team: Team; year: number; is
   return (
     <div
       className="rounded-xl overflow-hidden shadow-xl"
-      style={{
-        background: `radial-gradient(ellipse at 50% 20%, ${team.color}44 0%, #0d1f17 65%)`,
-        border: `2px solid ${team.color}`,
-      }}
+      style={{ background: 'linear-gradient(180deg, #060d08 0%, #0b1610 100%)', border: `2px solid ${team.color}` }}
     >
-      <div className="px-6 py-10 text-center space-y-3 relative">
-        <div className="absolute top-4 left-5 text-masters-gold/40 text-xl select-none">★</div>
-        <div className="absolute top-4 right-5 text-masters-gold/40 text-xl select-none">★</div>
+      <div className="h-1.5" style={{ background: `linear-gradient(90deg, transparent, ${team.color}, transparent)` }} />
 
-        <p className="text-[10px] uppercase tracking-[0.4em] font-bold text-masters-gold/80">
-          Juggerknocker Invitational · {year}
+      <div className="px-6 py-8 text-center space-y-2">
+        <p className="text-lg font-semibold text-white tracking-wide">
+          {year} Juggerknocker Invitational Champions
         </p>
-
-        <div className="flex justify-center py-1">
-          <Trophy size={60} className="text-masters-gold drop-shadow-lg" />
-        </div>
-
-        <div
-          className="text-5xl font-serif font-bold leading-tight"
-          style={{ color: team.color, textShadow: `0 0 40px ${team.color}66` }}
+        <div className="py-2 text-8xl leading-none select-none">🏆</div>
+        <p
+          className="text-5xl font-serif font-bold text-white"
+          style={{ textShadow: `0 0 40px ${team.color}` }}
         >
           {team.name}
-        </div>
-
-        <p className="text-xl font-bold uppercase tracking-widest text-masters-gold">
-          Tournament Champions
         </p>
-
         {!isComplete && (
-          <p className="text-sm text-white/50 italic pt-1">
-            Mathematically eliminated all opponents
-          </p>
+          <p className="text-sm text-white/60 italic pt-1">Mathematically clinched</p>
         )}
       </div>
-      <div className="h-1" style={{ background: team.color }} />
+
+      <div className="h-1.5" style={{ background: `linear-gradient(90deg, transparent, ${team.color}, transparent)` }} />
     </div>
   )
 }
