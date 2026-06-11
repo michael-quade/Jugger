@@ -2,7 +2,7 @@ import { useState, Fragment } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { Player } from '../types'
-import { Lock, Unlock, Plus, Trash2, Edit2, Check, X, RotateCcw, ArrowRightLeft, ExternalLink } from 'lucide-react'
+import { Lock, Unlock, Plus, Trash2, Edit2, Check, X, RotateCcw, ArrowRightLeft } from 'lucide-react'
 import {
   rawCourseHdcpDisplay, tournamentHdcp, nettedCourseHdcpRaw, apply18Cap,
 } from '../utils/handicap'
@@ -502,17 +502,6 @@ function PlayerRow({
           <span className="font-mono text-masters-dark">
             {player.ghinNumber ?? <span className="text-gray-300">—</span>}
           </span>
-        )}
-        {player.ghinNumber && (
-          <a
-            href={`https://www.ghin.com/golfer/${player.ghinNumber}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Look up on GHIN"
-            className="text-gray-300 hover:text-masters-green transition-colors"
-          >
-            <ExternalLink size={11} />
-          </a>
         )}
       </div>
     </div>
