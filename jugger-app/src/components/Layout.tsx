@@ -3,7 +3,7 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
-  History, ArrowRight,
+  History, ArrowRight, Calculator,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
@@ -23,7 +23,8 @@ const NAV = [
   { to: '/stats',      label: 'Stats',        icon: TrendingUp },
   { to: '/archive',    label: 'Archive',      icon: Archive },
   { to: '/history',    label: 'Course History', icon: BookOpen },
-  { to: '/print',      label: 'Print All',    icon: Printer },
+  { to: '/print',           label: 'Print All',      icon: Printer },
+  { to: '/skidmore-hdcp',  label: 'Skidmore HDCP',  icon: Calculator, adminOnly: true },
 ]
 
 export default function Layout() {

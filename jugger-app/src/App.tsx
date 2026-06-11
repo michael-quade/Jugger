@@ -14,6 +14,7 @@ import ScorecardView from './pages/ScorecardView'
 import Results from './pages/Results'
 import HoleInOne from './pages/HoleInOne'
 import PrintAll from './pages/PrintAll'
+import SkidmoreHdcp from './pages/SkidmoreHdcp'
 import CtpPage from './pages/CtpPage'
 import { useTournamentStore } from './store/useTournamentStore'
 import { hashPassword } from './utils/auth'
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="hole-in-one" element={<HoleInOne />} />
         <Route path="ctp" element={<CtpPage />} />
         <Route path="print" element={<PrintAll />} />
+        <Route path="skidmore-hdcp" element={<SkidmoreHdcp />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation } from '../types'
-import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY } from '../data/initialData'
+import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore } from '../types'
+import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY, INITIAL_SKIDMORE_SCORES } from '../data/initialData'
 import { COURSES, ROUND_CONFIGS } from '../data/courseData'
 
 interface Actions {
@@ -54,6 +54,10 @@ interface Actions {
   setDonationPaid: (id: string, paid: boolean) => void
   claimPot: (hioId: string) => void
 
+  addSkidmoreScore: (score: Omit<SkidmoreScore, 'id'>) => void
+  updateSkidmoreScore: (id: string, updates: Partial<Omit<SkidmoreScore, 'id'>>) => void
+  removeSkidmoreScore: (id: string) => void
+
   clearMatchScores: (matchId: string) => void
   clearAllMatchScores: () => void
   clearAllTeamScores: () => void
@@ -87,6 +91,7 @@ const DEFAULT_STATE: TournamentState = {
   admins: [],
   pairingsLocked: false,
   hioDonations: INITIAL_HIO_DONATIONS,
+  skidmoreScores: INITIAL_SKIDMORE_SCORES,
 }
 
 export const useTournamentStore = create<TournamentState & Actions>()(
@@ -359,6 +364,24 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           }
         }),
 
+      addSkidmoreScore: (score) =>
+        set(state => ({
+          skidmoreScores: [
+            ...state.skidmoreScores,
+            { ...score, id: `sk-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` },
+          ],
+        })),
+
+      updateSkidmoreScore: (id, updates) =>
+        set(state => ({
+          skidmoreScores: state.skidmoreScores.map(s => s.id === id ? { ...s, ...updates } : s),
+        })),
+
+      removeSkidmoreScore: (id) =>
+        set(state => ({
+          skidmoreScores: state.skidmoreScores.filter(s => s.id !== id),
+        })),
+
       clearMatchScores: (matchId) =>
         set(state => {
           const sourceMatch = state.matches.find(m => m.id === matchId)
@@ -498,7 +521,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 14,
+      version: 15,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -600,6 +623,11 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             ...a,
             role: a.role ?? 'admin',
           }))
+        }
+        if (fromVersion < 15) {
+          if (!base.skidmoreScores || base.skidmoreScores.length === 0) {
+            base.skidmoreScores = INITIAL_SKIDMORE_SCORES
+          }
         }
         return base as TournamentState
       },

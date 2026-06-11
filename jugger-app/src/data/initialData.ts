@@ -1,4 +1,28 @@
-import type { Team, HoleInOneEntry, CourseHistoryEntry, HioDonation } from '../types'
+import type { Team, HoleInOneEntry, CourseHistoryEntry, HioDonation, SkidmoreScore } from '../types'
+
+// Matt Skidmore's historical scores (from Jugger 2026 Schedule-HDCP.xlsm "Skidmore HDCP" tab).
+// Dates are approximate — Jugger trip is annually in June; admin can edit.
+// Ordered oldest → newest (matches Excel row order, score #1 to #18).
+export const INITIAL_SKIDMORE_SCORES: SkidmoreScore[] = [
+  { id: 'sk-01', date: '2020-06-01', course: 'Legacy Golf Links',    rating: 71.4, slope: 127, score: 104 },
+  { id: 'sk-02', date: '2020-06-02', course: 'Dormie Club',          rating: 72.3, slope: 130, score: 106 },
+  { id: 'sk-03', date: '2020-09-15', course: 'Dormie Club',          rating: 72.3, slope: 130, score: 109 },
+  { id: 'sk-04', date: '2021-06-01', course: 'UNC Finley',           rating: 69.9, slope: 125, score: 103 },
+  { id: 'sk-05', date: '2021-06-02', course: 'CC Whispering Pines',  rating: 70.8, slope: 124, score: 105 },
+  { id: 'sk-06', date: '2021-06-03', course: 'LPGC',                 rating: 70.7, slope: 130, score: 106 },
+  { id: 'sk-07', date: '2022-06-01', course: 'Foxfire',              rating: 70.8, slope: 127, score: 107 },
+  { id: 'sk-08', date: '2022-06-02', course: 'Southern Pines',       rating: 69.9, slope: 127, score: 105 },
+  { id: 'sk-09', date: '2022-06-03', course: 'Mid South Club',       rating: 71.0, slope: 130, score: 105 },
+  { id: 'sk-10', date: '2023-06-01', course: 'Mid South Club',       rating: 70.0, slope: 132, score: 112 },
+  { id: 'sk-11', date: '2023-06-02', course: 'Pinewild Magnolia',    rating: 70.5, slope: 128, score: 112 },
+  { id: 'sk-12', date: '2023-06-03', course: 'Southern Pines',       rating: 72.0, slope: 135, score: 110 },
+  { id: 'sk-13', date: '2024-06-01', course: 'Bald Head Island',     rating: 71.8, slope: 136, score: 110 },
+  { id: 'sk-14', date: '2024-06-02', course: 'Lonnie Poole GC',      rating: 68.8, slope: 123, score: 102 },
+  { id: 'sk-15', date: '2024-06-03', course: 'Bald Head Island',     rating: 70.4, slope: 133, score:  97 },
+  { id: 'sk-16', date: '2025-06-01', course: 'Lonnie Poole GC',      rating: 68.8, slope: 123, score: 104 },
+  { id: 'sk-17', date: '2025-06-02', course: 'Lonnie Poole GC',      rating: 68.8, slope: 123, score: 103 },
+  { id: 'sk-18', date: '2025-06-03', course: 'Lonnie Poole GC',      rating: 68.8, slope: 123, score: 107 },
+]
 
 // CTP hole donations to HIO pot before app tracking started (2026)
 export const INITIAL_CTP_HIO_HISTORY: { year: number; amount: number }[] = [

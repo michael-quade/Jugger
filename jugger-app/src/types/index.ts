@@ -162,6 +162,7 @@ export interface TournamentState {
   admins: AdminCredential[]
   pairingsLocked: boolean
   hioDonations: HioDonation[]
+  skidmoreScores: SkidmoreScore[]
 }
 
 export interface CourseHistoryRound {
@@ -193,4 +194,14 @@ export interface AdminCredential {
   username: string
   passwordHash: string
   role?: 'admin' | 'scorer'
+}
+
+export interface SkidmoreScore {
+  id: string
+  date: string        // YYYY-MM-DD
+  course: string
+  rating: number
+  slope: number
+  score: number       // adjusted gross score
+  notes?: string
 }

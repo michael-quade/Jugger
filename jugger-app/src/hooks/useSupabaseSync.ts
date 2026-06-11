@@ -10,7 +10,7 @@ export const useSyncStatus = create<{ connected: boolean }>(() => ({ connected: 
 const APP_STATE_KEYS: (keyof TournamentState)[] = [
   'year', 'teams', 'courses', 'roundConfigs', 'holeInOnes',
   'ctpEntries', 'ctpDonations', 'ctpHioHistory', 'hdcpLocked',
-  'courseHistory', 'admins', 'pairingsLocked', 'hioDonations',
+  'courseHistory', 'admins', 'pairingsLocked', 'hioDonations', 'skidmoreScores',
 ]
 
 // Counter instead of boolean so nested remote-apply calls compose correctly.
