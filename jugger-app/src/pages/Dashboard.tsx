@@ -322,20 +322,20 @@ function PairingCell({ match, teams, format }: { match: Match; teams: Team[]; fo
     const team2name = teams.find(t => t.id === match.twosome2.teamId)?.name ?? ''
     return (
       <div className="text-center leading-tight">
-        {([0, 1] as const).map(i => (
-          <div key={i} className="flex items-center justify-center gap-0.5 text-[9px]">
-            <span className="font-medium" style={{ color: color1 }}>{firstName(match.twosome1.playerIds[i])}</span>
-            <span className="text-gray-400"> vs </span>
-            <span className="font-medium" style={{ color: color2 }}>{firstName(match.twosome2.playerIds[i])}</span>
-          </div>
-        ))}
         {!match.isBlind && (
-          <div className="flex items-center justify-center gap-0.5 mt-0.5 pt-0.5 border-t border-gray-100 text-[8px] text-gray-400">
-            <span style={{ color: color1 + 'aa' }}>{team1name}</span>
-            <span className="text-gray-300"> 2v2 </span>
-            <span style={{ color: color2 + 'aa' }}>{team2name}</span>
+          <div className="flex items-center justify-center gap-0.5 font-semibold">
+            <span style={{ color: color1 }}>{team1name}</span>
+            <span className="text-[9px] text-gray-400 mx-0.5">vs</span>
+            <span style={{ color: color2 }}>{team2name}</span>
           </div>
         )}
+        {([0, 1] as const).map(i => (
+          <div key={i} className="flex items-center justify-center gap-0.5 font-medium">
+            <span style={{ color: color1 }}>{firstName(match.twosome1.playerIds[i])}</span>
+            <span className="text-[9px] text-gray-400 mx-0.5">vs</span>
+            <span style={{ color: color2 }}>{firstName(match.twosome2.playerIds[i])}</span>
+          </div>
+        ))}
       </div>
     )
   }
