@@ -17,8 +17,17 @@ const DIFF_USE_TABLE: Record<number, number> = {
   19: 7, 20: 8,
 }
 
-function calcDiff(score: number, rating: number, slope: number): number {
-  return Math.round((113 / slope) * (score - rating) * 10) / 10
+// 2024 WHS: for 9-hole scores, actual diff + expected diff (HI÷2 on standard course)
+function calcDiff(
+  score: number,
+  rating: number,
+  slope: number,
+  holes: 9 | 18 = 18,
+  hdcpAtTime = 0,
+): number {
+  const raw = (113 / slope) * (score - rating)
+  const combined = holes === 9 ? raw + hdcpAtTime / 2 : raw
+  return Math.round(combined * 10) / 10
 }
 
 interface HdcpResult {
@@ -43,7 +52,7 @@ function calcHandicapIndex(
   if (!useCount) return null
 
   // Pair each score with its id and differential
-  const withDiff = window.map(s => ({ id: s.id, diff: calcDiff(s.score, s.rating, s.slope) }))
+  const withDiff = window.map(s => ({ id: s.id, diff: calcDiff(s.score, s.rating, s.slope, s.holes ?? 18, s.hdcpAtTime ?? 0) }))
   const byDiff = [...withDiff].sort((a, b) => a.diff - b.diff)
   const chosen = byDiff.slice(0, useCount)
 
@@ -62,23 +71,39 @@ function calcHandicapIndex(
 
 // ─── Add / Edit Form ──────────────────────────────────────────────────────────
 
-const EMPTY_FORM = { date: '', course: '', rating: '', slope: '', score: '', notes: '' }
+const EMPTY_FORM = {
+  date: '', course: '', rating: '', slope: '', score: '',
+  holes: '18' as '9' | '18',
+  hdcpAtTime: '',
+  notes: '',
+}
+type FormShape = typeof EMPTY_FORM
 
 function ScoreForm({
   initial,
+  currentHdcp,
   onSave,
   onCancel,
 }: {
-  initial?: Partial<typeof EMPTY_FORM>
-  onSave: (v: typeof EMPTY_FORM) => void
+  initial?: Partial<FormShape>
+  currentHdcp: number | null
+  onSave: (v: FormShape) => void
   onCancel: () => void
 }) {
-  const [form, setForm] = useState({ ...EMPTY_FORM, ...initial })
-  const set = (k: keyof typeof EMPTY_FORM) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const [form, setForm] = useState<FormShape>({ ...EMPTY_FORM, ...initial })
+  const set = (k: keyof FormShape) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
+  const is9 = form.holes === '9'
+
   const diff = form.rating && form.slope && form.score
-    ? calcDiff(parseFloat(form.score), parseFloat(form.rating), parseFloat(form.slope))
+    ? calcDiff(
+        parseFloat(form.score),
+        parseFloat(form.rating),
+        parseFloat(form.slope),
+        is9 ? 9 : 18,
+        is9 ? parseFloat(form.hdcpAtTime || String(currentHdcp ?? 0)) : 0,
+      )
     : null
 
   const valid =
@@ -90,9 +115,32 @@ function ScoreForm({
 
   return (
     <div className="card border border-masters-green/30 space-y-3">
-      <h3 className="font-semibold text-masters-dark text-sm">
-        {initial?.date ? 'Edit Score' : 'Add Score'}
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-masters-dark text-sm">
+          {initial?.date ? 'Edit Score' : 'Add Score'}
+        </h3>
+        {/* Holes toggle */}
+        <div className="flex items-center rounded overflow-hidden border border-gray-200 text-xs font-semibold">
+          {(['18', '9'] as const).map(h => (
+            <button
+              key={h}
+              className={`px-3 py-1 transition-colors ${
+                form.holes === h
+                  ? 'bg-masters-green text-white'
+                  : 'bg-white text-gray-500 hover:bg-gray-50'
+              }`}
+              onClick={() => setForm(f => ({
+                ...f,
+                holes: h,
+                hdcpAtTime: h === '9' && !f.hdcpAtTime ? String(currentHdcp ?? '') : f.hdcpAtTime,
+              }))}
+            >
+              {h} holes
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <div>
           <label className="label">Date</label>
@@ -103,28 +151,58 @@ function ScoreForm({
           <input className="input text-sm w-full" placeholder="Course name" value={form.course} onChange={set('course')} />
         </div>
         <div>
-          <label className="label">Course Rating</label>
-          <input type="number" step="0.1" className="input text-sm w-full" placeholder="e.g. 71.4" value={form.rating} onChange={set('rating')} />
+          <label className="label">{is9 ? '9-Hole Rating' : 'Course Rating'}</label>
+          <input type="number" step="0.1" className="input text-sm w-full" placeholder={is9 ? 'e.g. 35.8' : 'e.g. 71.4'} value={form.rating} onChange={set('rating')} />
         </div>
         <div>
-          <label className="label">Slope</label>
+          <label className="label">{is9 ? '9-Hole Slope' : 'Slope'}</label>
           <input type="number" className="input text-sm w-full" placeholder="e.g. 127" value={form.slope} onChange={set('slope')} />
         </div>
         <div>
           <label className="label">Adj. Gross Score</label>
-          <input type="number" className="input text-sm w-full" placeholder="e.g. 104" value={form.score} onChange={set('score')} />
+          <input type="number" className="input text-sm w-full" placeholder={is9 ? 'e.g. 52' : 'e.g. 104'} value={form.score} onChange={set('score')} />
         </div>
-        <div className="sm:col-span-2">
+        {is9 && (
+          <div>
+            <label className="label">HDCP Index at Time of Round</label>
+            <input
+              type="number"
+              step="0.1"
+              className="input text-sm w-full"
+              placeholder={currentHdcp != null ? String(currentHdcp) : ''}
+              value={form.hdcpAtTime}
+              onChange={set('hdcpAtTime')}
+            />
+          </div>
+        )}
+        <div className={is9 ? '' : 'sm:col-span-2'}>
           <label className="label">Notes (optional)</label>
           <input className="input text-sm w-full" placeholder="e.g. Jugger 2026 R1" value={form.notes} onChange={set('notes')} />
         </div>
-        {diff !== null && (
-          <div className="flex items-center gap-1.5 text-sm text-masters-green font-semibold">
-            <Calculator size={14} />
-            Differential: {diff.toFixed(1)}
-          </div>
-        )}
       </div>
+
+      {diff !== null && (
+        <div className="flex items-center gap-2 text-sm text-masters-green font-semibold bg-green-50 rounded px-3 py-1.5">
+          <Calculator size={14} />
+          {is9 ? (
+            <>
+              9-hole diff: {calcDiff(parseFloat(form.score), parseFloat(form.rating), parseFloat(form.slope), 9, 0).toFixed(1)}
+              {' '}+ expected ({(parseFloat(form.hdcpAtTime || String(currentHdcp ?? 0)) / 2).toFixed(1)})
+              {' '}= combined 18-hole differential: {diff.toFixed(1)}
+            </>
+          ) : (
+            <>Differential: {diff.toFixed(1)}</>
+          )}
+        </div>
+      )}
+
+      {is9 && (
+        <p className="text-[11px] text-gray-400">
+          WHS 2024: combined diff = actual 9-hole diff + (Handicap Index ÷ 2) on a standard-difficulty course.
+          Use the 9-hole course rating and slope from the scorecard.
+        </p>
+      )}
+
       <div className="flex gap-2 justify-end pt-1">
         <button className="btn-ghost text-sm" onClick={onCancel}>Cancel</button>
         <button className="btn-primary text-sm" disabled={!valid} onClick={() => onSave(form)}>
@@ -235,26 +313,32 @@ export default function SkidmoreHdcp() {
     )
   }
 
-  const handleAddSave = (form: typeof EMPTY_FORM) => {
+  const handleAddSave = (form: FormShape) => {
+    const is9 = form.holes === '9'
     addSkidmoreScore({
       date: form.date,
       course: form.course.trim(),
       rating: parseFloat(form.rating),
       slope: parseFloat(form.slope),
       score: parseFloat(form.score),
+      holes: is9 ? 9 : 18,
+      hdcpAtTime: is9 && form.hdcpAtTime ? parseFloat(form.hdcpAtTime) : undefined,
       notes: form.notes.trim() || undefined,
     })
     setShowAdd(false)
   }
 
-  const handleEditSave = (form: typeof EMPTY_FORM) => {
+  const handleEditSave = (form: FormShape) => {
     if (!editId) return
+    const is9 = form.holes === '9'
     updateSkidmoreScore(editId, {
       date: form.date,
       course: form.course.trim(),
       rating: parseFloat(form.rating),
       slope: parseFloat(form.slope),
       score: parseFloat(form.score),
+      holes: is9 ? 9 : 18,
+      hdcpAtTime: is9 && form.hdcpAtTime ? parseFloat(form.hdcpAtTime) : undefined,
       notes: form.notes.trim() || undefined,
     })
     setEditId(null)
@@ -356,7 +440,7 @@ export default function SkidmoreHdcp() {
 
       {/* Add form */}
       {showAdd && !editId && (
-        <ScoreForm onSave={handleAddSave} onCancel={() => setShowAdd(false)} />
+        <ScoreForm currentHdcp={computedHdcp} onSave={handleAddSave} onCancel={() => setShowAdd(false)} />
       )}
 
       {/* USGA WHS Rules */}
@@ -386,7 +470,25 @@ export default function SkidmoreHdcp() {
             </div>
 
             <div className="space-y-1">
-              <p className="font-semibold text-masters-dark">2. Score Window & Differentials Used</p>
+              <p className="font-semibold text-masters-dark">2. 9-Hole Scores (WHS 2024)</p>
+              <div className="bg-masters-light rounded px-3 py-2 font-mono text-xs">
+                Combined diff = (113 ÷ 9-hole Slope) × (Score − 9-hole Rating) + (Handicap Index ÷ 2)
+              </div>
+              <p className="text-xs text-gray-500">
+                Each 9-hole score is immediately combined with the player's expected 9-hole differential
+                (HI ÷ 2 on a standard-difficulty course) to produce a full 18-hole differential.
+                Use the actual 9-hole course rating and slope from the scorecard tee sheet —
+                not half of the 18-hole values. Enter the player's Handicap Index at the time of the round
+                in the "HDCP Index at Time of Round" field (pre-filled with current computed index).
+              </p>
+              <p className="text-xs text-gray-400 italic">
+                Prior to 2024, two 9-hole scores were paired together in posting order.
+                The 2024 revision eliminates the wait and uses the expected differential instead.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="font-semibold text-masters-dark">3. Score Window & Differentials Used</p>
               <p className="text-xs text-gray-500 mb-2">
                 Use the most recent 20 scores. Select the lowest N differentials:
               </p>
@@ -409,7 +511,7 @@ export default function SkidmoreHdcp() {
             </div>
 
             <div className="space-y-1">
-              <p className="font-semibold text-masters-dark">3. Handicap Index Formula</p>
+              <p className="font-semibold text-masters-dark">4. Handicap Index Formula</p>
               <div className="bg-masters-light rounded px-3 py-2 font-mono text-xs">
                 Index = truncate( avg(lowest N differentials) × 0.96, 1 decimal )
               </div>
@@ -419,7 +521,7 @@ export default function SkidmoreHdcp() {
             </div>
 
             <div className="space-y-1">
-              <p className="font-semibold text-masters-dark">4. Soft Cap &amp; Hard Cap</p>
+              <p className="font-semibold text-masters-dark">5. Soft Cap &amp; Hard Cap</p>
               <p className="text-xs text-gray-500">
                 <strong>Soft cap:</strong> If the calculated index exceeds your low HDCP + 3, the excess
                 above that threshold is reduced by 50%.<br />
@@ -473,7 +575,8 @@ export default function SkidmoreHdcp() {
                 const isTournament = Boolean((s as unknown as Record<string, unknown>).isTournament)
                 const inWindow = windowIds.has(s.id)
                 const isUsed = hdcpResult?.usedIds.has(s.id) ?? false
-                const diff = calcDiff(s.score, s.rating, s.slope)
+                const is9 = s.holes === 9
+                const diff = calcDiff(s.score, s.rating, s.slope, s.holes ?? 18, s.hdcpAtTime ?? 0)
                 const isEditing = editId === s.id
 
                 const rowBg = isUsed
@@ -487,12 +590,15 @@ export default function SkidmoreHdcp() {
                     {isEditing && !isTournament ? (
                       <td colSpan={8} className="px-4 py-2">
                         <ScoreForm
+                          currentHdcp={computedHdcp}
                           initial={{
                             date: s.date,
                             course: s.course,
                             rating: String(s.rating),
                             slope: String(s.slope),
                             score: String(s.score),
+                            holes: (s.holes ?? 18) === 9 ? '9' : '18',
+                            hdcpAtTime: s.hdcpAtTime != null ? String(s.hdcpAtTime) : '',
                             notes: s.notes ?? '',
                           }}
                           onSave={handleEditSave}
@@ -512,6 +618,11 @@ export default function SkidmoreHdcp() {
                                 Tourney
                               </span>
                             )}
+                            {is9 && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold uppercase">
+                                9-hole
+                              </span>
+                            )}
                           </div>
                           {s.notes && !isTournament && (
                             <div className="text-[10px] text-gray-400">{s.notes}</div>
@@ -522,6 +633,11 @@ export default function SkidmoreHdcp() {
                         <td className="px-3 py-2.5 text-center font-mono font-semibold">{s.score}</td>
                         <td className={`px-3 py-2.5 text-center font-mono font-semibold ${isUsed ? 'text-masters-green' : 'text-gray-700'}`}>
                           {diff.toFixed(1)}
+                          {is9 && s.hdcpAtTime != null && (
+                            <div className="text-[9px] text-gray-400 font-normal">
+                              {calcDiff(s.score, s.rating, s.slope, 9, 0).toFixed(1)} + {(s.hdcpAtTime / 2).toFixed(1)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-center">
                           {isUsed ? (

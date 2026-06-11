@@ -200,8 +200,10 @@ export interface SkidmoreScore {
   id: string
   date: string        // YYYY-MM-DD
   course: string
-  rating: number
-  slope: number
+  rating: number      // 9-hole or 18-hole course rating to match holes played
+  slope: number       // 9-hole or 18-hole slope to match holes played
   score: number       // adjusted gross score
+  holes?: 9 | 18      // defaults to 18 when absent
+  hdcpAtTime?: number // WHS 2024: Handicap Index when the 9-hole round was played
   notes?: string
 }
