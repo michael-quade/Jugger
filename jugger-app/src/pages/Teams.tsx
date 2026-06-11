@@ -2,21 +2,23 @@ import { useState, Fragment } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { Player } from '../types'
-import { Lock, Unlock, Plus, Trash2, Edit2, Check, X, RotateCcw } from 'lucide-react'
+import { Lock, Unlock, Plus, Trash2, Edit2, Check, X, RotateCcw, ArrowRightLeft } from 'lucide-react'
 import {
   rawCourseHdcpDisplay, tournamentHdcp, nettedCourseHdcpRaw, apply18Cap,
 } from '../utils/handicap'
 
 export default function Teams() {
-  const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute } = useTournamentStore()
+  const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute, permanentlyReplacePlayer, makeSubPermanent } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [editName, setEditName] = useState<{ teamId: string; playerId: string; val: string } | null>(null)
   const [editTeamName, setEditTeamName] = useState<{ teamId: string; val: string } | null>(null)
-  const [subForm, setSubForm] = useState<{
+  const [playerForm, setPlayerForm] = useState<{
     teamId: string
+    type: 'sub' | 'perm'
     replacingId: string
-    subName: string
-    subHdcp: string
+    name: string
+    hdcp: string
+    ghin: string
   } | null>(null)
 
   return (
@@ -80,25 +82,32 @@ export default function Teams() {
                   teamId={team.id}
                   hdcpLocked={hdcpLocked}
                   isAdmin={isAdmin}
+                  canDelete={team.players.length > 4}
                   editName={editName}
                   setEditName={setEditName}
                   onUpdatePlayer={(id, updates) => updatePlayer(team.id, id, updates)}
                   onRemove={() => removePlayer(team.id, player.id)}
                   onRevert={() => revertSubstitute(team.id, player.id)}
+                  onMakePermanent={() => makeSubPermanent(team.id, player.id)}
                 />
               ))}
             </div>
 
             {isAdmin && !hdcpLocked && (
-              subForm?.teamId === team.id ? (
-                <div className="border border-masters-green/30 rounded-lg p-3 space-y-2 bg-masters-green/5">
-                  <p className="text-xs font-bold text-masters-dark">Add Substitute</p>
+              playerForm?.teamId === team.id ? (
+                <div className={`border rounded-lg p-3 space-y-2 ${playerForm.type === 'perm' ? 'border-blue-300 bg-blue-50/40' : 'border-masters-green/30 bg-masters-green/5'}`}>
+                  <p className="text-xs font-bold text-masters-dark">
+                    {playerForm.type === 'perm' ? 'Permanently Replace Player' : 'Add Substitute (this year only)'}
+                  </p>
+                  {playerForm.type === 'perm' && (
+                    <p className="text-[10px] text-blue-700">The new player becomes a core team member going forward. The replaced player's history is preserved in archived years.</p>
+                  )}
                   <div>
                     <label className="label">Replacing</label>
                     <select
                       className="input text-sm w-full"
-                      value={subForm.replacingId}
-                      onChange={e => setSubForm({ ...subForm, replacingId: e.target.value })}
+                      value={playerForm.replacingId}
+                      onChange={e => setPlayerForm({ ...playerForm, replacingId: e.target.value })}
                     >
                       <option value="">— Select player —</option>
                       {team.players.filter(p => !p.isSubstitute).map(p => (
@@ -106,14 +115,14 @@ export default function Teams() {
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={`grid gap-2 ${playerForm.type === 'perm' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <div>
-                      <label className="label">Sub Name</label>
+                      <label className="label">{playerForm.type === 'perm' ? 'New Player Name' : 'Sub Name'}</label>
                       <input
                         className="input text-sm w-full"
                         placeholder="Full name"
-                        value={subForm.subName}
-                        onChange={e => setSubForm({ ...subForm, subName: e.target.value })}
+                        value={playerForm.name}
+                        onChange={e => setPlayerForm({ ...playerForm, name: e.target.value })}
                         autoFocus
                       />
                     </div>
@@ -126,32 +135,55 @@ export default function Teams() {
                         max={54}
                         className="input text-sm w-full"
                         placeholder="e.g. 12.4"
-                        value={subForm.subHdcp}
-                        onChange={e => setSubForm({ ...subForm, subHdcp: e.target.value })}
+                        value={playerForm.hdcp}
+                        onChange={e => setPlayerForm({ ...playerForm, hdcp: e.target.value })}
                       />
                     </div>
+                    {playerForm.type === 'perm' && (
+                      <div>
+                        <label className="label">GHIN #</label>
+                        <input
+                          className="input text-sm w-full font-mono"
+                          placeholder="optional"
+                          value={playerForm.ghin}
+                          onChange={e => setPlayerForm({ ...playerForm, ghin: e.target.value })}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button
-                      className="btn-primary text-xs flex items-center gap-1"
-                      disabled={!subForm.replacingId || !subForm.subName.trim()}
+                      className={`text-xs flex items-center gap-1 ${playerForm.type === 'perm' ? 'bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-semibold' : 'btn-primary'}`}
+                      disabled={!playerForm.replacingId || !playerForm.name.trim()}
                       onClick={() => {
-                        substitutePlayer(team.id, subForm.replacingId, subForm.subName.trim(), parseFloat(subForm.subHdcp) || 0)
-                        setSubForm(null)
+                        if (playerForm.type === 'perm') {
+                          permanentlyReplacePlayer(team.id, playerForm.replacingId, playerForm.name.trim(), parseFloat(playerForm.hdcp) || 0, playerForm.ghin.trim() || undefined)
+                        } else {
+                          substitutePlayer(team.id, playerForm.replacingId, playerForm.name.trim(), parseFloat(playerForm.hdcp) || 0)
+                        }
+                        setPlayerForm(null)
                       }}
                     >
-                      <Check size={12} /> Confirm Sub
+                      <Check size={12} /> {playerForm.type === 'perm' ? 'Confirm Permanent Replace' : 'Confirm Sub'}
                     </button>
-                    <button className="btn-ghost text-xs" onClick={() => setSubForm(null)}>Cancel</button>
+                    <button className="btn-ghost text-xs" onClick={() => setPlayerForm(null)}>Cancel</button>
                   </div>
                 </div>
               ) : (
-                <button
-                  className="btn-ghost w-full flex items-center justify-center gap-1 text-sm"
-                  onClick={() => setSubForm({ teamId: team.id, replacingId: '', subName: '', subHdcp: '' })}
-                >
-                  <Plus size={14} /> Add Substitute
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="btn-ghost flex-1 flex items-center justify-center gap-1 text-sm"
+                    onClick={() => setPlayerForm({ teamId: team.id, type: 'sub', replacingId: '', name: '', hdcp: '', ghin: '' })}
+                  >
+                    <Plus size={14} /> Add Substitute
+                  </button>
+                  <button
+                    className="flex-1 flex items-center justify-center gap-1 text-sm border border-blue-200 text-blue-600 hover:border-blue-400 hover:bg-blue-50 rounded font-semibold px-3 py-1.5 transition-colors"
+                    onClick={() => setPlayerForm({ teamId: team.id, type: 'perm', replacingId: '', name: '', hdcp: '', ghin: '' })}
+                  >
+                    <ArrowRightLeft size={14} /> Permanently Replace
+                  </button>
+                </div>
               )
             )}
           </div>
@@ -348,23 +380,31 @@ function HdcpTable() {
 }
 
 function PlayerRow({
-  player, teamId, hdcpLocked, isAdmin, editName, setEditName, onUpdatePlayer, onRemove, onRevert
+  player, teamId, hdcpLocked, isAdmin, canDelete, editName, setEditName, onUpdatePlayer, onRemove, onRevert, onMakePermanent
 }: {
   player: Player
   teamId: string
   hdcpLocked: boolean
   isAdmin: boolean
+  canDelete: boolean
   editName: { teamId: string; playerId: string; val: string } | null
   setEditName: (v: { teamId: string; playerId: string; val: string } | null) => void
   onUpdatePlayer: (id: string, updates: Partial<Player>) => void
   onRemove: () => void
   onRevert: () => void
+  onMakePermanent: () => void
 }) {
   const isEditing = isAdmin && editName?.teamId === teamId && editName?.playerId === player.id
   const canEdit = isAdmin && !hdcpLocked
 
+  const borderClass = player.isPermanentReplacement
+    ? 'border-blue-300 bg-blue-50/30'
+    : player.isSubstitute
+      ? 'border-amber-300 bg-amber-50/50'
+      : 'border-gray-200'
+
   return (
-    <div className={`border rounded p-2 space-y-1 ${player.isSubstitute ? 'border-amber-300 bg-amber-50/50' : 'border-gray-200'}`}>
+    <div className={`border rounded p-2 space-y-1 ${borderClass}`}>
       {/* Name row */}
       {isEditing ? (
         <div className="flex items-center gap-1">
@@ -384,6 +424,11 @@ function PlayerRow({
       ) : (
         <div className="flex items-center gap-1 flex-wrap">
           <span className="font-semibold text-sm flex-1">{player.name}</span>
+          {player.isPermanentReplacement && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-200 text-blue-800 font-bold uppercase tracking-wide shrink-0">
+              PERM
+            </span>
+          )}
           {player.isSubstitute && (
             <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800 font-bold uppercase tracking-wide shrink-0">
               SUB
@@ -395,23 +440,35 @@ function PlayerRow({
             </button>
           )}
           {isAdmin && player.isSubstitute && (
-            <button
-              onClick={onRevert}
-              title={`Revert to ${player.originalName}`}
-              className="flex items-center gap-0.5 text-[10px] text-amber-700 hover:text-amber-900 font-semibold"
-            >
-              <RotateCcw size={10} /> Revert
-            </button>
+            <>
+              <button
+                onClick={onRevert}
+                title={`Revert to ${player.originalName}`}
+                className="flex items-center gap-0.5 text-[10px] text-amber-700 hover:text-amber-900 font-semibold"
+              >
+                <RotateCcw size={10} /> Revert
+              </button>
+              <button
+                onClick={onMakePermanent}
+                title="Make this sub a permanent team member"
+                className="flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
+              >
+                <ArrowRightLeft size={10} /> Make Permanent
+              </button>
+            </>
           )}
-          {isAdmin && (
+          {isAdmin && canDelete && (
             <button onClick={onRemove} title="Remove player">
               <Trash2 size={12} className="text-gray-300 hover:text-red-500" />
             </button>
           )}
         </div>
       )}
+      {player.isPermanentReplacement && player.replacedPlayerName && (
+        <div className="text-[10px] text-blue-600 italic">replaced {player.replacedPlayerName}</div>
+      )}
       {player.isSubstitute && player.originalName && (
-        <div className="text-[10px] text-amber-700 italic">replacing {player.originalName}</div>
+        <div className="text-[10px] text-amber-700 italic">replacing {player.originalName} (this year)</div>
       )}
 
       {/* HDCP row */}

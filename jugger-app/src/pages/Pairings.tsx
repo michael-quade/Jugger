@@ -95,12 +95,12 @@ export default function Pairings() {
           {[1, 2, 3, 4, 5].map(round => {
             const roundMatches = getMatchesForRound(matches, round)
             if (roundMatches.length === 0) return null
+            const rc = roundConfigs.find(r => r.round === round)
             const regular = roundMatches.filter(m => !m.isBlind)
             const blind    = roundMatches.filter(m => m.isBlind)
             return (
               <div key={round}>
                 <h2 className="section-header">{(() => {
-                  const rc = roundConfigs.find(r => r.round === round)
                   const course = courses.find(c => c.id === rc?.courseId)
                   return `Round ${round} — ${FORMAT_LABELS[rc?.format ?? ''] ?? rc?.format ?? ''}${course ? ` (${course.name})` : ''}`
                 })()}</h2>
@@ -109,7 +109,7 @@ export default function Pairings() {
                     <div className="space-y-2">
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Regular Matches (2 pts each)</p>
                       {regular.map(m => (
-                        <MatchCard key={m.id} match={m} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} onViewScorecard={() => navigate(`/scorecards?match=${m.id}&round=${m.round}`)} setEditDraft={setEditDraft} />
+                        <MatchCard key={m.id} match={m} format={rc?.format} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} onViewScorecard={() => navigate(`/scorecards?match=${m.id}&round=${m.round}`)} setEditDraft={setEditDraft} />
                       ))}
                     </div>
                   )}
@@ -117,7 +117,7 @@ export default function Pairings() {
                     <div className="space-y-2">
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Blind Matches (1 pt each)</p>
                       {blind.map(m => (
-                        <MatchCard key={m.id} match={m} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} onViewScorecard={() => navigate(`/scorecards?match=${m.id}&round=${m.round}`)} setEditDraft={setEditDraft} />
+                        <MatchCard key={m.id} match={m} format={rc?.format} teams={teams} editing={editMatch === m.id} editDraft={editDraft} canEdit={isAdmin && !pairingsLocked} onEdit={() => startEdit(m)} onSave={saveEdit} onCancel={() => { setEditMatch(null); setEditDraft(null) }} onViewScorecard={() => navigate(`/scorecards?match=${m.id}&round=${m.round}`)} setEditDraft={setEditDraft} />
                       ))}
                     </div>
                   )}
@@ -134,6 +134,7 @@ export default function Pairings() {
 interface MatchCardProps {
   match: Match
   teams: Team[]
+  format?: string
   editing: boolean
   editDraft: Match | null
   canEdit: boolean
@@ -144,7 +145,7 @@ interface MatchCardProps {
   setEditDraft: (m: Match | null) => void
 }
 
-function MatchCard({ match, teams, editing, editDraft, canEdit, onEdit, onSave, onCancel, onViewScorecard, setEditDraft }: MatchCardProps) {
+function MatchCard({ match, teams, format, editing, editDraft, canEdit, onEdit, onSave, onCancel, onViewScorecard, setEditDraft }: MatchCardProps) {
   const allPlayers = teams.flatMap(t => t.players)
 
   function getTeamColor(teamId: string) {
@@ -153,9 +154,13 @@ function MatchCard({ match, teams, editing, editDraft, canEdit, onEdit, onSave, 
   function getTeamName(teamId: string) {
     return teams.find(t => t.id === teamId)?.name ?? teamId
   }
+  function firstName(pid: string) {
+    return allPlayers.find(p => p.id === pid)?.name.split(' ')[0] ?? pid
+  }
 
   const t1 = match.twosome1
   const t2 = match.twosome2
+  const isIndividual = format === 'individual_match'
 
   if (editing && editDraft) {
     const draft = editDraft
@@ -208,13 +213,52 @@ function MatchCard({ match, teams, editing, editDraft, canEdit, onEdit, onSave, 
   return (
     <div className="border border-gray-200 rounded p-3 hover:border-gray-300 transition-colors">
       <div className="flex items-start justify-between">
-        <div className="flex-1 space-y-1">
-          <TwosomeRow twosome={t1} teams={teams} />
-          <div className="text-xs text-center text-masters-gold font-bold">vs</div>
-          <TwosomeRow twosome={t2} teams={teams} />
+        <div className="flex-1">
+          {isIndividual ? (
+            match.isBlind ? (
+              <div className="space-y-1">
+                {([0, 1] as const).map(i => (
+                  <div key={i} className="flex items-center gap-1.5 text-xs">
+                    <span className="font-semibold" style={{ color: getTeamColor(t1.teamId) }}>{firstName(t1.playerIds[i])}</span>
+                    <span className="text-masters-gold text-[10px] font-bold">vs</span>
+                    <span className="font-semibold" style={{ color: getTeamColor(t2.teamId) }}>{firstName(t2.playerIds[i])}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: getTeamColor(t1.teamId) }} />
+                    <span style={{ color: getTeamColor(t1.teamId) }}>{getTeamName(t1.teamId)}</span>
+                  </div>
+                  <span className="text-masters-gold px-1">vs</span>
+                  <div className="flex items-center gap-1.5">
+                    <span style={{ color: getTeamColor(t2.teamId) }}>{getTeamName(t2.teamId)}</span>
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: getTeamColor(t2.teamId) }} />
+                  </div>
+                </div>
+                <div className="space-y-0.5 pl-2 border-l-2 border-gray-100">
+                  {([0, 1] as const).map(i => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs">
+                      <span className="font-medium" style={{ color: getTeamColor(t1.teamId) }}>{firstName(t1.playerIds[i])}</span>
+                      <span className="text-[10px] text-gray-400">vs</span>
+                      <span className="font-medium" style={{ color: getTeamColor(t2.teamId) }}>{firstName(t2.playerIds[i])}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="space-y-1">
+              <TwosomeRow twosome={t1} teams={teams} />
+              <div className="text-xs text-center text-masters-gold font-bold">vs</div>
+              <TwosomeRow twosome={t2} teams={teams} />
+            </div>
+          )}
         </div>
         {canEdit && (
-          <button className="ml-2 mt-1" onClick={onEdit}>
+          <button className="ml-2 mt-1 shrink-0" onClick={onEdit}>
             <Edit2 size={13} className="text-gray-400 hover:text-masters-green" />
           </button>
         )}

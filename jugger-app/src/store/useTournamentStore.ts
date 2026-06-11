@@ -14,6 +14,8 @@ interface Actions {
   removePlayer: (teamId: string, playerId: string) => void
   substitutePlayer: (teamId: string, playerId: string, subName: string, subHdcp: number) => void
   revertSubstitute: (teamId: string, playerId: string) => void
+  permanentlyReplacePlayer: (teamId: string, playerId: string, newName: string, newHdcp: number, newGhin?: string) => void
+  makeSubPermanent: (teamId: string, playerId: string) => void
   updateTeamName: (teamId: string, name: string) => void
   updateTeamColor: (teamId: string, color: string) => void
 
@@ -150,6 +152,47 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   ...p,
                   name: p.originalName ?? p.name,
                   handicapIndex: p.originalHandicapIndex ?? p.handicapIndex,
+                  isSubstitute: false,
+                  originalName: undefined,
+                  originalHandicapIndex: undefined,
+                }
+              ),
+            }
+          ),
+        })),
+
+      permanentlyReplacePlayer: (teamId, playerId, newName, newHdcp, newGhin) =>
+        set(state => ({
+          teams: state.teams.map(t =>
+            t.id !== teamId ? t : {
+              ...t,
+              players: t.players.map(p =>
+                p.id !== playerId ? p : {
+                  ...p,
+                  name: newName,
+                  handicapIndex: newHdcp,
+                  ghinNumber: newGhin ?? undefined,
+                  isPermanentReplacement: true,
+                  replacedPlayerName: p.replacedPlayerName ?? p.name,
+                  isSubstitute: false,
+                  originalName: undefined,
+                  originalHandicapIndex: undefined,
+                }
+              ),
+            }
+          ),
+        })),
+
+      makeSubPermanent: (teamId, playerId) =>
+        set(state => ({
+          teams: state.teams.map(t =>
+            t.id !== teamId ? t : {
+              ...t,
+              players: t.players.map(p =>
+                p.id !== playerId ? p : {
+                  ...p,
+                  isPermanentReplacement: true,
+                  replacedPlayerName: p.originalName ?? p.name,
                   isSubstitute: false,
                   originalName: undefined,
                   originalHandicapIndex: undefined,
@@ -370,10 +413,17 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             ...t,
             players: t.players
               .filter(p => !p.id.startsWith('sub-'))
-              .map(p => p.isSubstitute
-                ? { ...p, name: p.originalName!, handicapIndex: p.originalHandicapIndex!, isSubstitute: false, originalName: undefined, originalHandicapIndex: undefined }
-                : p
-              ),
+              .map(p => {
+                if (p.isPermanentReplacement) {
+                  // Graduate to core member — keep their name/hdcp, just clear the flags
+                  return { ...p, isPermanentReplacement: false, replacedPlayerName: undefined }
+                }
+                if (p.isSubstitute) {
+                  // Single-year sub: revert to original player for next year's template
+                  return { ...p, name: p.originalName!, handicapIndex: p.originalHandicapIndex!, isSubstitute: false, originalName: undefined, originalHandicapIndex: undefined }
+                }
+                return p
+              }),
           }))
           const newYear = state.year + 1
           return {

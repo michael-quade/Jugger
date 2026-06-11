@@ -178,7 +178,7 @@ export default function Dashboard() {
                           const m = matches.find(x => x.id === `${rc.round}${s}`)
                           return (
                             <td key={s} className={`p-2${i === 0 ? ' border-l border-gray-200' : ''}`}>
-                              {m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}
+                              {m ? <PairingCell match={m} teams={teams} format={rc.format} /> : <span className="text-gray-300 block text-center">—</span>}
                             </td>
                           )
                         })}
@@ -186,7 +186,7 @@ export default function Dashboard() {
                           const m = matches.find(x => x.id === `${rc.round}blind${n}`)
                           return (
                             <td key={n} className={`p-2${n === 1 ? ' border-l border-gray-200' : ''}`}>
-                              {m ? <PairingCell match={m} teams={teams} /> : <span className="text-gray-300 block text-center">—</span>}
+                              {m ? <PairingCell match={m} teams={teams} format={rc.format} /> : <span className="text-gray-300 block text-center">—</span>}
                             </td>
                           )
                         })}
@@ -306,7 +306,7 @@ function ChampionHero({ team, year, isComplete }: { team: Team; year: number; is
   )
 }
 
-function PairingCell({ match, teams }: { match: Match; teams: Team[] }) {
+function PairingCell({ match, teams, format }: { match: Match; teams: Team[]; format?: string }) {
   function firstName(id: string) {
     for (const t of teams) {
       const p = t.players.find(p => p.id === id)
@@ -316,6 +316,30 @@ function PairingCell({ match, teams }: { match: Match; teams: Team[] }) {
   }
   const color1 = teams.find(t => t.id === match.twosome1.teamId)?.color ?? '#666'
   const color2 = teams.find(t => t.id === match.twosome2.teamId)?.color ?? '#666'
+
+  if (format === 'individual_match') {
+    const team1name = teams.find(t => t.id === match.twosome1.teamId)?.name ?? ''
+    const team2name = teams.find(t => t.id === match.twosome2.teamId)?.name ?? ''
+    return (
+      <div className="text-center leading-tight">
+        {([0, 1] as const).map(i => (
+          <div key={i} className="flex items-center justify-center gap-0.5 text-[9px]">
+            <span className="font-medium" style={{ color: color1 }}>{firstName(match.twosome1.playerIds[i])}</span>
+            <span className="text-gray-400"> vs </span>
+            <span className="font-medium" style={{ color: color2 }}>{firstName(match.twosome2.playerIds[i])}</span>
+          </div>
+        ))}
+        {!match.isBlind && (
+          <div className="flex items-center justify-center gap-0.5 mt-0.5 pt-0.5 border-t border-gray-100 text-[8px] text-gray-400">
+            <span style={{ color: color1 + 'aa' }}>{team1name}</span>
+            <span className="text-gray-300"> 2v2 </span>
+            <span style={{ color: color2 + 'aa' }}>{team2name}</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="text-center leading-tight">
       <div className="font-medium" style={{ color: color1 }}>
