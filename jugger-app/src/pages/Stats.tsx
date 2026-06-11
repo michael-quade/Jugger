@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, ReferenceLine,
+  ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { useTournamentStore } from '../store/useTournamentStore'
-import { PLAYER_HDCP_HISTORY, HDCP_YEARS, buildHdcpChartData } from '../data/hdcpHistory'
+import { PLAYER_HDCP_HISTORY, HDCP_YEARS } from '../data/hdcpHistory'
 
 // ── Palette: lighter/darker within each team color ───────────────────────────
 const PLAYER_COLORS: Record<string, string> = {
@@ -56,24 +56,74 @@ function CustomTooltip({ active, payload, label }: {
 }
 
 export default function Stats() {
-  const { teams } = useTournamentStore()
-  const allPlayers = teams.flatMap(t => t.players)
+  const { teams, archivedYears, liveYear, liveCache, isViewingHistory } = useTournamentStore()
 
-  // Build display names from store — use original name if this slot is currently a substitute
+  // Always use the live (non-archived) teams for the current year data point
+  const liveTeams = isViewingHistory ? (liveCache?.teams ?? teams) : teams
+
+  const allIds = Object.keys(PLAYER_HDCP_HISTORY)
+
+  // Build display names — show original name for substitute slots
+  const allPlayers = liveTeams.flatMap(t => t.players)
   const playerName = (id: string) => {
     const p = allPlayers.find(pl => pl.id === id)
     if (!p) return id
     return p.isSubstitute ? (p.originalName ?? p.name) : p.name
   }
 
-  // Visible player IDs
-  const [visible, setVisible] = useState<Set<string>>(
-    new Set(Object.keys(PLAYER_HDCP_HISTORY))
-  )
+  // Merge static history (hdcpHistory.ts) with dynamic data from archivedYears + live year.
+  // Static data covers 2006–last year in HDCP_YEARS. Each finalized year and the current
+  // live year are derived from the store automatically — no manual file edits needed.
+  const { allYears, allHistory, allChartData } = useMemo(() => {
+    const staticYearSet = new Set(HDCP_YEARS)
 
-  // Year range filter
-  const [yearFrom, setYearFrom] = useState(2006)
-  const [yearTo,   setYearTo]   = useState(2026)
+    const years = [...HDCP_YEARS]
+    const history: Record<string, (number | null)[]> = {}
+    allIds.forEach(id => { history[id] = [...PLAYER_HDCP_HISTORY[id]] })
+
+    // Archived years beyond the static data range
+    const newArchived = [...archivedYears]
+      .filter(a => !staticYearSet.has(a.year))
+      .sort((a, b) => a.year - b.year)
+
+    for (const archived of newArchived) {
+      years.push(archived.year)
+      const players = archived.teams.flatMap(t => t.players)
+      for (const id of allIds) {
+        const player = players.find(p => p.id === id)
+        history[id].push(!player || player.isSubstitute ? null : player.handicapIndex)
+      }
+    }
+
+    // Live year if not already covered by static data or a new archive
+    const coveredYears = new Set([...HDCP_YEARS, ...newArchived.map(a => a.year)])
+    if (!coveredYears.has(liveYear)) {
+      years.push(liveYear)
+      const players = liveTeams.flatMap(t => t.players)
+      for (const id of allIds) {
+        const player = players.find(p => p.id === id)
+        history[id].push(!player || player.isSubstitute ? null : player.handicapIndex)
+      }
+    }
+
+    const chartData = years.map((year, i) => {
+      const row: Record<string, number | string | null> = { year }
+      for (const id of allIds) { row[id] = history[id][i] ?? null }
+      return row
+    })
+
+    return { allYears: years, allHistory: history, allChartData: chartData }
+  }, [archivedYears, liveTeams, liveYear])
+
+  const [visible, setVisible] = useState<Set<string>>(new Set(allIds))
+  const [yearFrom, setYearFrom] = useState(allYears[0])
+  const [yearTo,   setYearTo]   = useState(allYears[allYears.length - 1])
+
+  // Auto-advance yearTo when a new year is finalized
+  useEffect(() => {
+    const latest = allYears[allYears.length - 1]
+    setYearTo(prev => Math.max(prev, latest))
+  }, [allYears.length])
 
   function togglePlayer(id: string) {
     setVisible(prev => {
@@ -96,24 +146,24 @@ export default function Stats() {
     setVisible(new Set(ids))
   }
 
-  const chartData = useMemo(() =>
-    buildHdcpChartData().filter(d => (d.year as number) >= yearFrom && (d.year as number) <= yearTo),
-    [yearFrom, yearTo]
+  const filteredChartData = useMemo(
+    () => allChartData.filter(d => (d.year as number) >= yearFrom && (d.year as number) <= yearTo),
+    [allChartData, yearFrom, yearTo],
   )
 
-  // Single-player spotlight: click a player in legend to see their year-by-year table
   const [spotlight, setSpotlight] = useState<string | null>(null)
 
   const spotlightData = useMemo(() => {
     if (!spotlight) return null
-    const values = PLAYER_HDCP_HISTORY[spotlight]
-    return HDCP_YEARS
+    const values = allHistory[spotlight]
+    return allYears
       .map((year, i) => ({ year, hdcp: values[i] }))
       .filter(r => r.hdcp !== null && r.year >= yearFrom && r.year <= yearTo) as { year: number; hdcp: number }[]
-  }, [spotlight, yearFrom, yearTo])
+  }, [spotlight, allHistory, allYears, yearFrom, yearTo])
 
-  const allIds = Object.keys(PLAYER_HDCP_HISTORY)
   const allVisible = allIds.every(id => visible.has(id))
+  const latestYear = allYears[allYears.length - 1]
+  const prevYear   = allYears[allYears.length - 2]
 
   return (
     <div className="space-y-6">
@@ -125,11 +175,11 @@ export default function Stats() {
         <div className="flex items-center gap-2 text-sm">
           <label className="text-gray-500">From</label>
           <select className="input py-1 w-20" value={yearFrom} onChange={e => setYearFrom(+e.target.value)}>
-            {HDCP_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <label className="text-gray-500">To</label>
           <select className="input py-1 w-20" value={yearTo} onChange={e => setYearTo(+e.target.value)}>
-            {HDCP_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
       </div>
@@ -191,7 +241,7 @@ export default function Stats() {
       <div className="card">
         <h2 className="section-header">Handicap Index Over Time</h2>
         <ResponsiveContainer width="100%" height={420}>
-          <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+          <LineChart data={filteredChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="year" tick={{ fontSize: 11 }} />
             <YAxis
@@ -287,20 +337,20 @@ export default function Stats() {
                 <th className="border p-2 text-center">Rounds Played</th>
                 <th className="border p-2 text-center">All-Time Low</th>
                 <th className="border p-2 text-center">All-Time High</th>
-                <th className="border p-2 text-center">2026 Index</th>
+                <th className="border p-2 text-center">{latestYear} Index</th>
                 <th className="border p-2 text-center">Trend</th>
               </tr>
             </thead>
             <tbody>
               {TEAM_GROUPS.flatMap(group =>
                 group.ids.map(id => {
-                  const values = PLAYER_HDCP_HISTORY[id].filter((v): v is number => v !== null)
-                  const allEntries = PLAYER_HDCP_HISTORY[id]
-                    .map((v, i) => ({ year: HDCP_YEARS[i], v }))
+                  const values = allHistory[id].filter((v): v is number => v !== null)
+                  const allEntries = allHistory[id]
+                    .map((v, i) => ({ year: allYears[i], v }))
                     .filter(e => e.v !== null) as { year: number; v: number }[]
                   const firstYear = allEntries[0]?.year
-                  const low  = Math.min(...values)
-                  const high = Math.max(...values)
+                  const low  = values.length > 0 ? Math.min(...values) : null
+                  const high = values.length > 0 ? Math.max(...values) : null
                   const current = allEntries[allEntries.length - 1]?.v ?? null
                   const prev    = allEntries[allEntries.length - 2]?.v ?? null
                   const trend = current !== null && prev !== null
@@ -316,8 +366,8 @@ export default function Stats() {
                       <td className="border p-2 text-center text-gray-500">{group.label}</td>
                       <td className="border p-2 text-center">{firstYear ?? '—'}</td>
                       <td className="border p-2 text-center">{values.length}</td>
-                      <td className="border p-2 text-center font-semibold text-masters-green">{low.toFixed(1)}</td>
-                      <td className="border p-2 text-center font-semibold text-red-500">{high.toFixed(1)}</td>
+                      <td className="border p-2 text-center font-semibold text-masters-green">{low?.toFixed(1) ?? '—'}</td>
+                      <td className="border p-2 text-center font-semibold text-red-500">{high?.toFixed(1) ?? '—'}</td>
                       <td className="border p-2 text-center font-bold">{current?.toFixed(1) ?? '—'}</td>
                       <td className="border p-2 text-center font-bold text-lg" style={{ color: trendColor }}>{trend}</td>
                     </tr>
@@ -327,7 +377,7 @@ export default function Stats() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-1">↓ lower is better. Trend compares 2026 vs 2025.</p>
+        <p className="text-xs text-gray-400 mt-1">↓ lower is better. Trend compares {latestYear} vs {prevYear}.</p>
       </div>
     </div>
   )
