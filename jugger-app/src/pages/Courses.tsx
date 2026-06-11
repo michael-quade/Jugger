@@ -52,46 +52,59 @@ function ScorecardLightbox({ src, label, onClose }: { src: string; label: string
 }
 
 export default function Courses() {
-  const { courses, setCourse, removeCourse } = useTournamentStore()
+  const { courses, setCourse, removeCourse, roundConfigs, year } = useTournamentStore()
   const isAdmin = useIsAdmin()
-  const [selected, setSelected] = useState<string>(courses[0]?.id ?? '')
-  const course = courses.find(c => c.id === selected)
+
+  const activeIds = new Set(roundConfigs.map(r => r.courseId).filter(Boolean))
+  const activeCourses = courses.filter(c => activeIds.has(c.id))
+
+  const [selected, setSelected] = useState<string>(activeCourses[0]?.id ?? '')
+  const course = activeCourses.find(c => c.id === selected) ?? activeCourses[0]
 
   function handleRemoveCourse(id: string) {
     if (!confirm('Delete this course? This cannot be undone.')) return
     removeCourse(id)
-    setSelected(courses.find(c => c.id !== id)?.id ?? '')
+    setSelected(activeCourses.find(c => c.id !== id)?.id ?? '')
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-serif font-bold text-masters-dark">Course Information</h1>
+      <h1 className="text-2xl font-serif font-bold text-masters-dark">{year} Courses</h1>
 
-      {/* Course tabs */}
-      <div className="flex gap-2 flex-wrap items-center">
-        {courses.map(c => (
-          <button
-            key={c.id}
-            onClick={() => setSelected(c.id)}
-            className={`px-4 py-2 rounded font-semibold text-sm transition-colors ${
-              selected === c.id
-                ? 'bg-masters-green text-white'
-                : 'bg-white border border-gray-300 hover:border-masters-green'
-            }`}
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
+      {activeCourses.length === 0 ? (
+        <div className="card text-center py-12">
+          <p className="text-gray-400 font-semibold">No courses assigned to this year's rounds yet.</p>
+          <p className="text-gray-300 text-sm mt-1">Go to Course History and use "Assign to Tournament Round" to add courses.</p>
+        </div>
+      ) : (
+        <>
+          {/* Course tabs */}
+          <div className="flex gap-2 flex-wrap items-center">
+            {activeCourses.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setSelected(c.id)}
+                className={`px-4 py-2 rounded font-semibold text-sm transition-colors ${
+                  course?.id === c.id
+                    ? 'bg-masters-green text-white'
+                    : 'bg-white border border-gray-300 hover:border-masters-green'
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
 
-      {course && (
-        <CourseEditor
-          key={course.id}
-          course={course}
-          onSave={setCourse}
-          onRemove={() => handleRemoveCourse(course.id)}
-          isAdmin={isAdmin}
-        />
+          {course && (
+            <CourseEditor
+              key={course.id}
+              course={course}
+              onSave={setCourse}
+              onRemove={() => handleRemoveCourse(course.id)}
+              isAdmin={isAdmin}
+            />
+          )}
+        </>
       )}
     </div>
   )
