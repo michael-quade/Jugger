@@ -21,7 +21,7 @@ export default function PrintAll() {
     content: () => printRef.current,
     pageStyle: `
       @page { size: letter; margin: 0.35in; }
-      body { font-size: 8pt; background: white; }
+      body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     `,
     documentTitle: `Jugger ${year} Scorecards`,
   })

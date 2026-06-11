@@ -51,6 +51,9 @@
   body {
     background: white !important;
     font-size: 8pt;
+    /* Force backgrounds (row colors, subtotal shading) to print */
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
   .no-print {
     display: none !important;
@@ -66,6 +69,11 @@
   }
   .scorecard-half:last-child {
     border-bottom: none;
+  }
+  /* Darken grid lines so they're clearly visible on paper */
+  .scorecard-table th,
+  .scorecard-table td {
+    border-color: #888 !important;
   }
 }
 
