@@ -36,7 +36,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   allPlayerIds.forEach(pid => {
     const player = allPlayers.find(p => p.id === pid)
     if (player) {
-      playerHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+      playerHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
     }
   })
 

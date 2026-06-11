@@ -205,21 +205,17 @@ function HdcpTable() {
   const minIndex = Math.min(...allPlayers.map(p => p.handicapIndex))
   const minPlayer = allPlayers.find(p => p.handicapIndex === minIndex)!
 
-  // Course + tee for each round (1–5)
+  // Course + tee + format for each round (1–5)
   const courseRounds = ([1, 2, 3, 4, 5] as const).map(round => {
     const config = roundConfigs.find(r => r.round === round)
     const course = config ? courses.find(c => c.id === config.courseId) : undefined
     const tee = course && config ? (course.tees.find(t => t.name === config.tee) ?? course.tees[0]) : undefined
-    return { round, course, tee }
+    return { round, course, tee, format: config?.format ?? '' }
   })
-
-  const roundLabels: Record<number, string> = {
-    1: 'Pine Needles', 2: 'Magnolia', 3: 'Holly (60%)', 4: 'Mid South', 5: 'Mid South',
-  }
 
   // Per-player values for all 5 rounds
   function calcPlayer(index: number) {
-    return courseRounds.map(({ round, course, tee }) => {
+    return courseRounds.map(({ course, tee, format }) => {
       if (!course || !tee) return null
       const slope = tee.slope ?? 113
       const rating = tee.rating ?? course.par
@@ -227,7 +223,7 @@ function HdcpTable() {
       const raw = rawCourseHdcpDisplay(index, slope, rating, par)
       const nettedRaw = nettedCourseHdcpRaw(index, slope, rating, par, minIndex)
       const capped = apply18Cap(nettedRaw)
-      const final = round === 3 ? Math.round(capped * 0.6) : capped
+      const final = format === 'texas_scramble' ? Math.round(capped * 0.6) : capped
       return { raw, nettedRaw, capped, final }
     })
   }
@@ -253,7 +249,7 @@ function HdcpTable() {
         <div>
           <strong>Tournament HDCP</strong> = player's rounded course HDCP − lowest player's rounded course HDCP.
           HDCPs above 18 are compressed: 18 + 50% of excess (e.g., 27 → 18 + 5 = 23).
-          Round 3 applies an additional 60%.
+          Texas Scramble rounds apply an additional 60%.
         </div>
       </div>
 
@@ -264,9 +260,9 @@ function HdcpTable() {
             <tr>
               <th className={thLeft + ' min-w-[130px]'}>Player</th>
               <th className={thCell}>GHIN HDCP<br/>Index</th>
-              {courseRounds.map(({ round, course, tee }) => (
+              {courseRounds.map(({ round, course, tee, format }) => (
                 <th key={round} colSpan={2} className={thCell + ' border-l-2 border-l-masters-green/40'}>
-                  <div>R{round} {roundLabels[round]}</div>
+                  <div>R{round} {course?.name ?? `Round ${round}`}{format === 'texas_scramble' ? ' (60%)' : ''}</div>
                   {tee && course && (
                     <div className="font-normal text-[9px] text-gray-400">
                       {tee.rating}/{tee.slope} par {course.par}
@@ -297,9 +293,11 @@ function HdcpTable() {
                 player: p,
                 calcs: calcPlayer(p.handicapIndex),
               }))
-              // Cap'n Choice: ROUND(SUM(R5 final HDCPs) * 0.15, 0)
-              const r5Hdcps = playerCalcs.map(pc => pc.calcs[4]?.final ?? 0)
-              const captChoice = Math.round(r5Hdcps.reduce((s, v) => s + v, 0) * 0.15)
+              // Cap'n Choice: ROUND(SUM(CC round final HDCPs) * 0.15, 0)
+              const ccRoundIdx = courseRounds.findIndex(r => r.format === 'captains_choice')
+              const ccRound = courseRounds[ccRoundIdx]
+              const ccHdcps = ccRoundIdx >= 0 ? playerCalcs.map(pc => pc.calcs[ccRoundIdx]?.final ?? 0) : []
+              const captChoice = Math.round(ccHdcps.reduce((s, v) => s + v, 0) * 0.15)
 
               return (
                 <Fragment key={team.id}>
@@ -315,8 +313,8 @@ function HdcpTable() {
                           <span className="font-bold text-xs" style={{ color: team.color }}>{team.name}</span>
                         </div>
                         <span className="text-[10px] text-gray-500">
-                          Cap'n Choice HDCP: <strong className="text-masters-dark">{captChoice}</strong>
-                          <span className="text-gray-400 ml-1">(Σ R5 HDCPs {r5Hdcps.join('+')}={r5Hdcps.reduce((s,v)=>s+v,0)} × 15%)</span>
+                          Cap'n Choice HDCP: <strong className="text-masters-dark">{ccRound ? captChoice : '—'}</strong>
+                          {ccRound && <span className="text-gray-400 ml-1">(Σ R{ccRound.round} HDCPs {ccHdcps.join('+')}={ccHdcps.reduce((s,v)=>s+v,0)} × 15%)</span>}
                         </span>
                       </div>
                     </td>

@@ -12,19 +12,22 @@ export function getPlayerCourseHdcp(
   tee: string,
   round: number,
   allTournamentPlayers: Player[] = [],
+  format = '',
 ): number {
   const teeData = course.tees.find(t => t.name === tee) ?? course.tees[0]
   const override = player.courseHdcpOverrides?.[`${course.id}-${round}`]
   if (override !== undefined) return override
 
+  const isScramble = format === 'texas_scramble'
+
   if (allTournamentPlayers.length === 0) {
     // Legacy fallback: raw course HDCP (used when netting players not available)
     const raw = courseHandicap(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par)
-    return round === 3 ? Math.floor(raw * 0.6) : raw
+    return isScramble ? Math.floor(raw * 0.6) : raw
   }
 
   const minIndex = Math.min(...allTournamentPlayers.map(p => p.handicapIndex))
-  return tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, round === 3)
+  return tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, isScramble)
 }
 
 export function playerQuota(courseHdcp: number): number {
@@ -93,20 +96,18 @@ export function net2009Hdcp(index: number, minIndex: number): number {
   return Math.trunc(index) - Math.trunc(minIndex)
 }
 
-export function formatRoundHdcp(round: number): string {
-  switch (round) {
-    case 1: return 'Full Course HDCP'
-    case 2: return 'Full Course HDCP (quota = 36 − HDCP)'
-    case 3: return '60% of Course HDCP'
-    case 4: return 'Full Course HDCP'
-    case 5: return '15% of Team Aggregate'
-    default: return ''
+export function formatRoundHdcp(format: string): string {
+  switch (format) {
+    case 'texas_scramble':  return '60% of Course HDCP'
+    case 'captains_choice': return '15% of Team Aggregate'
+    case 'points_round':    return 'Full Course HDCP (quota = 36 − HDCP)'
+    default:                return 'Full Course HDCP'
   }
 }
 
-export function getRoundHdcpPct(round: number): number | null {
-  if (round === 3) return 0.6
-  if (round === 5) return 0.15
+export function getRoundHdcpPct(format: string): number | null {
+  if (format === 'texas_scramble') return 0.6
+  if (format === 'captains_choice') return 0.15
   return null
 }
 
@@ -118,14 +119,15 @@ export function computeAllCourseHdcps(
   tee: string,
   round: number,
   allTournamentPlayers: Player[] = [],
+  format = '',
 ): Record<string, number> {
   const teeData = course.tees.find(t => t.name === tee) ?? course.tees[0]
   const allPlayers = allTournamentPlayers.length > 0 ? allTournamentPlayers : players
   const minIndex = Math.min(...allPlayers.map(p => p.handicapIndex))
   const result: Record<string, number> = {}
 
-  if (round === 5) {
-    // Individual R5 tournament HDCPs summed, then × 15% for the team
+  if (format === 'captains_choice') {
+    // Individual tournament HDCPs summed, then × 15% for the team
     const indivHdcps = players.map(p =>
       tournamentHdcp(p.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false)
     )
@@ -135,7 +137,7 @@ export function computeAllCourseHdcps(
   }
 
   players.forEach(p => {
-    result[p.id] = getPlayerCourseHdcp(p, course, tee, round, allPlayers)
+    result[p.id] = getPlayerCourseHdcp(p, course, tee, round, allPlayers, format)
   })
   return result
 }

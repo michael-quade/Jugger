@@ -12,12 +12,17 @@ import { Printer, Dices, Trash2, Flag, Trophy } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry } from '../types'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
 
-const ROUND_NAMES: Record<number, string> = {
-  1: 'Round 1 — Team Match Play',
-  2: 'Round 2 — Points Round',
-  3: 'Round 3 — Texas Scramble',
-  4: 'Round 4 — Individual Match Play',
-  5: "Round 5 — Captain's Choice",
+const FORMAT_DISPLAY: Record<string, string> = {
+  team_match_play:  'Team Match Play',
+  points_round:     'Points Round',
+  texas_scramble:   'Texas Scramble',
+  individual_match: 'Individual Match Play',
+  captains_choice:  "Captain's Choice",
+}
+
+function getRoundName(round: number, configs: RoundConfig[]): string {
+  const rc = configs.find(r => r.round === round)
+  return rc ? `Round ${round} — ${FORMAT_DISPLAY[rc.format] ?? rc.format}` : `Round ${round}`
 }
 
 export default function ScorecardView() {
@@ -70,7 +75,7 @@ export default function ScorecardView() {
         const localHdcps: Record<string, number> = {}
         allPids.forEach(pid => {
           const player = allPlayers.find(p => p.id === pid)
-          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
         })
         const prRes = computePointsRound(m, course.holes, localHdcps)
         const pts = m.isBlind ? 1 : 2
@@ -103,7 +108,7 @@ export default function ScorecardView() {
       const hdcps: Record<string, number> = {}
       allPids.forEach(pid => {
         const player = allPlayers.find(p => p.id === pid)
-        if (player) hdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+        if (player) hdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
       })
       return { match: m, result: computeScramble(m, course.holes, hdcps) }
     })
@@ -159,7 +164,7 @@ export default function ScorecardView() {
       const localHdcps: Record<string, number> = {}
       allPids.forEach(pid => {
         const player = allPlayers.find(p => p.id === pid)
-        if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+        if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
       })
 
       const imRes = computeIndividualMatch(m, course.holes, localHdcps)
@@ -317,7 +322,7 @@ export default function ScorecardView() {
         const localHdcps: Record<string, number> = {}
         allPids.forEach(pid => {
           const player = allPlayers.find(p => p.id === pid)
-          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
         })
 
         const tempM = { ...m, scores: effectiveScores }
@@ -434,7 +439,7 @@ export default function ScorecardView() {
         const hdcps: Record<string, number> = {}
         allPids.forEach(pid => {
           const player = allPlayers.find(p => p.id === pid)
-          if (player) hdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers)
+          if (player) hdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
         })
         return { match: m, result: computeScramble(m, crs.holes, hdcps) }
       })
@@ -467,7 +472,7 @@ export default function ScorecardView() {
         const localHdcps: Record<string, number> = {}
         allPids.forEach(pid => {
           const player = allPlayers.find(p => p.id === pid)
-          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers)
+          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
         })
         const imRes = computeIndividualMatch(m, crs.holes, localHdcps)
         for (const { result, p1TeamId, p2TeamId } of [
@@ -499,7 +504,7 @@ export default function ScorecardView() {
         const localHdcps: Record<string, number> = {}
         allPids.forEach(pid => {
           const player = allPlayers.find(p => p.id === pid)
-          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers)
+          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
         })
         const winner = rc.format === 'points_round'
           ? computePointsRound(m, crs.holes, localHdcps).winner
@@ -608,7 +613,7 @@ export default function ScorecardView() {
         <div className="flex gap-4 items-start">
           {/* Match list — fixed narrow sidebar */}
           <div className="shrink-0 w-40 space-y-2">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{ROUND_NAMES[activeRound]}</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{getRoundName(activeRound, roundConfigs)}</p>
             {roundMatches.length === 0 && (
               <p className="text-sm text-gray-400">No matches for this round.</p>
             )}
@@ -893,7 +898,7 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
   const playerHdcps: Record<string, number> = {}
   allPlayerIds.forEach((pid: string) => {
     const player = allPlayers.find((p: any) => p.id === pid)
-    if (player) playerHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+    if (player) playerHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
   })
   if (config.format === 'captains_choice') {
     const teeData = course.tees.find((t: any) => t.name === config.tee) ?? course.tees[0]
@@ -1154,19 +1159,17 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
 // Generates realistic random gross scores for all 4 players in a match.
 // ─── Round info banner ────────────────────────────────────────────────────────
 
-interface RoundInfo {
-  format: string
-  course: string
-  description: string
+interface FormatInfo {
+  label: string
   totalPoints: number
+  description: string
   scoring: { label: string; detail: string }[]
   points: { label: string; value: string }[]
 }
 
-const ROUND_INFO: Record<number, RoundInfo> = {
-  1: {
-    format: 'Team Match Play',
-    course: 'Pine Needles · Thursday PM',
+const FORMAT_INFO: Record<string, FormatInfo> = {
+  team_match_play: {
+    label: 'Team Match Play',
     totalPoints: 9,
     description: 'Two-vs-two twosome format. Each team puts up their best NET score per hole. The twosome with the lowest net wins the hole. Most holes won wins the match.',
     scoring: [
@@ -1179,9 +1182,8 @@ const ROUND_INFO: Record<number, RoundInfo> = {
       { label: 'Blind match', value: '1 pt' },
     ],
   },
-  2: {
-    format: 'Points Round (Stableford)',
-    course: 'Pinewild Magnolia · Friday AM',
+  points_round: {
+    label: 'Points Round (Stableford)',
     totalPoints: 15,
     description: 'Gross Stableford points format. Each player earns points based on their gross score relative to par. The twosome with the higher combined points vs. their quota wins.',
     scoring: [
@@ -1199,9 +1201,8 @@ const ROUND_INFO: Record<number, RoundInfo> = {
       { label: 'Magic Ball', value: '1 pt/ball' },
     ],
   },
-  3: {
-    format: 'Texas Scramble',
-    course: 'Pinewild Holly · Friday PM',
+  texas_scramble: {
+    label: 'Texas Scramble',
     totalPoints: 7,
     description: 'All 4 players tee off, choose the best drive, then each plays from that spot. 60% of each player\'s course HDCP applied. Best-ball count increases as the round progresses.',
     scoring: [
@@ -1216,9 +1217,8 @@ const ROUND_INFO: Record<number, RoundInfo> = {
       { label: '3rd place', value: '1 pt' },
     ],
   },
-  4: {
-    format: 'Individual Match Play',
-    course: 'Mid South · Saturday AM',
+  individual_match: {
+    label: 'Individual Match Play',
     totalPoints: 12,
     description: 'Each player plays their own ball with NET scoring. Two sub-matches run simultaneously: each player\'s individual result plus a twosome best-ball result per pairing.',
     scoring: [
@@ -1232,9 +1232,8 @@ const ROUND_INFO: Record<number, RoundInfo> = {
       { label: 'Blind match', value: '½ pt' },
     ],
   },
-  5: {
-    format: "Captain's Choice",
-    course: 'Mid South · Saturday PM',
+  captains_choice: {
+    label: "Captain's Choice",
     totalPoints: 7,
     description: 'The team captain selects which shot to play after all players tee off. HDCP is 15% of the combined team handicap. Minimum 3 tee shots per player must be used across the round.',
     scoring: [
@@ -1251,14 +1250,19 @@ const ROUND_INFO: Record<number, RoundInfo> = {
 }
 
 function RoundInfoBanner({ round }: { round: number }) {
-  const info = ROUND_INFO[round]
-  if (!info) return null
+  const { roundConfigs, courses } = useTournamentStore()
+  const rc = roundConfigs.find(r => r.round === round)
+  const info = rc ? FORMAT_INFO[rc.format] : undefined
+  if (!info || !rc) return null
+
+  const courseName = courses.find(c => c.id === rc.courseId)?.name
+  const courseLabel = [courseName, rc.date].filter(Boolean).join(' · ')
 
   return (
     <div className="bg-masters-light border border-masters-green/20 rounded-lg p-4 space-y-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="font-serif font-bold text-masters-dark text-base">{info.format}</h2>
-        <span className="text-xs text-gray-500">{info.course}</span>
+        <h2 className="font-serif font-bold text-masters-dark text-base">{info.label}</h2>
+        {courseLabel && <span className="text-xs text-gray-500">{courseLabel}</span>}
       </div>
       <p className="text-sm text-gray-700">{info.description}</p>
       <div className="grid sm:grid-cols-2 gap-4">
@@ -1306,7 +1310,7 @@ function simulateMatchScores(
   for (const pid of playerIds) {
     const player = allPlayers.find(p => p.id === pid)
     if (!player) continue
-    const hdcp = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers)
+    const hdcp = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
     result[pid] = {}
     for (const hole of course.holes) {
       const dotsStr = getStrokeDots(hdcp, hole.hdcpOrder)
