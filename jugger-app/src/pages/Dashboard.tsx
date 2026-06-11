@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import { Lock, Unlock, CheckCircle, AlertTriangle, X, Trophy } from 'lucide-react'
+import { Lock, Unlock, CheckCircle, AlertTriangle, X, Trophy, ExternalLink } from 'lucide-react'
 import type { Match, Team } from '../types'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
 
@@ -203,7 +203,12 @@ export default function Dashboard() {
       {/* Team rosters */}
       <div className="grid md:grid-cols-3 gap-4">
         {teams.map(team => (
-          <Link key={team.id} to="/teams" className="card border-t-4 hover:shadow-md transition-shadow" style={{ borderTopColor: team.color }}>
+          <div
+            key={team.id}
+            className="card border-t-4 hover:shadow-md transition-shadow cursor-pointer"
+            style={{ borderTopColor: team.color }}
+            onClick={() => navigate('/teams')}
+          >
             <h3 className="font-serif font-bold text-lg mb-2" style={{ color: team.color }}>
               {team.name}
             </h3>
@@ -215,13 +220,28 @@ export default function Dashboard() {
             </div>
             <ul className="space-y-1">
               {team.players.map(p => (
-                <li key={p.id} className="flex justify-between text-sm">
+                <li key={p.id} className="flex justify-between items-center text-sm">
                   <span>{p.name}</span>
-                  <div className="w-16 text-center text-gray-500">{p.handicapIndex.toFixed(1)}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-10 text-center text-gray-500">{p.handicapIndex.toFixed(1)}</span>
+                    {p.ghinNumber && (
+                      <a
+                        href={`https://www.ghin.com/golfer/${p.ghinNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        title="Look up on GHIN"
+                        className="text-gray-300 hover:text-masters-green transition-colors"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+                    {!p.ghinNumber && <span className="w-4" />}
+                  </div>
                 </li>
               ))}
             </ul>
-          </Link>
+          </div>
         ))}
       </div>
 
