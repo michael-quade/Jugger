@@ -9,12 +9,18 @@ import {
   Flag, Image as ImageIcon, FileImage, ZoomIn,
 } from 'lucide-react'
 
-const ROUND_LABELS: Record<number, string> = {
-  1: 'Round 1 — Team Match Play',
-  2: 'Round 2 — Points Round',
-  3: 'Round 3 — Texas Scramble',
-  4: 'Round 4 — Individual Match Play',
-  5: "Round 5 — Captain's Choice",
+const FORMAT_LABELS: Record<string, string> = {
+  team_match_play: 'Team Match Play',
+  points_round: 'Points Round',
+  texas_scramble: 'Texas Scramble',
+  individual_match: 'Individual Match Play',
+  captains_choice: "Captain's Choice",
+}
+
+function getRoundLabel(round: number, roundConfigs: { round: number; format: string }[]): string {
+  const rc = roundConfigs.find(r => r.round === round)
+  const fmt = rc ? (FORMAT_LABELS[rc.format] ?? rc.format) : null
+  return fmt ? `Round ${round} — ${fmt}` : `Round ${round}`
 }
 
 function newId() {
@@ -148,7 +154,7 @@ export default function CourseHistory() {
         ? entry.playedRounds
         : [...entry.playedRounds, { id: newId(), year: new Date().getFullYear(), round }],
     })
-    alert(`Assigned ${entry.name} to ${ROUND_LABELS[round]}`)
+    alert(`Assigned ${entry.name} to ${getRoundLabel(round, roundConfigs)}`)
   }
 
   if (view === 'add' || view === 'edit') {
@@ -326,6 +332,7 @@ function CourseDetail({
   onAssignRound: (round: 1 | 2 | 3 | 4 | 5) => void
 }) {
   const isAdmin = useIsAdmin()
+  const { roundConfigs } = useTournamentStore()
   const [imgErr, setImgErr] = useState(false)
   const [scImgErr, setScImgErr] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
@@ -460,7 +467,7 @@ function CourseDetail({
                 <span className="font-bold text-masters-dark w-12">{r.year}</span>
                 {r.round && (
                   <span className="bg-masters-green/10 text-masters-green text-xs px-2 py-0.5 rounded font-semibold">
-                    {ROUND_LABELS[r.round]}
+                    {getRoundLabel(r.round, roundConfigs)}
                   </span>
                 )}
                 {r.date && <span className="text-gray-400 text-xs">{r.date}</span>}
@@ -491,7 +498,7 @@ function CourseDetail({
                 className="btn-ghost text-xs"
                 onClick={() => { onAssignRound(r); setShowAssign(false) }}
               >
-                {ROUND_LABELS[r]}
+                {getRoundLabel(r, roundConfigs)}
               </button>
             ))}
           </div>
@@ -595,6 +602,7 @@ function CourseForm({
   onSave: (e: CourseHistoryEntry) => void
   onCancel: () => void
 }) {
+  const { roundConfigs } = useTournamentStore()
   const [draft, setDraft] = useState<CourseHistoryEntry>({ ...initial })
   const [urlInput, setUrlInput] = useState(initial.website ?? '')
   const [urlFetching, setUrlFetching] = useState(false)
@@ -976,7 +984,7 @@ function CourseForm({
                   >
                     <option value="">— none —</option>
                     {([1, 2, 3, 4, 5] as const).map(n => (
-                      <option key={n} value={n}>{ROUND_LABELS[n]}</option>
+                      <option key={n} value={n}>{getRoundLabel(n, roundConfigs)}</option>
                     ))}
                   </select>
                 </div>
