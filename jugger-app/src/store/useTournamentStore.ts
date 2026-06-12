@@ -429,6 +429,45 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       finalizeYear: () =>
         set(state => {
+          // Persist Skidmore's tournament scores before matches are cleared
+          const mattPlayer = state.teams.flatMap(t => t.players).find(
+            p => p.id === 'skidmore' || p.name.toLowerCase().includes('skidmore')
+          )
+          const tournamentScoresToAdd: SkidmoreScore[] = []
+          if (mattPlayer) {
+            const seen = new Set<number>()
+            for (const match of state.matches) {
+              if (match.isBlind) continue
+              const allIds = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+              if (!allIds.includes(mattPlayer.id)) continue
+              if (seen.has(match.round)) continue
+              const holeRecord = match.scores[mattPlayer.id] ?? {}
+              const holeNums = Object.keys(holeRecord).map(Number)
+              if (holeNums.length < 18) continue
+              if (holeNums.some(h => holeRecord[h] === null || holeRecord[h] === undefined)) continue
+              const rc = state.roundConfigs.find(r => r.round === match.round)
+              if (!rc) continue
+              const course = state.courses.find(c => c.id === rc.courseId)
+              if (!course) continue
+              const tee = course.tees.find(t => t.name === rc.tee) ?? course.tees[0]
+              if (!tee?.rating || !tee?.slope) continue
+              const total = holeNums.reduce((s, h) => s + (holeRecord[h] ?? 0), 0)
+              seen.add(match.round)
+              const id = `sk-tour-${state.year}-r${match.round}`
+              if (!state.skidmoreScores.some(s => s.id === id)) {
+                tournamentScoresToAdd.push({
+                  id,
+                  date: rc.date ?? `${state.year}-06-15`,
+                  course: `${course.name} (${state.year} R${match.round})`,
+                  rating: tee.rating,
+                  slope: tee.slope,
+                  score: total,
+                  notes: `${state.year} Tournament Round ${match.round}`,
+                })
+              }
+            }
+          }
+
           // Archive WITH subs intact (accurate historical record)
           const snapshot: ArchivedYear = {
             year: state.year,
@@ -467,6 +506,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             hdcpLocked: false,
             isViewingHistory: false,
             liveCache: null,
+            skidmoreScores: [...state.skidmoreScores, ...tournamentScoresToAdd],
           }
         }),
 
