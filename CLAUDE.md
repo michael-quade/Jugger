@@ -74,15 +74,16 @@ Players net against the lowest Course HDCP in the field. Netted HDCP = player ra
 ### Over-18 Cap
 If netted HDCP > 18: `18 + 0.5 × (netted − 18)`
 
-### Round-specific percentages
+### Format-based percentages
+Handicap percentages are keyed to **format type**, not round number — so if formats are swapped between years the math updates automatically.
 
-| Round | Percentage | Notes |
+| Format | Percentage | Notes |
 |---|---|---|
-| R1 Team Match Play | 100% | Full netted+capped HDCP |
-| R2 Points Round | 100% (quota-based) | 36 − course HDCP |
-| R3 Texas Scramble | 60% | Applied after netting+capping |
-| R4 Individual Match Play | 100% | Full netted+capped HDCP |
-| R5 Captain's Choice | 15% of team sum | `floor(Σ individual HDCPs × 0.15)` |
+| `team_match_play` | 100% | Full netted+capped HDCP |
+| `points_round` | 100% (quota-based) | 36 − course HDCP |
+| `texas_scramble` | 60% | Applied after netting+capping |
+| `individual_match` | 100% | Full netted+capped HDCP |
+| `captains_choice` | 15% of team sum | `floor(Σ individual HDCPs × 0.15)` |
 
 ---
 
@@ -91,6 +92,7 @@ If netted HDCP > 18: `18 + 0.5 × (netted − 18)`
 - Each twosome plays exactly 2 matches per round: 1 regular + 1 blind
 - A twosome never plays the same opposing team twice in the same round
 - Blind matches are ideally against a different team than the regular match
+- Generation enforces partner rotation and minimizes opponent repeats across rounds
 - Fixed matrix (teams randomly assigned as T1/T2/T3 each round, then split into twosomes A/B):
   - Regular A: T1A vs T2A · Regular B: T1B vs T3A · Regular C: T2B vs T3B
   - Blind 1: T3B vs T1A · Blind 2: T2A vs T3A · Blind 3: T2B vs T1B
@@ -100,14 +102,14 @@ If netted HDCP > 18: `18 + 0.5 × (netted − 18)`
 
 ## Web Application
 
-Lives in `jugger-app/`. Deployed to GitHub Pages at `https://michael-quade.github.io/Jugger/`.
+Lives in `jugger-app/`. Deployed to **`https://juggerknockerinvitational.com`** via GitHub Pages with custom domain.
 
 ### Quick Start
 
 ```bash
 cd jugger-app
 npm install
-npm run dev      # http://localhost:5173/Jugger/
+npm run dev      # http://localhost:5173/
 npm run build    # production build → dist/
 ```
 
@@ -117,7 +119,7 @@ npm run build    # production build → dist/
 |---|---|---|
 | React | 18.3.1 | UI framework |
 | TypeScript | 5.2 | Type safety |
-| Vite | 5.3 | Build tool, `base: '/Jugger/'` |
+| Vite | 5.3 | Build tool, `base: '/'` (custom domain) |
 | React Router DOM | 6.24 | Client-side routing (HashRouter) |
 | Zustand | 4.5.4 | State management + localStorage persistence |
 | Tailwind CSS | 3.4 | Styling (Masters tournament theme) |
@@ -130,7 +132,7 @@ npm run build    # production build → dist/
 
 GitHub Actions (`.github/workflows/deploy.yml`) triggers on push to `master`:
 1. `npm ci` + `npm run build` with Supabase secrets injected
-2. `dist/` uploaded to GitHub Pages
+2. `dist/` uploaded to GitHub Pages; `public/CNAME` sets `juggerknockerinvitational.com`
 
 Required GitHub secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 
@@ -147,7 +149,7 @@ jugger-app/src/
   index.css                     # Tailwind + custom component styles
   types/index.ts                # All TypeScript interfaces
   store/
-    useTournamentStore.ts       # Zustand store v14 (all state + actions)
+    useTournamentStore.ts       # Zustand store v15 (all state + actions)
     useAuthStore.ts             # Auth state (admin/scorer login)
   lib/supabase.ts               # Supabase client init (null if env vars absent)
   hooks/useSupabaseSync.ts      # Real-time sync hook + useSyncStatus
@@ -156,29 +158,37 @@ jugger-app/src/
     handicap.ts                 # Course HDCP formulas, stroke dots, Stableford
     matchplay.ts                # Per-format scoring computation
     pairings.ts                 # Match generation + lookup helpers
+    champion.ts                 # Tournament champion detection + Ryder Cup tiebreaker
   data/
     courseData.ts               # 4 courses (holes, pars, yardages, tees) + ROUND_CONFIGS
-    initialData.ts              # INITIAL_TEAMS, INITIAL_COURSE_HISTORY, donations
-    hdcpHistory.ts              # 21-year HDCP history for all 12 players (2006–2026)
+    initialData.ts              # INITIAL_TEAMS, INITIAL_COURSE_HISTORY, donations,
+                                #   INITIAL_SKIDMORE_SCORES (18 historical rounds)
+    hdcpHistory.ts              # Static HDCP history 2006–2025; Stats merges with
+                                #   archivedYears dynamically for 2026+
   components/
-    Layout.tsx                  # Sticky header + sub-nav + history banner
+    Layout.tsx                  # Sticky chrome (header + nav + history banner in one
+                                #   sticky wrapper), Outlet
     ScorecardCard.tsx           # Per-format scorecard display + score entry
     AdminPanel.tsx              # Admin/scorer account management modal
     HeaderAdminWidget.tsx       # Header login/logout widget
   pages/
-    Dashboard.tsx               # Overview: standings, schedule, rosters, finalize
-    Teams.tsx                   # Roster editing, HDCP table
+    Dashboard.tsx               # Overview: champion hero, standings, schedule, rosters,
+                                #   finalize
+    Teams.tsx                   # Roster editing, substitute/permanent replacement,
+                                #   HDCP table
     Schedule.tsx                # Round dates, tee times, format selector
     Pairings.tsx                # Match generation + manual editing (admin only)
-    ScorecardView.tsx           # Score entry UI, auto team score computation
-    Courses.tsx                 # Course/hole data editor with scorecard images
+    ScorecardView.tsx           # Score entry UI, per-round simulate, auto team scores
+    Courses.tsx                 # Active-year courses only (from roundConfigs); hole data
     Results.tsx                 # Editable team standings table
     CtpPage.tsx                 # Par 3 CTP pot management
     HoleInOne.tsx               # HIO champion tracking + pot management
-    Stats.tsx                   # Handicap history line charts
+    Stats.tsx                   # Handicap history charts (auto-merged from archivedYears)
     FileArchive.tsx             # Supabase Storage file browser
-    CourseHistory.tsx           # Historical course database
+    CourseHistory.tsx           # Course database — primary course add/edit/delete;
+                                #   assign to tournament round (admin)
     PrintAll.tsx                # Batch print all scorecards (2/page)
+    SkidmoreHdcp.tsx            # WHS handicap tracker for Matt Skidmore (admin only)
 ```
 
 ---
@@ -194,6 +204,11 @@ Player {
   hdcpLocked: boolean
   hdcp2009gross?: number          // Round 2 quota base
   courseHdcpOverrides?: Record<string, number>   // courseId → override
+  isSubstitute?: boolean          // single-year sub; reverts after finalizeYear
+  originalName?: string           // original player name when subbed out
+  originalHandicapIndex?: number  // original HDCP when subbed out
+  isPermanentReplacement?: boolean // permanent roster change; kept after finalizeYear
+  replacedPlayerName?: string     // name of the player they replaced
 }
 
 Team { id, name, color, players: Player[] }
@@ -248,6 +263,18 @@ CtpEntry {
 }
 CtpDonation { id, year, playerName, amount, paid }
 
+SkidmoreScore {
+  id: string
+  date: string                    // YYYY-MM-DD
+  course: string
+  rating: number                  // 9-hole or 18-hole course rating
+  slope: number                   // 9-hole or 18-hole slope
+  score: number                   // adjusted gross score
+  holes?: 9 | 18                  // defaults to 18
+  hdcpAtTime?: number             // WHS 2024: Handicap Index when 9-hole round was played
+  notes?: string
+}
+
 ArchivedYear {
   year, finalizedAt: string
   teams, roundConfigs, matches, teamScores, hdcpLocked
@@ -262,6 +289,7 @@ TournamentState {
   teams, courses, roundConfigs, matches, teamScores
   holeInOnes, ctpEntries, ctpDonations, ctpHioHistory
   hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations
+  skidmoreScores: SkidmoreScore[]
 }
 
 AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
@@ -271,25 +299,31 @@ AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
 
 ## State Management
 
-### Zustand Store (`useTournamentStore`) — version 14
+### Zustand Store (`useTournamentStore`) — version 15
 
-Persists to `localStorage` key `jugger-tournament-2026`. All 14 versions have migration functions.
+Persists to `localStorage` key `jugger-tournament-2026`. All 15 versions have migration functions.
 
 **Key actions:**
 - `setYear / lockHandicaps / setPairingsLocked`
 - `updatePlayer / addPlayer / removePlayer / updateTeamName / updateTeamColor`
+- `substitutePlayer` — replaces a player with a single-year sub (reverts on `finalizeYear`)
+- `revertSubstitute` — restores original player before finalization
+- `permanentlyReplacePlayer` — replaces a player permanently (kept after `finalizeYear`)
+- `makeSubPermanent` — upgrades an existing sub to a permanent replacement
 - `setCourse / setRoundConfig`
 - `setMatches / updateMatch / setMatchScore / setTeamHoleScore / setTeeShot`
 - `setTeamScore / clearAllTeamScores / clearTeamScoresForRound`
 - `clearMatchScores / clearAllMatchScores / clearRoundMatches`
 - `addAdmin / updateAdmin / removeAdmin`
-- `finalizeYear` — snapshots year → archivedYears, increments year, clears matches/scores
+- `finalizeYear` — snapshots year → archivedYears, increments year, clears matches/scores;
+  single-year subs revert; permanent replacements graduate to core members
 - `switchToYear(year)` — swaps live state to archived year; saves liveCache first
 - `returnToLive()` — restores liveCache, saves any edits back to archivedYears
 - `addHoleInOne / updateHoleInOne / deleteHoleInOne`
 - `addHioDonation / setDonationPaid / claimPot`
 - `setCtpEntries / updateCtpEntry / addCtpDonation / setCtpDonationPaid`
 - `addCourseHistory / updateCourseHistory / deleteCourseHistory`
+- `addSkidmoreScore / updateSkidmoreScore / removeSkidmoreScore`
 
 **Score propagation:** When a non-blind match score changes, the store automatically propagates those scores to the player's corresponding blind match in the same round.
 
@@ -318,7 +352,7 @@ Not persisted (session-only).
 | `matches` | `match_id`, `tournament_year` | `match_json` (Match object) |
 | `team_scores` | `tournament_year`, `team_id`, `round` | `points`, `notes` |
 
-**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations`
+**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations, skidmoreScores`
 
 ### Sync Behavior
 - **On load:** Supabase wins over localStorage if rows exist
@@ -336,14 +370,14 @@ Not persisted (session-only).
 |---|---|---|
 | **Admin** | Shield icon → sign-in form | Everything: edit rosters, courses, schedule, pairings, scores, results, accounts |
 | **Scorer** | Same sign-in form | Enter scores, toggle Magic Ball, record match results |
-| **Guest** | No login | Read-only view of all pages except Pairings |
+| **Guest** | No login | Read-only view of all pages except Pairings and Skidmore HDCP |
 
 ### Page-Level Access
 
 | Page | Guests | Scorers | Admins |
 |---|---|---|---|
 | Dashboard | Read | Read | Full (lock HDCP, finalize year) |
-| Teams | Read | Read | Full (edit names, HDCP, add/remove players) |
+| Teams | Read | Read | Full (edit names, HDCP, substitutes, permanent replacements) |
 | Schedule | Read | Read | Full (edit dates, tee times, format) |
 | **Pairings** | **Hidden/locked** | **Hidden/locked** | Full (generate, edit, lock) |
 | Scorecards | Read | Enter scores, Magic Ball, match result | Full + simulate + clear |
@@ -353,8 +387,9 @@ Not persisted (session-only).
 | Hole in One | Read | Read | Full |
 | Stats | Read | Read | Read |
 | Archive | Read | Read | Upload/delete files |
-| History | Read | Read | Assign course to round |
+| History | Read | Read | Add/edit/delete courses; assign to round |
 | Print All | Print | Print | Print |
+| **Skidmore HDCP** | **Hidden** | **Hidden** | Full (add/edit scores, auto-applies HDCP) |
 
 ### Account Management
 
@@ -368,7 +403,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ## Navigation Order
 
-1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Team Results · 8. Par 3 CTP · 9. Hole in One · 10. Stats · 11. Archive · 12. History · 13. Print All
+1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Team Results · 8. Par 3 CTP · 9. Hole in One · 10. Stats · 11. Archive · 12. History · 13. Print All · 14. Skidmore HDCP *(admin only)*
 
 ---
 
@@ -400,7 +435,8 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Sans:** Source Sans 3 (body text)
 
 ### Header Layout
-- Sticky top: tournament title (links to Dashboard), year badge, sync status dot, admin widget
+- Entire chrome (header + sub-nav + history banner) wrapped in one `sticky top-0 z-50` div — all three scroll as a unit and stay pinned
+- Header: tournament logo, title (links to Dashboard), year badge, sync status dot, admin widget
 - Admin year selector (dropdown) — visible only when archived years exist and user is admin
 - History mode amber banner with "Return to {liveYear}" button
 
@@ -409,17 +445,20 @@ Both use SHA-256 password hashing via Web Crypto API.
 ## Page Details
 
 ### Dashboard (`/`)
+- **Champion hero** — when tournament is complete, displays the winning team with trophy, color banner, and Ryder Cup tiebreaker logic (via `utils/champion.ts`)
 - **Stat cards** (click to navigate): Players → Teams, Courses → Courses, Matches → Schedule, Rounds → Results
 - **Standings** — sorted by total `teamScores` points
 - **Round Schedule** — list of rounds with date/time, links to Schedule page
-- **Team Rosters** — 3 cards (click any → Teams page)
+- **Team Rosters** — 3 cards (click any → Teams page); players with `ghinNumber` can be looked up via GHIN
 - **Finalize Tournament** — admin only, live year only; archives data and advances year
 
 ### Teams (`/teams`)
-- Edit player name / handicap index (admin only)
-- Add/remove substitutes (admin only)
-- HDCP table: shows raw, netted, capped, final HDCPs for all 5 rounds (mirrors Excel)
-- Handicap lock toggle prevents GHIN lookup changes
+- Edit player name / handicap index / GHIN number (admin only)
+- **Substitute player system** — admin can swap a player for a single-year sub; sub reverts to original player on `finalizeYear`; badge: `SUB`
+- **Permanent replacement** — admin can permanently replace a player; carried forward on `finalizeYear`; badge: `PERM`
+- **Make Sub Permanent** — upgrades an existing sub to a permanent roster member
+- HDCP table: raw, netted, capped, final HDCPs for all rounds; column headers show course name and format; note distinguishes 60% scramble rounds dynamically based on `roundConfigs.format`
+- Handicap lock toggle prevents edits; Captain's Choice team aggregate shown dynamically
 
 ### Schedule (`/schedule`)
 - Per-round card: format selector (admin), date/tee pickers (admin), tee times for Match A/B/C
@@ -429,7 +468,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Course summary bar (name, par, selected tee rating/slope/yardage)
 
 ### Pairings (`/pairings`) — Admin only
-- Generate/Re-generate Pairings button
+- Generate/Re-generate Pairings button (enforces partner rotation; minimizes opponent repeats)
 - Lock Pairings toggle (prevents edits)
 - Per-round match cards: team colors, player names, edit button (inline editor)
 - Regular matches and blind matches in separate columns
@@ -439,12 +478,13 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Round tabs (1–5) + match selector list
 - Per-match scorecard via `ScorecardCard` component (see below)
 - Score entry inputs (canEnterScores role)
-- Admin-only: Simulate Scores (random), Clear Scores, Clear All Scores
+- Admin-only: **Simulate Scores** (per-round or global), Clear Scores, Clear All Scores
 - Auto-recomputes team scores when scores change (format-specific logic)
 - Deep links: `?match={matchId}&round={round}`
 
-### Courses (`/courses`)
-- Tab per course (4 courses)
+### Courses (`/{year} Courses` at `/courses`)
+- Shows **only** courses assigned in the current year's `roundConfigs`; empty state if none assigned
+- Tab per active course
 - Course hero image, name, par, website (admin-editable)
 - Tee table: Name | F9 yds | B9 yds | Total yds | Rating | Slope
 - Official scorecard images with lightbox zoom
@@ -472,10 +512,11 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Per-player $20/year donation tracking with paid toggle (admin)
 
 ### Stats (`/stats`)
-- Recharts LineChart: 21-year handicap trends (2006–2026) for all 12 players
+- Recharts LineChart: handicap trends for all 12 players across all recorded years
+- Data auto-merged: static `data/hdcpHistory.ts` (2006–2025) + dynamic `archivedYears` + live year — no manual edits needed when a year is finalized
 - Year range filter, player visibility toggles, team group controls
 - Colors keyed to team (3 shades per team)
-- Data source: `data/hdcpHistory.ts` (static)
+- Career summary header shows latest available year
 
 ### Archive (`/archive`)
 - Supabase Storage bucket `jugger-archive`
@@ -484,11 +525,11 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Admin: upload files, delete files
 - Dev: served via Vite plugin reading `/JuggerHistory/` local filesystem
 
-### History (`/history`)
+### History (`/history`) — Primary course management
 - Searchable/filterable course database (28+ historical courses)
-- Per-course detail: image, metadata, played rounds, scorecard
-- Image upload (base64)
-- **Assign to Tournament Round** — admin only
+- **Add Course / Edit Course / Delete Course** — admin only; this is the primary way to add courses to the app; changes propagate to Courses page via `setCourse` + `setRoundConfig`
+- Per-course detail: hero image upload, metadata, scorecard image, played rounds
+- **Assign to Tournament Round** — admin only; sets course + round config; round labels dynamic based on `roundConfigs.format`
 - Built-in `hist-*` entries seeded from `initialData.ts`
 
 ### Print All (`/print`)
@@ -496,6 +537,19 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Cut line between top/bottom halves
 - Round headers, page breaks between rounds
 - @page: letter, 0.35in margins
+
+### Skidmore HDCP (`/skidmore-hdcp`) — Admin only
+- WHS handicap tracker for Matt Skidmore (not in GHIN)
+- **HDCP Status cards**: computed WHS index + Teams page sync status
+- **Auto-applies** computed HDCP to Teams page via `updatePlayer` when HDCPs are not locked; shows "projected" post-tournament HDCP when locked
+- **Tournament scores auto-derived** from match data (non-blind R1/R2/R4 with all 18 holes scored); appear/disappear automatically with simulation
+- **Score table**: color-coded rows — gold = used in calculation, blue = in 20-score window, gray = outside window; shows differential breakdown
+- **18-hole and 9-hole entry** supported:
+  - 18-hole: standard score differential = `(113 / Slope) × (Score − Rating)`
+  - 9-hole (WHS 2024): combined diff = actual 9-hole diff + `(Handicap Index at time ÷ 2)`; form pre-fills HDCP at time with current computed index
+- **Add/Edit score form**: date, course, rating, slope, score, holes toggle (18/9), notes; live differential preview
+- **USGA WHS rules accordion**: formula, 9-hole treatment, score window table (current count highlighted), handicap index formula, soft/hard caps, historical Excel discrepancy note
+- Seeded with 18 historical scores from the `Skidmore HDCP` Excel tab (approximate dates 2020–2025)
 
 ---
 
@@ -547,8 +601,19 @@ Key functions:
 courseHandicap(index, slope, rating, par)
   → round(index × (slope/113) + (rating - par))
 
-getPlayerCourseHdcp(player, course, tee, round, allPlayers)
-  → applies netting, 18-cap, round % (60% for R3)
+getPlayerCourseHdcp(player, course, tee, round, allPlayers, format = '')
+  → applies netting, 18-cap, format % (60% for texas_scramble)
+  → format param determines percentage — not round number
+
+getRoundHdcpPct(format: string): number | null
+  → 0.6 for texas_scramble, 0.15 for captains_choice, null otherwise
+
+formatRoundHdcp(format: string): string
+  → human-readable description of the HDCP treatment for a format
+
+computeAllCourseHdcps(players, course, tee, round, allPlayers, format = '')
+  → for captains_choice: all players get same teamHdcp = round(Σ × 0.15)
+  → otherwise delegates to getPlayerCourseHdcp per player
 
 apply18Cap(netted)
   → netted ≤ 18 ? netted : 18 + 0.5×(netted - 18)
@@ -564,12 +629,30 @@ stablefordPoints(gross, par, strokes)
 
 ---
 
+## Champion Detection (`utils/champion.ts`)
+
+```
+computeChampion(teams, teamScores, rounds)
+  → determines winning team by total points
+  → Ryder Cup tiebreaker: if tied, counts individual round wins
+  → returns { championTeam, isTied, tiedTeams } or null if incomplete
+
+getDefendingChampionId(archivedYears, teams)
+  → finds previous year's champion from archivedYears
+```
+
+Dashboard renders a champion hero card with team color banner and trophy when all rounds are complete.
+
+---
+
 ## Pairing Generation (`utils/pairings.ts`)
 
 ```
-generateTwosomeMatches(teams, round)
+generateTwosomeMatches(teams, round, existingMatches?)
   Shuffles 3 teams → T1/T2/T3
   Shuffles each team's 4 players → splits into twosomes A/B
+  Enforces partner rotation (no repeated partners across rounds)
+  Minimizes opponent repeats where possible
   Fixed matrix creates 3 regular + 3 blind matches
 
 generateTeamMatches(teams, round)
@@ -591,7 +674,7 @@ Match ID formats:
 ## Vite Configuration
 
 ```typescript
-base: '/Jugger/'               // GitHub Pages subdirectory
+base: '/'                      // custom domain (juggerknockerinvitational.com)
 plugins: [react(), juggerHistoryPlugin()]
 server: { port: 5173, open: true }
 ```
@@ -602,14 +685,14 @@ server: { port: 5173, open: true }
 
 ## Excel Workbook (`Jugger 2026 Schedule-HDCP.xlsm`)
 
-Legacy macro-enabled workbook used before the web app existed.
+Legacy macro-enabled workbook used before the web app existed. The web app is now the system of record; the Excel is kept for reference.
 
 | Sheet | Purpose |
 |---|---|
 | `Schedule` | Trip schedule, tee times, pairings, game rules |
 | `HDCPs` | 2006–2026 handicap history + course HDCP calculations |
 | `HDCP Calc` | Formula reference |
-| `Skidmore HDCP` | High-handicap special calculations (Matt Skidmore ~28) |
+| `Skidmore HDCP` | Historical scores used to seed `INITIAL_SKIDMORE_SCORES` (18 rounds, 2020–2025) |
 | `Results` | Final point totals per round; CTP tracking |
 | `Hole in 1` | HIO tracker |
 | `1-Scorecard` through `5-Scorecard` | Printed course scorecards per round |
@@ -617,10 +700,4 @@ Legacy macro-enabled workbook used before the web app existed.
 
 **Scorecard layout:** Two copies per sheet (top/bottom halves). Columns B=player, C=HDCP, D–V=holes 1–18, W–X=subtotals. Dot indicators (`.` / `..`) show when handicap strokes apply.
 
-**Workflow:**
-1. Update handicap indexes in `HDCPs` sheet
-2. Verify course ratings/slopes
-3. Update rosters if lineup changed
-4. Confirm pairings in `Schedule`
-5. Print match sheets for on-course use
-6. Enter scores; `Results` aggregates totals
+**Note on Skidmore HDCP:** The Excel used a simplified formula (average lowest differentials, round to 1 decimal, no 0.96 multiplier), yielding 28.5. The web app uses the official WHS formula (× 0.96, truncate) giving 27.3.

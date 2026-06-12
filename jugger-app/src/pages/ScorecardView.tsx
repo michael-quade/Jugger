@@ -566,7 +566,16 @@ export default function ScorecardView() {
               <Dices size={13} /> Simulate All Rounds
             </button>
             <button
-              onClick={() => { if (confirm('Clear ALL scores and results from every match?')) { clearAllMatchScores(); clearAllTeamScores() } }}
+              onClick={() => {
+                if (confirm('Clear ALL scores and results from every match?')) {
+                  clearAllMatchScores()
+                  clearAllTeamScores()
+                  setCtpEntries(ctpEntries.map(e => ({
+                    id: e.id, year: e.year, round: e.round, hole: e.hole,
+                    courseName: e.courseName, yardage: e.yardage,
+                  })))
+                }
+              }}
               className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-3 py-1.5 transition-colors"
             >
               <Trash2 size={12} /> Clear All Scores
