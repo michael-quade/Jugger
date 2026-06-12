@@ -447,6 +447,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
               if (holeNums.some(h => holeRecord[h] === null || holeRecord[h] === undefined)) continue
               const rc = state.roundConfigs.find(r => r.round === match.round)
               if (!rc) continue
+              if (rc.format === 'texas_scramble' || rc.format === 'captains_choice') continue
               const course = state.courses.find(c => c.id === rc.courseId)
               if (!course) continue
               const tee = course.tees.find(t => t.name === rc.tee) ?? course.tees[0]

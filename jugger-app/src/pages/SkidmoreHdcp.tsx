@@ -256,6 +256,7 @@ export default function SkidmoreHdcp() {
 
       const rc = roundConfigs.find(r => r.round === match.round)
       if (!rc) continue
+      if (rc.format === 'texas_scramble' || rc.format === 'captains_choice') continue
       const course = courses.find(c => c.id === rc.courseId)
       if (!course) continue
       const tee = course.tees.find(t => t.name === rc.tee) ?? course.tees[0]
