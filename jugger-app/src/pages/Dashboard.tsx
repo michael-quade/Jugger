@@ -17,10 +17,14 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
+  const [pendingSandbagger, setPendingSandbagger] = useState<string>(sandbaggerPlayerId ?? '')
+  const [pendingToilet, setPendingToilet] = useState<string>(toiletAwardPlayerId ?? '')
+
+  const allPlayers = teams.flatMap(t => t.players.map(p => ({ ...p, teamName: t.name, teamColor: t.color })))
 
   const standings = teams.map(t => ({
     team: t,
@@ -220,8 +224,19 @@ export default function Dashboard() {
             </div>
             <ul className="space-y-1">
               {team.players.map(p => (
-                <li key={p.id} className="flex justify-between text-sm">
-                  <span>{p.name}</span>
+                <li key={p.id} className="flex justify-between items-center text-sm">
+                  <span className="flex items-center gap-1.5">
+                    {p.id === sandbaggerPlayerId && (
+                      <img src={`${import.meta.env.BASE_URL}sandbagger.jpg`} alt="Sandbagger" title="Sandbagger Award" className="h-5 w-5 object-cover rounded-full shrink-0" />
+                    )}
+                    {p.id === toiletAwardPlayerId && (
+                      <img src={`${import.meta.env.BASE_URL}toilet_award.webp`} alt="Toilet Award" title="Toilet Award" className="h-5 w-5 object-cover rounded-full shrink-0" />
+                    )}
+                    {p.id !== sandbaggerPlayerId && p.id !== toiletAwardPlayerId && (
+                      <span className="w-5 shrink-0" />
+                    )}
+                    {p.name}
+                  </span>
                   <div className="w-16 text-center text-gray-500">{p.handicapIndex.toFixed(1)}</div>
                 </li>
               ))}
@@ -249,30 +264,81 @@ export default function Dashboard() {
           </div>
 
           {showFinalize && (
-            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-red-800 text-sm">Finalize {year} Juggerknocker Invitational?</p>
-                  <ul className="text-xs text-red-700 mt-1.5 space-y-0.5 list-disc list-inside">
-                    <li>All {year} data (pairings, scores, results) will be archived</li>
-                    <li>The site will advance to {year + 1}</li>
-                    <li>Rosters and course configs carry over as a starting template</li>
-                    <li>After finalizing, reload the page to start syncing for {year + 1}</li>
-                    <li>Previous year data remains viewable and editable by admins</li>
-                  </ul>
+            <div className="mt-4 space-y-4">
+              {/* Step 1: Award selection */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                <p className="font-semibold text-amber-800 text-sm">Step 1 — Assign End-of-Year Awards</p>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {/* Sandbagger */}
+                  <div className="flex gap-3 items-start">
+                    <img src={`${import.meta.env.BASE_URL}sandbagger.jpg`} alt="Sandbagger" className="h-14 w-14 object-cover rounded-lg shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-amber-900 mb-1">Sandbagger Award</p>
+                      <p className="text-[10px] text-amber-700 mb-2">Played way better than their handicap. Usually on the winning team.</p>
+                      <select
+                        className="input text-xs w-full"
+                        value={pendingSandbagger}
+                        onChange={e => setPendingSandbagger(e.target.value)}
+                      >
+                        <option value="">— None —</option>
+                        {allPlayers.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.teamName})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {/* Toilet */}
+                  <div className="flex gap-3 items-start">
+                    <img src={`${import.meta.env.BASE_URL}toilet_award.webp`} alt="Toilet Award" className="h-14 w-14 object-cover rounded-lg shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-amber-900 mb-1">Toilet Award</p>
+                      <p className="text-[10px] text-amber-700 mb-2">Played much worse than their handicap. Usually on a losing team.</p>
+                      <select
+                        className="input text-xs w-full"
+                        value={pendingToilet}
+                        onChange={e => setPendingToilet(e.target.value)}
+                      >
+                        <option value="">— None —</option>
+                        {allPlayers.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.teamName})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  className="btn-primary text-xs bg-red-600 border-red-600 hover:bg-red-700 flex items-center gap-1.5"
-                  onClick={() => { finalizeYear(); setShowFinalize(false) }}
-                >
-                  <CheckCircle size={13} /> Confirm — finalize {year} &amp; advance to {year + 1}
-                </button>
-                <button className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1" onClick={() => setShowFinalize(false)}>
-                  <X size={12} /> Cancel
-                </button>
+
+              {/* Step 2: Confirmation */}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-red-800 text-sm">Step 2 — Finalize {year} Juggerknocker Invitational?</p>
+                    <ul className="text-xs text-red-700 mt-1.5 space-y-0.5 list-disc list-inside">
+                      <li>All {year} data (pairings, scores, results) will be archived</li>
+                      <li>The site will advance to {year + 1}</li>
+                      <li>Rosters and course configs carry over as a starting template</li>
+                      <li>After finalizing, reload the page to start syncing for {year + 1}</li>
+                      <li>Previous year data remains viewable and editable by admins</li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    className="btn-primary text-xs bg-red-600 border-red-600 hover:bg-red-700 flex items-center gap-1.5"
+                    onClick={() => {
+                      setSandbaggerPlayer(pendingSandbagger || null)
+                      setToiletAwardPlayer(pendingToilet || null)
+                      finalizeYear()
+                      setShowFinalize(false)
+                    }}
+                  >
+                    <CheckCircle size={13} /> Confirm — finalize {year} &amp; advance to {year + 1}
+                  </button>
+                  <button className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1" onClick={() => setShowFinalize(false)}>
+                    <X size={12} /> Cancel
+                  </button>
+                </div>
               </div>
             </div>
           )}

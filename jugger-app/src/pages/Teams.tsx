@@ -8,7 +8,7 @@ import {
 } from '../utils/handicap'
 
 export default function Teams() {
-  const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute, permanentlyReplacePlayer, makeSubPermanent } = useTournamentStore()
+  const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute, permanentlyReplacePlayer, makeSubPermanent, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [editName, setEditName] = useState<{ teamId: string; playerId: string; val: string } | null>(null)
   const [editTeamName, setEditTeamName] = useState<{ teamId: string; val: string } | null>(null)
@@ -89,6 +89,10 @@ export default function Teams() {
                   onRemove={() => removePlayer(team.id, player.id)}
                   onRevert={() => revertSubstitute(team.id, player.id)}
                   onMakePermanent={() => makeSubPermanent(team.id, player.id)}
+                  isSandbagger={sandbaggerPlayerId === player.id}
+                  isToilet={toiletAwardPlayerId === player.id}
+                  onSetSandbagger={() => setSandbaggerPlayer(sandbaggerPlayerId === player.id ? null : player.id)}
+                  onSetToilet={() => setToiletAwardPlayer(toiletAwardPlayerId === player.id ? null : player.id)}
                 />
               ))}
             </div>
@@ -378,7 +382,8 @@ function HdcpTable() {
 }
 
 function PlayerRow({
-  player, teamId, hdcpLocked, isAdmin, canDelete, editName, setEditName, onUpdatePlayer, onRemove, onRevert, onMakePermanent
+  player, teamId, hdcpLocked, isAdmin, canDelete, editName, setEditName, onUpdatePlayer, onRemove, onRevert, onMakePermanent,
+  isSandbagger, isToilet, onSetSandbagger, onSetToilet,
 }: {
   player: Player
   teamId: string
@@ -391,6 +396,10 @@ function PlayerRow({
   onRemove: () => void
   onRevert: () => void
   onMakePermanent: () => void
+  isSandbagger: boolean
+  isToilet: boolean
+  onSetSandbagger: () => void
+  onSetToilet: () => void
 }) {
   const isEditing = isAdmin && editName?.teamId === teamId && editName?.playerId === player.id
   const canEdit = isAdmin && !hdcpLocked
@@ -401,107 +410,155 @@ function PlayerRow({
       ? 'border-amber-300 bg-amber-50/50'
       : 'border-gray-200'
 
+  const awardImg = isSandbagger
+    ? { src: `${import.meta.env.BASE_URL}sandbagger.jpg`, alt: 'Sandbagger Award', label: 'Sandbagger' }
+    : isToilet
+      ? { src: `${import.meta.env.BASE_URL}toilet_award.webp`, alt: 'Toilet Award', label: 'Toilet Award' }
+      : null
+
   return (
     <div className={`border rounded p-2 space-y-1 ${borderClass}`}>
-      {/* Name row */}
-      {isEditing ? (
-        <div className="flex items-center gap-1">
-          <input
-            className="input flex-1 text-sm"
-            value={editName!.val}
-            onChange={e => setEditName({ ...editName!, val: e.target.value })}
-            autoFocus
-          />
-          <button onClick={() => { onUpdatePlayer(player.id, { name: editName!.val }); setEditName(null) }}>
-            <Check size={14} className="text-masters-green" />
-          </button>
-          <button onClick={() => setEditName(null)}>
-            <X size={14} className="text-gray-400" />
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1 flex-wrap">
-          <span className="font-semibold text-sm flex-1">{player.name}</span>
-          {player.isPermanentReplacement && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-200 text-blue-800 font-bold uppercase tracking-wide shrink-0">
-              PERM
-            </span>
+      <div className="flex gap-2">
+        {/* Left: name + sub info + hdcp + ghin */}
+        <div className="flex-1 min-w-0 space-y-1">
+          {/* Name row */}
+          {isEditing ? (
+            <div className="flex items-center gap-1">
+              <input
+                className="input flex-1 text-sm"
+                value={editName!.val}
+                onChange={e => setEditName({ ...editName!, val: e.target.value })}
+                autoFocus
+              />
+              <button onClick={() => { onUpdatePlayer(player.id, { name: editName!.val }); setEditName(null) }}>
+                <Check size={14} className="text-masters-green" />
+              </button>
+              <button onClick={() => setEditName(null)}>
+                <X size={14} className="text-gray-400" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="font-semibold text-sm flex-1">{player.name}</span>
+              {player.isPermanentReplacement && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-200 text-blue-800 font-bold uppercase tracking-wide shrink-0">
+                  PERM
+                </span>
+              )}
+              {player.isSubstitute && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800 font-bold uppercase tracking-wide shrink-0">
+                  SUB
+                </span>
+              )}
+              {isAdmin && !player.isSubstitute && (
+                <button onClick={() => setEditName({ teamId, playerId: player.id, val: player.name })}>
+                  <Edit2 size={12} className="text-gray-400 hover:text-masters-green" />
+                </button>
+              )}
+              {isAdmin && player.isSubstitute && (
+                <>
+                  <button
+                    onClick={onRevert}
+                    title={`Revert to ${player.originalName}`}
+                    className="flex items-center gap-0.5 text-[10px] text-amber-700 hover:text-amber-900 font-semibold"
+                  >
+                    <RotateCcw size={10} /> Revert
+                  </button>
+                  <button
+                    onClick={onMakePermanent}
+                    title="Make this sub a permanent team member"
+                    className="flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    <ArrowRightLeft size={10} /> Make Permanent
+                  </button>
+                </>
+              )}
+              {isAdmin && canDelete && (
+                <button onClick={onRemove} title="Remove player">
+                  <Trash2 size={12} className="text-gray-300 hover:text-red-500" />
+                </button>
+              )}
+            </div>
           )}
-          {player.isSubstitute && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800 font-bold uppercase tracking-wide shrink-0">
-              SUB
-            </span>
+          {player.isPermanentReplacement && player.replacedPlayerName && (
+            <div className="text-[10px] text-blue-600 italic">replaced {player.replacedPlayerName}</div>
           )}
-          {isAdmin && !player.isSubstitute && (
-            <button onClick={() => setEditName({ teamId, playerId: player.id, val: player.name })}>
-              <Edit2 size={12} className="text-gray-400 hover:text-masters-green" />
-            </button>
+          {player.isSubstitute && player.originalName && (
+            <div className="text-[10px] text-amber-700 italic">replacing {player.originalName} (this year)</div>
           )}
-          {isAdmin && player.isSubstitute && (
-            <>
+
+          {/* HDCP row */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-400">HDCP Index:</span>
+            {canEdit ? (
+              <input
+                type="number"
+                step="0.1"
+                min={0}
+                max={54}
+                className="border border-gray-200 rounded px-1 py-0.5 w-16 text-xs"
+                value={player.handicapIndex}
+                onChange={e => onUpdatePlayer(player.id, { handicapIndex: parseFloat(e.target.value) || 0 })}
+              />
+            ) : (
+              <span className="font-bold text-masters-dark">{player.handicapIndex.toFixed(1)}</span>
+            )}
+            {player.hdcpLocked && <Lock size={10} className="text-masters-gold" />}
+          </div>
+
+          {/* GHIN row */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-400">GHIN #:</span>
+            {canEdit ? (
+              <input
+                className="border border-gray-200 rounded px-1 py-0.5 w-28 text-xs font-mono"
+                placeholder="e.g. 1234567"
+                value={player.ghinNumber ?? ''}
+                onChange={e => onUpdatePlayer(player.id, { ghinNumber: e.target.value || undefined })}
+              />
+            ) : (
+              <span className="font-mono text-masters-dark">
+                {player.ghinNumber ?? <span className="text-gray-300">—</span>}
+              </span>
+            )}
+          </div>
+
+          {/* Award assignment buttons (admin, no award currently) */}
+          {isAdmin && !awardImg && (
+            <div className="flex gap-1.5 pt-0.5">
               <button
-                onClick={onRevert}
-                title={`Revert to ${player.originalName}`}
-                className="flex items-center gap-0.5 text-[10px] text-amber-700 hover:text-amber-900 font-semibold"
+                onClick={onSetSandbagger}
+                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-amber-700 border border-gray-200 hover:border-amber-300 rounded px-1.5 py-0.5 transition-colors"
               >
-                <RotateCcw size={10} /> Revert
+                <img src={`${import.meta.env.BASE_URL}sandbagger.jpg`} alt="" className="h-3.5 w-3.5 object-cover rounded-full" />
+                Sandbagger
               </button>
               <button
-                onClick={onMakePermanent}
-                title="Make this sub a permanent team member"
-                className="flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
+                onClick={onSetToilet}
+                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-700 border border-gray-200 hover:border-blue-300 rounded px-1.5 py-0.5 transition-colors"
               >
-                <ArrowRightLeft size={10} /> Make Permanent
+                <img src={`${import.meta.env.BASE_URL}toilet_award.webp`} alt="" className="h-3.5 w-3.5 object-cover rounded-full" />
+                Toilet
               </button>
-            </>
-          )}
-          {isAdmin && canDelete && (
-            <button onClick={onRemove} title="Remove player">
-              <Trash2 size={12} className="text-gray-300 hover:text-red-500" />
-            </button>
+            </div>
           )}
         </div>
-      )}
-      {player.isPermanentReplacement && player.replacedPlayerName && (
-        <div className="text-[10px] text-blue-600 italic">replaced {player.replacedPlayerName}</div>
-      )}
-      {player.isSubstitute && player.originalName && (
-        <div className="text-[10px] text-amber-700 italic">replacing {player.originalName} (this year)</div>
-      )}
 
-      {/* HDCP row */}
-      <div className="flex items-center gap-2 text-xs">
-        <span className="text-gray-400">HDCP Index:</span>
-        {canEdit ? (
-          <input
-            type="number"
-            step="0.1"
-            min={0}
-            max={54}
-            className="border border-gray-200 rounded px-1 py-0.5 w-16 text-xs"
-            value={player.handicapIndex}
-            onChange={e => onUpdatePlayer(player.id, { handicapIndex: parseFloat(e.target.value) || 0 })}
-          />
-        ) : (
-          <span className="font-bold text-masters-dark">{player.handicapIndex.toFixed(1)}</span>
-        )}
-        {player.hdcpLocked && <Lock size={10} className="text-masters-gold" />}
-      </div>
-
-      {/* GHIN row */}
-      <div className="flex items-center gap-2 text-xs">
-        <span className="text-gray-400">GHIN #:</span>
-        {canEdit ? (
-          <input
-            className="border border-gray-200 rounded px-1 py-0.5 w-28 text-xs font-mono"
-            placeholder="e.g. 1234567"
-            value={player.ghinNumber ?? ''}
-            onChange={e => onUpdatePlayer(player.id, { ghinNumber: e.target.value || undefined })}
-          />
-        ) : (
-          <span className="font-mono text-masters-dark">
-            {player.ghinNumber ?? <span className="text-gray-300">—</span>}
-          </span>
+        {/* Right: award image */}
+        {awardImg && (
+          <div className="shrink-0 flex flex-col items-center gap-1">
+            <img src={awardImg.src} alt={awardImg.alt} className="h-20 w-auto max-w-[80px] object-contain rounded-lg" />
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide text-center">{awardImg.label}</span>
+            {isAdmin && (
+              <button
+                onClick={isSandbagger ? onSetSandbagger : onSetToilet}
+                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                title="Remove award"
+              >
+                ✕ remove
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

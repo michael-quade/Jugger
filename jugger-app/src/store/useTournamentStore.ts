@@ -58,6 +58,9 @@ interface Actions {
   updateSkidmoreScore: (id: string, updates: Partial<Omit<SkidmoreScore, 'id'>>) => void
   removeSkidmoreScore: (id: string) => void
 
+  setSandbaggerPlayer: (id: string | null) => void
+  setToiletAwardPlayer: (id: string | null) => void
+
   clearMatchScores: (matchId: string) => void
   clearAllMatchScores: () => void
   clearAllTeamScores: () => void
@@ -92,6 +95,8 @@ const DEFAULT_STATE: TournamentState = {
   pairingsLocked: false,
   hioDonations: INITIAL_HIO_DONATIONS,
   skidmoreScores: INITIAL_SKIDMORE_SCORES,
+  sandbaggerPlayerId: 'pitts',
+  toiletAwardPlayerId: 'skidmore',
 }
 
 export const useTournamentStore = create<TournamentState & Actions>()(
@@ -382,6 +387,9 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           skidmoreScores: state.skidmoreScores.filter(s => s.id !== id),
         })),
 
+      setSandbaggerPlayer: (id) => set({ sandbaggerPlayerId: id ?? undefined }),
+      setToiletAwardPlayer: (id) => set({ toiletAwardPlayerId: id ?? undefined }),
+
       clearMatchScores: (matchId) =>
         set(state => {
           const sourceMatch = state.matches.find(m => m.id === matchId)
@@ -521,7 +529,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 15,
+      version: 16,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -628,6 +636,11 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           if (!base.skidmoreScores || base.skidmoreScores.length === 0) {
             base.skidmoreScores = INITIAL_SKIDMORE_SCORES
           }
+        }
+        if (fromVersion < 16) {
+          const b = base as any
+          if (!b.sandbaggerPlayerId) b.sandbaggerPlayerId = 'pitts'
+          if (!b.toiletAwardPlayerId) b.toiletAwardPlayerId = 'skidmore'
         }
         return base as TournamentState
       },

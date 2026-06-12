@@ -163,6 +163,8 @@ export interface TournamentState {
   pairingsLocked: boolean
   hioDonations: HioDonation[]
   skidmoreScores: SkidmoreScore[]
+  sandbaggerPlayerId?: string
+  toiletAwardPlayerId?: string
 }
 
 export interface CourseHistoryRound {
