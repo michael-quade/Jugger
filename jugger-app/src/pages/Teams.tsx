@@ -46,17 +46,6 @@ export default function Teams() {
       <div className="grid md:grid-cols-3 gap-6">
         {teams.map(team => (
           <div key={team.id} className="card border-t-4 space-y-3 overflow-visible" style={{ borderTopColor: team.color }}>
-            {/* Defending champion banner */}
-            {team.id === defendingChampionTeamId && (
-              <div className="flex justify-center -mt-1 -mx-1">
-                <img
-                  src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo_Champions.png`}
-                  alt="Defending Champions"
-                  title="Defending Champions"
-                  className="h-20 w-auto object-contain"
-                />
-              </div>
-            )}
             {/* Team name */}
             {isAdmin && editTeamName?.teamId === team.id ? (
               <div className="flex items-center gap-1">
@@ -76,6 +65,14 @@ export default function Teams() {
             ) : (
               <div className="flex items-center gap-2">
                 <h2 className="font-serif font-bold text-xl flex-1" style={{ color: team.color }}>{team.name}</h2>
+                {team.id === defendingChampionTeamId && (
+                  <img
+                    src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo_Champions.png`}
+                    alt="Defending Champions"
+                    title="Defending Champions"
+                    className="h-10 w-auto object-contain shrink-0"
+                  />
+                )}
                 {isAdmin && team.id === defendingChampionTeamId && (
                   <button
                     onClick={() => setDefendingChampion(null)}

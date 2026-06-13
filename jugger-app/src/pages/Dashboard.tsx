@@ -238,7 +238,7 @@ export default function Dashboard() {
                   <img
                     src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo_Champions.png`}
                     alt="Defending Champions"
-                    className="h-14 w-auto object-contain"
+                    className="h-16 w-auto object-contain"
                     title="Defending Champions"
                   />
                 )}
