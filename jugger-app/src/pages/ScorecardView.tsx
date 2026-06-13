@@ -9,7 +9,8 @@ import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
 import { Printer, Dices, Trash2, Flag, Trophy } from 'lucide-react'
-import type { Match, Course, RoundConfig, Team, CtpEntry } from '../types'
+import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig } from '../types'
+import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
 
 const FORMAT_DISPLAY: Record<string, string> = {
@@ -1145,7 +1146,8 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
                 })
               }
 
-              const quota = 36 - hdcp
+              const coursePar = course.holes.reduce((s: number, h: any) => s + h.par, 0)
+              const quota = Math.round(coursePar / 2) - hdcp
 
               return (
                 <tr key={pid} className="border-t">
@@ -1176,92 +1178,100 @@ interface FormatInfo {
   points: { label: string; value: string }[]
 }
 
-const FORMAT_INFO: Record<string, FormatInfo> = {
-  team_match_play: {
-    label: 'Team Match Play',
-    totalPoints: 9,
-    description: 'Two-vs-two twosome format. Each team puts up their best NET score per hole. The twosome with the lowest net wins the hole. Most holes won wins the match.',
-    scoring: [
-      { label: 'NET scoring', detail: 'Gross score minus per-hole handicap strokes' },
-      { label: 'Best ball', detail: 'Each twosome counts only their better net score per hole' },
-      { label: 'Hole win', detail: 'Low net wins the hole; tie = halved' },
-    ],
-    points: [
-      { label: 'Regular match', value: '2 pts' },
-      { label: 'Blind match', value: '1 pt' },
-    ],
-  },
-  points_round: {
-    label: 'Points Round (Stableford)',
-    totalPoints: 15,
-    description: 'Gross Stableford points format. Each player earns points based on their gross score relative to par. The twosome with the higher combined points vs. their quota wins.',
-    scoring: [
-      { label: 'Albatross (−3)', detail: '10 pts' },
-      { label: 'Eagle (−2)', detail: '6 pts' },
-      { label: 'Birdie (−1)', detail: '4 pts' },
-      { label: 'Par (E)', detail: '2 pts' },
-      { label: 'Bogey (+1)', detail: '1 pt' },
-      { label: 'Double bogey (+2)', detail: '½ pt' },
-      { label: 'Worse', detail: '0 pts' },
-    ],
-    points: [
-      { label: 'Regular match', value: '2 pts' },
-      { label: 'Blind match', value: '1 pt' },
-      { label: 'Magic Ball', value: '1 pt/ball' },
-    ],
-  },
-  texas_scramble: {
-    label: 'Texas Scramble',
-    totalPoints: 7,
-    description: 'All 4 players tee off, choose the best drive, then each plays from that spot. 60% of each player\'s course HDCP applied. Best-ball count increases as the round progresses.',
-    scoring: [
-      { label: 'Holes 1–6', detail: 'Best 1 ball' },
-      { label: 'Holes 7–12', detail: 'Best 2 balls' },
-      { label: 'Holes 13–15', detail: 'Best 3 balls' },
-      { label: 'Holes 16–18', detail: 'Best 4 balls (all players)' },
-    ],
-    points: [
-      { label: '1st place', value: '4 pts' },
-      { label: '2nd place', value: '2 pts' },
-      { label: '3rd place', value: '1 pt' },
-    ],
-  },
-  individual_match: {
-    label: 'Individual Match Play',
-    totalPoints: 12,
-    description: 'Each player plays their own ball with NET scoring. Two sub-matches run simultaneously: each player\'s individual result plus a twosome best-ball result per pairing.',
-    scoring: [
-      { label: 'NET scoring', detail: 'Gross minus full course HDCP strokes per hole' },
-      { label: 'Individual match', detail: 'Each of the 4 players plays straight match play vs. their opponent' },
-      { label: 'Twosome match', detail: 'Each twosome\'s best net score competes vs. the opposing twosome' },
-    ],
-    points: [
-      { label: 'Individual match', value: '1 pt' },
-      { label: 'Twosome best-ball', value: '1 pt' },
-      { label: 'Blind match', value: '½ pt' },
-    ],
-  },
-  captains_choice: {
-    label: "Captain's Choice",
-    totalPoints: 7,
-    description: 'The team captain selects which shot to play after all players tee off. HDCP is 15% of the combined team handicap. Minimum 3 tee shots per player must be used across the round.',
-    scoring: [
-      { label: 'Team HDCP', detail: 'floor(sum of all 4 player course HDCPs × 15%)' },
-      { label: 'Min tee balls', detail: 'Each player\'s drive must be selected at least 3 times' },
-      { label: 'Net score', detail: 'Team gross minus HDCP; lowest net wins' },
-    ],
-    points: [
-      { label: '1st place', value: '4 pts' },
-      { label: '2nd place', value: '2 pts' },
-      { label: '3rd place', value: '1 pt' },
-    ],
-  },
+function getFormatInfo(gc: GameConfig): Record<string, FormatInfo> {
+  const scrPct = Math.round(gc.texasScrambleHdcpPct * 100)
+  const ccPct  = Math.round(gc.captainsChoiceHdcpPct * 100)
+  const minTees = gc.captainsChoiceMinTeeBalls
+  const fmt = (n: number) => n % 1 === 0 ? `${n}` : `${n}`
+  return {
+    team_match_play: {
+      label: 'Team Match Play',
+      totalPoints: 9,
+      description: 'Two-vs-two twosome format. Each team puts up their best NET score per hole. The twosome with the lowest net wins the hole. Most holes won wins the match.',
+      scoring: [
+        { label: 'NET scoring', detail: 'Gross score minus per-hole handicap strokes' },
+        { label: 'Best ball', detail: 'Each twosome counts only their better net score per hole' },
+        { label: 'Hole win', detail: 'Low net wins the hole; tie = halved' },
+      ],
+      points: [
+        { label: 'Regular match', value: `${gc.regularMatchPts} pts` },
+        { label: 'Blind match', value: `${gc.blindMatchPts} pt` },
+      ],
+    },
+    points_round: {
+      label: 'Points Round (Stableford)',
+      totalPoints: 15,
+      description: 'Each player earns gross Stableford points on every hole. The goal is to accumulate as many points as possible relative to your twosome\'s combined Quota. Twosome Quota = course par − (HDCP_A + HDCP_B). Example: par 72, HDCPs 10+10 → Quota = 52. The twosome furthest above their Quota wins.',
+      scoring: [
+        { label: 'Albatross (−3)', detail: `${fmt(gc.stablefordAlbatross)} pts` },
+        { label: 'Eagle (−2)', detail: `${fmt(gc.stablefordEagle)} pts` },
+        { label: 'Birdie (−1)', detail: `${fmt(gc.stablefordBirdie)} pts` },
+        { label: 'Par (E)', detail: `${fmt(gc.stablefordPar)} pts` },
+        { label: 'Bogey (+1)', detail: `${fmt(gc.stablefordBogey)} pt` },
+        { label: 'Double bogey (+2)', detail: `${gc.stablefordDouble === 0.5 ? '½' : fmt(gc.stablefordDouble)} pt` },
+        { label: 'Worse', detail: '0 pts' },
+      ],
+      points: [
+        { label: 'Regular match', value: `${gc.regularMatchPts} pts` },
+        { label: 'Blind match', value: `${gc.blindMatchPts} pt` },
+        ...(gc.enableMagicBall ? [{ label: 'Magic Ball — special ball assigned to each twosome; players alternate using it for entire holes (A on hole 1, B on hole 2, etc.); twosome still holding it at finish earns the bonus', value: '1 pt' }] : []),
+      ],
+    },
+    texas_scramble: {
+      label: 'Texas Scramble',
+      totalPoints: gc.teamFinish1stPts + gc.teamFinish2ndPts + gc.teamFinish3rdPts,
+      description: `All 4 players tee off, choose the best drive, then each plays from that spot. ${scrPct}% of each player's course HDCP applied. Best-ball count increases as the round progresses.`,
+      scoring: [
+        { label: 'Holes 1–6', detail: 'Best 1 ball' },
+        { label: 'Holes 7–12', detail: 'Best 2 balls' },
+        { label: 'Holes 13–15', detail: 'Best 3 balls' },
+        { label: 'Holes 16–18', detail: 'Best 4 balls (all players)' },
+      ],
+      points: [
+        { label: '1st place', value: `${gc.teamFinish1stPts} pts` },
+        { label: '2nd place', value: `${gc.teamFinish2ndPts} pts` },
+        { label: '3rd place', value: `${gc.teamFinish3rdPts} pt` },
+      ],
+    },
+    individual_match: {
+      label: 'Individual Match Play',
+      totalPoints: 12,
+      description: 'Each player plays their own ball with NET scoring. Two sub-matches run simultaneously: each player\'s individual result plus a twosome best-ball result per pairing.',
+      scoring: [
+        { label: 'NET scoring', detail: 'Gross minus full course HDCP strokes per hole' },
+        { label: 'Individual match', detail: 'Each of the 4 players plays straight match play vs. their opponent' },
+        { label: 'Twosome match', detail: 'Each twosome\'s best net score competes vs. the opposing twosome' },
+      ],
+      points: [
+        { label: 'Individual match', value: '1 pt' },
+        { label: 'Twosome best-ball', value: '1 pt' },
+        { label: 'Blind match', value: `${gc.blindMatchPts} pt` },
+      ],
+    },
+    captains_choice: {
+      label: "Captain's Choice",
+      totalPoints: gc.teamFinish1stPts + gc.teamFinish2ndPts + gc.teamFinish3rdPts,
+      description: `The team captain selects which shot to play after all players tee off. HDCP is ${ccPct}% of the combined team handicap.${minTees > 0 ? ` Minimum ${minTees} tee shots per player must be used across the round.` : ''}`,
+      scoring: [
+        { label: 'Team HDCP', detail: `floor(sum of all 4 player course HDCPs × ${ccPct}%)` },
+        ...(minTees > 0 ? [{ label: 'Min tee balls', detail: `Each player's drive must be selected at least ${minTees} times` }] : []),
+        { label: 'Net score', detail: 'Team gross minus HDCP; lowest net wins' },
+      ],
+      points: [
+        { label: '1st place', value: `${gc.teamFinish1stPts} pts` },
+        { label: '2nd place', value: `${gc.teamFinish2ndPts} pts` },
+        { label: '3rd place', value: `${gc.teamFinish3rdPts} pt` },
+      ],
+    },
+  }
 }
 
 function RoundInfoBanner({ round }: { round: number }) {
-  const { roundConfigs, courses } = useTournamentStore()
+  const { roundConfigs, courses, gameConfig } = useTournamentStore(s => ({
+    roundConfigs: s.roundConfigs, courses: s.courses, gameConfig: s.gameConfig,
+  }))
   const rc = roundConfigs.find(r => r.round === round)
-  const info = rc ? FORMAT_INFO[rc.format] : undefined
+  const info = rc ? getFormatInfo(gameConfig ?? DEFAULT_GAME_CONFIG)[rc.format] : undefined
   if (!info || !rc) return null
 
   const courseName = courses.find(c => c.id === rc.courseId)?.name

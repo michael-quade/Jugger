@@ -2,6 +2,7 @@ import type { Match, Team, Course, RoundConfig, Player } from '../types'
 import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp } from '../utils/handicap'
 import { getPlayerName } from '../utils/pairings'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, type MatchPlayResult, type PointsRoundResult, type ScrambleResult, type CaptainsChoiceResult, type IndividualMatch1v1Result, type IndividualMatchResult } from '../utils/matchplay'
+import { useTournamentStore, DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 
 interface Props {
   match: Match
@@ -14,15 +15,21 @@ interface Props {
   onTeeShotChange?: (hole: number, playerId: string | null) => void
 }
 
-const ROUND_LABELS: Record<string, string> = {
-  team_match_play:   'Team Match Play · Two vs Two · Best Ball Net',
-  points_round:      'Points Round · Gross Stableford · Bogey=1 Par=2 Birdie=4 Eagle=6 · Closest to Quota wins',
-  texas_scramble:    'Texas Scramble · 60% HDCP · Best 1/2/3/4 balls by hole range',
-  individual_match:  'Individual Match Play · Net Scoring · Each match = 1pt',
-  captains_choice:   "Captain's Choice · 15% Team HDCP · Min 3 tee balls per player",
-}
-
 export default function ScorecardCard({ match, teams, course, config, interactive, onScoreChange, onTeamHoleScoreChange, onTeeShotChange }: Props) {
+  const gameConfig = useTournamentStore(s => s.gameConfig) ?? DEFAULT_GAME_CONFIG
+  const gc = gameConfig
+
+  const scrPct = Math.round(gc.texasScrambleHdcpPct * 100)
+  const ccPct  = Math.round(gc.captainsChoiceHdcpPct * 100)
+  const minTees = gc.captainsChoiceMinTeeBalls
+  const formatLabel: Record<string, string> = {
+    team_match_play:  'Team Match Play · Two vs Two · Best Ball Net',
+    points_round:     `Points Round · Gross Stableford · Bogey=${gc.stablefordBogey} Par=${gc.stablefordPar} Birdie=${gc.stablefordBirdie} Eagle=${gc.stablefordEagle} Albatross=${gc.stablefordAlbatross} · Closest to Quota wins`,
+    texas_scramble:   `Texas Scramble · ${scrPct}% HDCP · Best 1/2/3/4 balls by hole range`,
+    individual_match: 'Individual Match Play · Net Scoring · Each match = 1pt',
+    captains_choice:  `Captain's Choice · ${ccPct}% Team HDCP${minTees > 0 ? ` · Min ${minTees} tee balls per player` : ''}`,
+  }
+
   const allPlayers = teams.flatMap(t => t.players)
   const teeData = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
 
@@ -51,7 +58,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
       (s, p) => s + tournamentHdcp(p.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false),
       0,
     )
-    const teamHdcp = Math.round(r5Sum * 0.15)
+    const teamHdcp = Math.round(r5Sum * gc.captainsChoiceHdcpPct)
     allPlayerIds.forEach(pid => { playerHdcps[pid] = teamHdcp })
   }
 
@@ -110,7 +117,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
         </div>
       </div>
 
-      <div className="text-[10px] text-gray-500 italic mb-1">{ROUND_LABELS[config.format]}</div>
+      <div className="text-[10px] text-gray-500 italic mb-1">{formatLabel[config.format]}</div>
 
       {/* Scorecard table */}
       <table className="scorecard-table">
@@ -271,7 +278,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
 
       {/* Rules note */}
       <div className="mt-1 text-[9px] text-gray-400 italic">
-        * {ROUND_LABELS[config.format]}
+        * {formatLabel[config.format]}
       </div>
     </div>
   )

@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore } from '../types'
+import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig } from '../types'
 import { computeChampion } from '../utils/champion'
+import { configureHdcpSettings } from '../utils/handicap'
 import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY, INITIAL_SKIDMORE_SCORES } from '../data/initialData'
 import { COURSES, ROUND_CONFIGS } from '../data/courseData'
 
@@ -62,6 +63,7 @@ interface Actions {
   setSandbaggerPlayer: (id: string | null) => void
   setToiletAwardPlayer: (id: string | null) => void
   setDefendingChampion: (teamId: string | null) => void
+  setGameConfig: (config: GameConfig) => void
 
   clearMatchScores: (matchId: string) => void
   clearAllMatchScores: () => void
@@ -74,6 +76,25 @@ interface Actions {
   returnToLive: () => void
 
   resetAll: () => void
+}
+
+export const DEFAULT_GAME_CONFIG: GameConfig = {
+  texasScrambleHdcpPct: 0.6,
+  captainsChoiceHdcpPct: 0.15,
+  captainsChoiceMinTeeBalls: 3,
+  enableBlinds: true,
+  enableMagicBall: true,
+  stablefordAlbatross: 10,
+  stablefordEagle: 6,
+  stablefordBirdie: 4,
+  stablefordPar: 2,
+  stablefordBogey: 1,
+  stablefordDouble: 0.5,
+  regularMatchPts: 2,
+  blindMatchPts: 1,
+  teamFinish1stPts: 4,
+  teamFinish2ndPts: 2,
+  teamFinish3rdPts: 1,
 }
 
 const DEFAULT_STATE: TournamentState = {
@@ -99,6 +120,7 @@ const DEFAULT_STATE: TournamentState = {
   skidmoreScores: INITIAL_SKIDMORE_SCORES,
   sandbaggerPlayerId: 'pitts',
   toiletAwardPlayerId: 'skidmore',
+  gameConfig: DEFAULT_GAME_CONFIG,
 }
 
 export const useTournamentStore = create<TournamentState & Actions>()(
@@ -392,6 +414,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       setSandbaggerPlayer: (id) => set({ sandbaggerPlayerId: id ?? undefined }),
       setToiletAwardPlayer: (id) => set({ toiletAwardPlayerId: id ?? undefined }),
       setDefendingChampion: (teamId) => set({ defendingChampionTeamId: teamId ?? undefined }),
+      setGameConfig: (config) => set({ gameConfig: config }),
 
       clearMatchScores: (matchId) =>
         set(state => {
@@ -582,7 +605,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 17,
+      version: 18,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -695,8 +718,19 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           if (!b.sandbaggerPlayerId) b.sandbaggerPlayerId = 'pitts'
           if (!b.toiletAwardPlayerId) b.toiletAwardPlayerId = 'skidmore'
         }
+        if (fromVersion < 18) {
+          const b = base as any
+          if (!b.gameConfig) b.gameConfig = DEFAULT_GAME_CONFIG
+        }
         return base as TournamentState
       },
     }
   )
 )
+
+// Keep handicap module in sync with gameConfig (including on initial load)
+{
+  const { gameConfig } = useTournamentStore.getState()
+  configureHdcpSettings(gameConfig)
+}
+useTournamentStore.subscribe(state => configureHdcpSettings(state.gameConfig))

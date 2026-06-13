@@ -254,7 +254,7 @@ export function computeCaptainsChoice(
 // ─── Points Round (Gross Stableford with Quota) ───────────────────────────────
 
 export interface PointsRoundResult {
-  quota1: number                   // twosome1 target = (36−hdcp1a) + (36−hdcp1b)
+  quota1: number                   // twosome1 target = coursePar − (hdcp1a + hdcp1b)
   quota2: number
   holePoints1: (number | null)[]   // per-hole team points; null = not yet scored
   holePoints2: (number | null)[]
@@ -274,9 +274,10 @@ export function computePointsRound(
   const t1 = match.twosome1
   const t2 = match.twosome2
 
-  // Quota = sum of individual Stableford quotas (36 − course HDCP each)
-  const quota1 = (36 - (playerHdcps[t1.playerIds[0]] ?? 0)) + (36 - (playerHdcps[t1.playerIds[1]] ?? 0))
-  const quota2 = (36 - (playerHdcps[t2.playerIds[0]] ?? 0)) + (36 - (playerHdcps[t2.playerIds[1]] ?? 0))
+  // Twosome quota = course par − (hdcpA + hdcpB)
+  const coursePar = holes.reduce((s, h) => s + h.par, 0)
+  const quota1 = coursePar - (playerHdcps[t1.playerIds[0]] ?? 0) - (playerHdcps[t1.playerIds[1]] ?? 0)
+  const quota2 = coursePar - (playerHdcps[t2.playerIds[0]] ?? 0) - (playerHdcps[t2.playerIds[1]] ?? 0)
 
   const holePoints1: (number | null)[] = []
   const holePoints2: (number | null)[] = []

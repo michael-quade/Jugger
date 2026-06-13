@@ -15,6 +15,7 @@ import Results from './pages/Results'
 import HoleInOne from './pages/HoleInOne'
 import PrintAll from './pages/PrintAll'
 import SkidmoreHdcp from './pages/SkidmoreHdcp'
+import RoundGames from './pages/RoundGames'
 import CtpPage from './pages/CtpPage'
 import { useTournamentStore } from './store/useTournamentStore'
 import { hashPassword } from './utils/auth'
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="schedule" element={<Schedule />} />
         <Route path="pairings" element={<Pairings />} />
         <Route path="scorecards" element={<ScorecardView />} />
+        <Route path="round-games" element={<RoundGames />} />
         <Route path="results" element={<Results />} />
         <Route path="hole-in-one" element={<HoleInOne />} />
         <Route path="ctp" element={<CtpPage />} />

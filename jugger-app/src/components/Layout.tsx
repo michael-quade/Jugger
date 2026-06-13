@@ -3,7 +3,7 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
-  History, ArrowRight, Calculator,
+  History, ArrowRight, Calculator, Gamepad2,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
@@ -16,8 +16,9 @@ const NAV = [
   { to: '/schedule',   label: 'Schedule',     icon: Calendar },
   { to: '/pairings',   label: 'Pairings',     icon: Shuffle,       adminOnly: true },
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
-  { to: '/courses',    label: 'Courses',      icon: MapPin },
-  { to: '/results',    label: 'Team Results', icon: Trophy },
+  { to: '/courses',      label: 'Courses',      icon: MapPin },
+  { to: '/round-games',  label: 'Round Games',  icon: Gamepad2, adminOnly: true },
+  { to: '/results',      label: 'Team Results', icon: Trophy },
   { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
   { to: '/stats',      label: 'Stats',        icon: TrendingUp },

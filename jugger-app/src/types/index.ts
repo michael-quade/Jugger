@@ -142,6 +142,25 @@ export interface ArchivedYear {
   hdcpLocked: boolean
 }
 
+export interface GameConfig {
+  texasScrambleHdcpPct: number      // default 0.6
+  captainsChoiceHdcpPct: number     // default 0.15
+  captainsChoiceMinTeeBalls: number // default 3 (0 = no minimum)
+  enableBlinds: boolean             // affects new pairing generation
+  enableMagicBall: boolean          // default true
+  stablefordAlbatross: number       // default 10
+  stablefordEagle: number           // default 6
+  stablefordBirdie: number          // default 4
+  stablefordPar: number             // default 2
+  stablefordBogey: number           // default 1
+  stablefordDouble: number          // default 0.5
+  regularMatchPts: number           // default 2
+  blindMatchPts: number             // default 1
+  teamFinish1stPts: number          // default 4
+  teamFinish2ndPts: number          // default 2
+  teamFinish3rdPts: number          // default 1
+}
+
 export interface TournamentState {
   year: number
   liveYear: number
@@ -166,6 +185,7 @@ export interface TournamentState {
   sandbaggerPlayerId?: string
   toiletAwardPlayerId?: string
   defendingChampionTeamId?: string
+  gameConfig: GameConfig
 }
 
 export interface CourseHistoryRound {
