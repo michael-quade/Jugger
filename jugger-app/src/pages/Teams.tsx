@@ -544,19 +544,16 @@ function PlayerRow({
           )}
         </div>
 
-        {/* Right: award image — self-stretch keeps it bounded by the left column height */}
+        {/* Right: award image — self-stretch + h-full keeps it bounded by left column height */}
         {awardImg && (
-          <div className="shrink-0 self-stretch flex flex-col items-center justify-center gap-0.5">
-            <img src={awardImg.src} alt={awardImg.alt} className="flex-1 min-h-0 w-auto max-w-[64px] object-contain rounded-lg" />
-            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide text-center">{awardImg.label}</span>
+          <div className="shrink-0 self-stretch relative flex items-center">
+            <img src={awardImg.src} alt={awardImg.alt} title={awardImg.label} className="h-full w-auto max-w-[56px] object-contain rounded-lg" />
             {isAdmin && (
               <button
                 onClick={isSandbagger ? onSetSandbagger : onSetToilet}
-                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 text-gray-400 hover:text-red-500 flex items-center justify-center text-[9px] leading-none transition-colors shadow-sm"
                 title="Remove award"
-              >
-                ✕ remove
-              </button>
+              >✕</button>
             )}
           </div>
         )}
