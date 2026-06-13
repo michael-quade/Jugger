@@ -231,19 +231,14 @@ export default function Dashboard() {
             <h3 className="font-serif font-bold text-lg mb-2" style={{ color: team.color }}>
               {team.name}
             </h3>
-            <div className="flex items-end mb-1 pb-1 border-b border-gray-100 gap-2">
-              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide shrink-0">Player</span>
-              <div className="flex-1 flex justify-center items-end">
+            <div className="flex justify-between items-end mb-1 pb-1 border-b border-gray-100">
+              <div className="flex flex-col gap-1 items-start">
+                <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Player</span>
                 {isDefending && (
-                  <img
-                    src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo_Champions.png`}
-                    alt="Defending Champions"
-                    className="h-16 w-auto object-contain"
-                    title="Defending Champions"
-                  />
+                  <span className="text-xs font-bold text-masters-gold flex items-center gap-1">🏆 Defending Champs</span>
                 )}
               </div>
-              <div className="w-16 flex justify-center shrink-0">
+              <div className="w-16 flex justify-center">
                 <img src={`${import.meta.env.BASE_URL}USGA-GHIN-logo-square.webp`} alt="GHIN Handicap Index" className="h-16 opacity-80" />
               </div>
             </div>

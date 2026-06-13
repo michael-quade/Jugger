@@ -65,18 +65,13 @@ export default function Teams() {
             ) : (
               <div className="flex items-center gap-2">
                 <h2 className="font-serif font-bold text-xl flex-1" style={{ color: team.color }}>{team.name}</h2>
-                {team.id === defendingChampionTeamId && (
-                  <img
-                    src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo_Champions.png`}
-                    alt="Defending Champions"
-                    title="Defending Champions"
-                    className="h-10 w-auto object-contain shrink-0"
-                  />
+                {!isAdmin && team.id === defendingChampionTeamId && (
+                  <span className="text-xs font-bold text-masters-gold flex items-center gap-1 shrink-0">🏆 Defending Champs</span>
                 )}
                 {isAdmin && team.id === defendingChampionTeamId && (
                   <button
                     onClick={() => setDefendingChampion(null)}
-                    className="text-[10px] text-masters-gold hover:text-red-500 font-semibold flex items-center gap-0.5 transition-colors"
+                    className="text-xs text-masters-gold hover:text-red-500 font-bold flex items-center gap-1 shrink-0 transition-colors"
                     title="Remove defending champion designation"
                   >
                     🏆 Defending Champs ✕
@@ -85,7 +80,7 @@ export default function Teams() {
                 {isAdmin && team.id !== defendingChampionTeamId && (
                   <button
                     onClick={() => setDefendingChampion(team.id)}
-                    className="text-[10px] text-gray-300 hover:text-masters-gold font-semibold transition-colors"
+                    className="text-[11px] text-gray-300 hover:text-masters-gold font-semibold transition-colors shrink-0"
                     title="Set as defending champions"
                   >
                     🏆
