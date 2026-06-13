@@ -544,10 +544,10 @@ function PlayerRow({
           )}
         </div>
 
-        {/* Right: award image */}
+        {/* Right: award image — self-stretch keeps it bounded by the left column height */}
         {awardImg && (
-          <div className="shrink-0 flex flex-col items-center gap-1">
-            <img src={awardImg.src} alt={awardImg.alt} className="h-20 w-auto max-w-[80px] object-contain rounded-lg" />
+          <div className="shrink-0 self-stretch flex flex-col items-center justify-center gap-0.5">
+            <img src={awardImg.src} alt={awardImg.alt} className="flex-1 min-h-0 w-auto max-w-[64px] object-contain rounded-lg" />
             <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wide text-center">{awardImg.label}</span>
             {isAdmin && (
               <button
