@@ -17,7 +17,7 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
@@ -205,8 +205,23 @@ export default function Dashboard() {
       </div>
 
       {/* Team rosters */}
+      {isAdmin && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 -mt-2">
+          <span className="font-semibold">Defending Champions:</span>
+          <select
+            className="border border-gray-200 rounded px-2 py-1 text-xs bg-white"
+            value={defendingChampionTeamId ?? ''}
+            onChange={e => setDefendingChampion(e.target.value || null)}
+          >
+            <option value="">— None —</option>
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      )}
       <div className="grid md:grid-cols-3 gap-4">
-        {teams.map(team => (
+        {teams.map(team => {
+          const isDefending = team.id === defendingChampionTeamId
+          return (
           <div
             key={team.id}
             className="card border-t-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -216,9 +231,19 @@ export default function Dashboard() {
             <h3 className="font-serif font-bold text-lg mb-2" style={{ color: team.color }}>
               {team.name}
             </h3>
-            <div className="flex justify-between items-end mb-1 pb-1 border-b border-gray-100">
-              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Player</span>
-              <div className="w-16 flex justify-center">
+            <div className="flex items-end mb-1 pb-1 border-b border-gray-100 gap-2">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide shrink-0">Player</span>
+              <div className="flex-1 flex justify-center items-end">
+                {isDefending && (
+                  <img
+                    src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo_Champions.png`}
+                    alt="Defending Champions"
+                    className="h-14 w-auto object-contain"
+                    title="Defending Champions"
+                  />
+                )}
+              </div>
+              <div className="w-16 flex justify-center shrink-0">
                 <img src={`${import.meta.env.BASE_URL}USGA-GHIN-logo-square.webp`} alt="GHIN Handicap Index" className="h-16 opacity-80" />
               </div>
             </div>
@@ -242,7 +267,8 @@ export default function Dashboard() {
               ))}
             </ul>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Finalize tournament (admin, live year only) */}

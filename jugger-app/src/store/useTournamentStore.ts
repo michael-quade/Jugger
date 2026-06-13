@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore } from '../types'
+import { computeChampion } from '../utils/champion'
 import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY, INITIAL_SKIDMORE_SCORES } from '../data/initialData'
 import { COURSES, ROUND_CONFIGS } from '../data/courseData'
 
@@ -60,6 +61,7 @@ interface Actions {
 
   setSandbaggerPlayer: (id: string | null) => void
   setToiletAwardPlayer: (id: string | null) => void
+  setDefendingChampion: (teamId: string | null) => void
 
   clearMatchScores: (matchId: string) => void
   clearAllMatchScores: () => void
@@ -389,6 +391,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       setSandbaggerPlayer: (id) => set({ sandbaggerPlayerId: id ?? undefined }),
       setToiletAwardPlayer: (id) => set({ toiletAwardPlayerId: id ?? undefined }),
+      setDefendingChampion: (teamId) => set({ defendingChampionTeamId: teamId ?? undefined }),
 
       clearMatchScores: (matchId) =>
         set(state => {
@@ -469,6 +472,14 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             }
           }
 
+          // Determine this year's champion to carry forward as next year's defending champ
+          const championResult = computeChampion(
+            state.teams, state.teamScores,
+            state.roundConfigs.map(r => r.round),
+            state.defendingChampionTeamId,
+          )
+          const newDefendingChampionId = championResult.champion?.id
+
           // Archive WITH subs intact (accurate historical record)
           const snapshot: ArchivedYear = {
             year: state.year,
@@ -508,6 +519,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             isViewingHistory: false,
             liveCache: null,
             skidmoreScores: [...state.skidmoreScores, ...tournamentScoresToAdd],
+            defendingChampionTeamId: newDefendingChampionId,
           }
         }),
 
@@ -570,7 +582,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 16,
+      version: 17,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }

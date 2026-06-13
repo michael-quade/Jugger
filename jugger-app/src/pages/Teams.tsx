@@ -8,7 +8,7 @@ import {
 } from '../utils/handicap'
 
 export default function Teams() {
-  const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute, permanentlyReplacePlayer, makeSubPermanent, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer } = useTournamentStore()
+  const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute, permanentlyReplacePlayer, makeSubPermanent, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const [editName, setEditName] = useState<{ teamId: string; playerId: string; val: string } | null>(null)
   const [editTeamName, setEditTeamName] = useState<{ teamId: string; val: string } | null>(null)
@@ -46,6 +46,17 @@ export default function Teams() {
       <div className="grid md:grid-cols-3 gap-6">
         {teams.map(team => (
           <div key={team.id} className="card border-t-4 space-y-3 overflow-visible" style={{ borderTopColor: team.color }}>
+            {/* Defending champion banner */}
+            {team.id === defendingChampionTeamId && (
+              <div className="flex justify-center -mt-1 -mx-1">
+                <img
+                  src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo_Champions.png`}
+                  alt="Defending Champions"
+                  title="Defending Champions"
+                  className="h-20 w-auto object-contain"
+                />
+              </div>
+            )}
             {/* Team name */}
             {isAdmin && editTeamName?.teamId === team.id ? (
               <div className="flex items-center gap-1">
@@ -65,6 +76,24 @@ export default function Teams() {
             ) : (
               <div className="flex items-center gap-2">
                 <h2 className="font-serif font-bold text-xl flex-1" style={{ color: team.color }}>{team.name}</h2>
+                {isAdmin && team.id === defendingChampionTeamId && (
+                  <button
+                    onClick={() => setDefendingChampion(null)}
+                    className="text-[10px] text-masters-gold hover:text-red-500 font-semibold flex items-center gap-0.5 transition-colors"
+                    title="Remove defending champion designation"
+                  >
+                    🏆 Defending Champs ✕
+                  </button>
+                )}
+                {isAdmin && team.id !== defendingChampionTeamId && (
+                  <button
+                    onClick={() => setDefendingChampion(team.id)}
+                    className="text-[10px] text-gray-300 hover:text-masters-gold font-semibold transition-colors"
+                    title="Set as defending champions"
+                  >
+                    🏆
+                  </button>
+                )}
                 {isAdmin && (
                   <button onClick={() => setEditTeamName({ teamId: team.id, val: team.name })}>
                     <Edit2 size={14} className="text-gray-400 hover:text-masters-green" />

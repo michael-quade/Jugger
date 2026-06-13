@@ -165,6 +165,7 @@ export interface TournamentState {
   skidmoreScores: SkidmoreScore[]
   sandbaggerPlayerId?: string
   toiletAwardPlayerId?: string
+  defendingChampionTeamId?: string
 }
 
 export interface CourseHistoryRound {
