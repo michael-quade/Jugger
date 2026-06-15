@@ -41,23 +41,25 @@ Two-on-two best-ball match play. Each twosome takes its **best NET score** per h
 - Tied match: 1 pt each (regular), ½ pt each (blind)
 
 ### Round 2 — Points Round (Stableford)
-Each player earns **gross Stableford points** vs. their quota. Quota = 36 − course HDCP.
+Each player earns **gross Stableford points** every hole. Goal: accumulate twosome points at or above the combined Quota.
+- **Twosome Quota = course par − (HDCP_A + HDCP_B)**. Example: par 72, HDCPs 10+10 → Quota = 52
 - Albatross = 10 · Eagle = 6 · Birdie = 4 · Par = 2 · Bogey = 1 · Double Bogey = ½ · Worse = 0
-- Regular match: **2 pts** · Blind match: **1 pt** · Magic Ball: **+1 pt per twosome** that holds it at finish
-- Team with accumulated points vs. quota wins the match
+- Regular match: **2 pts** · Blind match: **1 pt**
+- **Magic Ball**: special ball assigned to each twosome; players alternate using it for entire holes (Player A uses it on hole 1, Player B on hole 2, etc.). Twosome still holding it at finish earns **+1 pt**
+- All point values and quota formula configurable via Round Games page
 
 ### Round 3 — Texas Scramble
-All 4 players tee off; pick best drive; all play from there. **60% of course HDCP.** Ball count rules:
+All 4 players tee off; pick best drive; all play from there. **60% of course HDCP** (configurable). Ball count rules:
 - Holes 1–6: best 1 ball · Holes 7–12: best 2 balls · Holes 13–15: best 3 balls · Holes 16–18: best 4 balls
-- Finish: 1st = **4 pts** · 2nd = **2 pts** · 3rd = **1 pt**
+- Finish: 1st = **4 pts** · 2nd = **2 pts** · 3rd = **1 pt** (configurable)
 
 ### Round 4 — Individual Match Play
 Each player plays their own ball, NET scoring.
 - Each individual 1v1: **1 pt** · Each 2v2 twosome best-ball sub-match: **1 pt** · Blind: **½ pt**
 
 ### Round 5 — Captain's Choice
-Team captain picks the shot. HDCP = `floor(team aggregate × 15%)`. Min **3 tee balls** per player across 18 holes.
-- Finish: 1st = **4 pts** · 2nd = **2 pts** · 3rd = **1 pt**
+Team captain picks the shot. HDCP = `floor(team aggregate × 15%)` (configurable). Min **3 tee balls** per player across 18 holes (configurable).
+- Finish: 1st = **4 pts** · 2nd = **2 pts** · 3rd = **1 pt** (configurable)
 
 ---
 
@@ -75,15 +77,20 @@ Players net against the lowest Course HDCP in the field. Netted HDCP = player ra
 If netted HDCP > 18: `18 + 0.5 × (netted − 18)`
 
 ### Format-based percentages
-Handicap percentages are keyed to **format type**, not round number — so if formats are swapped between years the math updates automatically.
+Handicap percentages are keyed to **format type**, not round number. Defaults configurable via Round Games page.
 
-| Format | Percentage | Notes |
+| Format | Default % | Notes |
 |---|---|---|
 | `team_match_play` | 100% | Full netted+capped HDCP |
-| `points_round` | 100% (quota-based) | 36 − course HDCP |
+| `points_round` | 100% (quota-based) | Twosome quota = course par − (HDCP_A + HDCP_B) |
 | `texas_scramble` | 60% | Applied after netting+capping |
 | `individual_match` | 100% | Full netted+capped HDCP |
-| `captains_choice` | 15% of team sum | `floor(Σ individual HDCPs × 0.15)` |
+| `captains_choice` | 15% of team sum | `floor(Σ individual HDCPs × pct)` |
+
+### Handicap Module Singleton (`utils/handicap.ts`)
+Module-level vars (`_scramblePct`, `_captainsChoicePct`, `_stableford`) are updated by a Zustand store subscriber whenever `gameConfig` changes. All handicap/scoring functions read these vars at call time — no threading of config through callers needed.
+- `configureHdcpSettings(config)` — called by store on load + every gameConfig change
+- `getScramblePct()` / `getCaptainsChoicePct()` — read current values (used in ScorecardCard labels)
 
 ---
 
@@ -134,6 +141,8 @@ GitHub Actions (`.github/workflows/deploy.yml`) triggers on push to `master`:
 1. `npm ci` + `npm run build` with Supabase secrets injected
 2. `dist/` uploaded to GitHub Pages; `public/CNAME` sets `juggerknockerinvitational.com`
 
+**Action versions (Node 24-native):** `actions/checkout@v6`, `actions/setup-node@v6`, `actions/upload-pages-artifact@v5`, `actions/deploy-pages@v5`. Build uses Node 22. Runner opts into Node 24 via `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true`.
+
 Required GitHub secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 
 Local dev: `.env.local` (gitignored) with the same two vars.
@@ -149,13 +158,14 @@ jugger-app/src/
   index.css                     # Tailwind + custom component styles
   types/index.ts                # All TypeScript interfaces
   store/
-    useTournamentStore.ts       # Zustand store v15 (all state + actions)
+    useTournamentStore.ts       # Zustand store v18 (all state + actions)
     useAuthStore.ts             # Auth state (admin/scorer login)
   lib/supabase.ts               # Supabase client init (null if env vars absent)
   hooks/useSupabaseSync.ts      # Real-time sync hook + useSyncStatus
   utils/
     auth.ts                     # SHA-256 password hash/verify (Web Crypto API)
-    handicap.ts                 # Course HDCP formulas, stroke dots, Stableford
+    handicap.ts                 # Course HDCP formulas, stroke dots, Stableford;
+                                #   module-level config singleton updated by store
     matchplay.ts                # Per-format scoring computation
     pairings.ts                 # Match generation + lookup helpers
     champion.ts                 # Tournament champion detection + Ryder Cup tiebreaker
@@ -168,18 +178,22 @@ jugger-app/src/
   components/
     Layout.tsx                  # Sticky chrome (header + nav + history banner in one
                                 #   sticky wrapper), Outlet
-    ScorecardCard.tsx           # Per-format scorecard display + score entry
+    ScorecardCard.tsx           # Per-format scorecard display + score entry;
+                                #   reads gameConfig from store for dynamic labels
     AdminPanel.tsx              # Admin/scorer account management modal
     HeaderAdminWidget.tsx       # Header login/logout widget
   pages/
     Dashboard.tsx               # Overview: champion hero, standings, schedule, rosters,
-                                #   finalize
+                                #   award thumbnails, defending champs, finalize
     Teams.tsx                   # Roster editing, substitute/permanent replacement,
-                                #   HDCP table
+                                #   HDCP table, award images, defending champs badge
     Schedule.tsx                # Round dates, tee times, format selector
     Pairings.tsx                # Match generation + manual editing (admin only)
-    ScorecardView.tsx           # Score entry UI, per-round simulate, auto team scores
+    ScorecardView.tsx           # Score entry UI, per-round simulate, auto team scores;
+                                #   RoundInfoBanner reads live gameConfig
     Courses.tsx                 # Active-year courses only (from roundConfigs); hole data
+    RoundGames.tsx              # Game format rules + configurable house parameters
+                                #   (admin only); changes apply immediately to scoring
     Results.tsx                 # Editable team standings table
     CtpPage.tsx                 # Par 3 CTP pot management
     HoleInOne.tsx               # HIO champion tracking + pot management
@@ -190,6 +204,11 @@ jugger-app/src/
     PrintAll.tsx                # Batch print all scorecards (2/page)
     SkidmoreHdcp.tsx            # WHS handicap tracker for Matt Skidmore (admin only)
 ```
+
+### Public Assets
+- `sandbagger.jpg` — Sandbagger Award image (shown next to award winner's name)
+- `toilet_award.webp` — Toilet Award image (shown next to award winner's name)
+- `Juggerknocker Invitational logo.png` — Tournament logo (header)
 
 ---
 
@@ -275,6 +294,25 @@ SkidmoreScore {
   notes?: string
 }
 
+GameConfig {
+  texasScrambleHdcpPct: number      // default 0.6
+  captainsChoiceHdcpPct: number     // default 0.15
+  captainsChoiceMinTeeBalls: number // default 3 (0 = no minimum)
+  enableBlinds: boolean             // default true; affects new pairing generation
+  enableMagicBall: boolean          // default true
+  stablefordAlbatross: number       // default 10
+  stablefordEagle: number           // default 6
+  stablefordBirdie: number          // default 4
+  stablefordPar: number             // default 2
+  stablefordBogey: number           // default 1
+  stablefordDouble: number          // default 0.5
+  regularMatchPts: number           // default 2
+  blindMatchPts: number             // default 1
+  teamFinish1stPts: number          // default 4
+  teamFinish2ndPts: number          // default 2
+  teamFinish3rdPts: number          // default 1
+}
+
 ArchivedYear {
   year, finalizedAt: string
   teams, roundConfigs, matches, teamScores, hdcpLocked
@@ -290,6 +328,10 @@ TournamentState {
   holeInOnes, ctpEntries, ctpDonations, ctpHioHistory
   hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations
   skidmoreScores: SkidmoreScore[]
+  sandbaggerPlayerId?: string       // player id holding Sandbagger Award
+  toiletAwardPlayerId?: string      // player id holding Toilet Award
+  defendingChampionTeamId?: string  // team id of prior year's champion
+  gameConfig: GameConfig            // house rules; wired into scoring calculations
 }
 
 AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
@@ -299,9 +341,9 @@ AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
 
 ## State Management
 
-### Zustand Store (`useTournamentStore`) — version 15
+### Zustand Store (`useTournamentStore`) — version 18
 
-Persists to `localStorage` key `jugger-tournament-2026`. All 15 versions have migration functions.
+Persists to `localStorage` key `jugger-tournament-2026`. All 18 versions have migration functions.
 
 **Key actions:**
 - `setYear / lockHandicaps / setPairingsLocked`
@@ -315,8 +357,13 @@ Persists to `localStorage` key `jugger-tournament-2026`. All 15 versions have mi
 - `setTeamScore / clearAllTeamScores / clearTeamScoresForRound`
 - `clearMatchScores / clearAllMatchScores / clearRoundMatches`
 - `addAdmin / updateAdmin / removeAdmin`
+- `setSandbaggerPlayer(id)` / `setToiletAwardPlayer(id)` — assign end-of-year awards
+- `setDefendingChampion(teamId)` — manually assign/override defending champion team
+- `setGameConfig(config)` — update house rules; triggers handicap module singleton update
 - `finalizeYear` — snapshots year → archivedYears, increments year, clears matches/scores;
-  single-year subs revert; permanent replacements graduate to core members
+  single-year subs revert; permanent replacements graduate; **auto-persists Skidmore tournament
+  scores** (non-blind, non-team-format rounds with all 18 holes scored, id `sk-tour-{year}-r{round}`);
+  **auto-computes defending champion** via `computeChampion`; sets `defendingChampionTeamId`
 - `switchToYear(year)` — swaps live state to archived year; saves liveCache first
 - `returnToLive()` — restores liveCache, saves any edits back to archivedYears
 - `addHoleInOne / updateHoleInOne / deleteHoleInOne`
@@ -326,6 +373,8 @@ Persists to `localStorage` key `jugger-tournament-2026`. All 15 versions have mi
 - `addSkidmoreScore / updateSkidmoreScore / removeSkidmoreScore`
 
 **Score propagation:** When a non-blind match score changes, the store automatically propagates those scores to the player's corresponding blind match in the same round.
+
+**GameConfig sync:** After store creation, a module-level subscriber calls `configureHdcpSettings(state.gameConfig)` on every state change so handicap calculations stay in sync without threading config through every call site.
 
 ### Auth Store (`useAuthStore`)
 
@@ -352,7 +401,7 @@ Not persisted (session-only).
 | `matches` | `match_id`, `tournament_year` | `match_json` (Match object) |
 | `team_scores` | `tournament_year`, `team_id`, `round` | `points`, `notes` |
 
-**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations, skidmoreScores`
+**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig`
 
 ### Sync Behavior
 - **On load:** Supabase wins over localStorage if rows exist
@@ -370,19 +419,20 @@ Not persisted (session-only).
 |---|---|---|
 | **Admin** | Shield icon → sign-in form | Everything: edit rosters, courses, schedule, pairings, scores, results, accounts |
 | **Scorer** | Same sign-in form | Enter scores, toggle Magic Ball, record match results |
-| **Guest** | No login | Read-only view of all pages except Pairings and Skidmore HDCP |
+| **Guest** | No login | Read-only view of all pages except Pairings, Round Games, and Skidmore HDCP |
 
 ### Page-Level Access
 
 | Page | Guests | Scorers | Admins |
 |---|---|---|---|
-| Dashboard | Read | Read | Full (lock HDCP, finalize year) |
-| Teams | Read | Read | Full (edit names, HDCP, substitutes, permanent replacements) |
+| Dashboard | Read | Read | Full (lock HDCP, assign awards, finalize year) |
+| Teams | Read | Read | Full (edit names, HDCP, substitutes, permanent replacements, awards) |
 | Schedule | Read | Read | Full (edit dates, tee times, format) |
-| **Pairings** | **Hidden/locked** | **Hidden/locked** | Full (generate, edit, lock) |
+| **Pairings** | **Hidden** | **Hidden** | Full (generate, edit, lock) |
 | Scorecards | Read | Enter scores, Magic Ball, match result | Full + simulate + clear |
 | Courses | Read | Read | Full (edit hole data) |
-| Results | Read | Read | Edit scores |
+| **Round Games** | **Hidden** | **Hidden** | Full (view rules, edit house parameters) |
+| Team Results | Read | Read | Edit scores |
 | Par 3 CTP | Read | Read | Full |
 | Hole in One | Read | Read | Full |
 | Stats | Read | Read | Read |
@@ -403,7 +453,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ## Navigation Order
 
-1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Team Results · 8. Par 3 CTP · 9. Hole in One · 10. Stats · 11. Archive · 12. History · 13. Print All · 14. Skidmore HDCP *(admin only)*
+1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Round Games *(admin only)* · 8. Team Results · 9. Par 3 CTP · 10. Hole in One · 11. Stats · 12. Archive · 13. History · 14. Print All · 15. Skidmore HDCP *(admin only)*
 
 ---
 
@@ -449,8 +499,9 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Stat cards** (click to navigate): Players → Teams, Courses → Courses, Matches → Schedule, Rounds → Results
 - **Standings** — sorted by total `teamScores` points
 - **Round Schedule** — list of rounds with date/time, links to Schedule page
-- **Team Rosters** — 3 cards (click any → Teams page); players with `ghinNumber` can be looked up via GHIN
-- **Finalize Tournament** — admin only, live year only; archives data and advances year
+- **Team Rosters** — 3 cards with team name row showing `🏆 Defending Champs` badge (right side, baseline-aligned) for the defending champion team; players with `ghinNumber` can be looked up via GHIN; Sandbagger and Toilet Award thumbnail images (`h-5 w-5`) shown inline next to award holders' names
+- **Admin controls**: dropdown to manually assign defending champion team
+- **Finalize Tournament** — admin only, live year only; Step 1: pick Sandbagger and Toilet Award winners; Step 2: confirm and archive
 
 ### Teams (`/teams`)
 - Edit player name / handicap index / GHIN number (admin only)
@@ -459,6 +510,8 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Make Sub Permanent** — upgrades an existing sub to a permanent roster member
 - HDCP table: raw, netted, capped, final HDCPs for all rounds; column headers show course name and format; note distinguishes 60% scramble rounds dynamically based on `roundConfigs.format`
 - Handicap lock toggle prevents edits; Captain's Choice team aggregate shown dynamically
+- **Award images** — player row shows `sandbagger.jpg` or `toilet_award.webp` (`h-full` filling the row height) for award holders; admin can assign/remove via thumbnail buttons; `✕` overlay removes the award
+- **Defending Champions** — team name row shows `🏆 Defending Champs` text; admin can click it to remove, or click `🏆` on other teams to assign
 
 ### Schedule (`/schedule`)
 - Per-round card: format selector (admin), date/tee pickers (admin), tee times for Match A/B/C
@@ -476,9 +529,12 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ### Scorecards (`/scorecards`)
 - Round tabs (1–5) + match selector list
+- **Round Info Banner** — per-round description panel above matches; reads live from `gameConfig` via `getFormatInfo(gc)` so all point values, pcts, and descriptions update instantly when house rules change
 - Per-match scorecard via `ScorecardCard` component (see below)
 - Score entry inputs (canEnterScores role)
 - Admin-only: **Simulate Scores** (per-round or global), Clear Scores, Clear All Scores
+  - Simulate includes Magic Ball random assignment for non-blind Points Round matches
+  - Clear sets `magicBall1/2: undefined` in addition to clearing scores
 - Auto-recomputes team scores when scores change (format-specific logic)
 - Deep links: `?match={matchId}&round={round}`
 
@@ -490,6 +546,19 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Official scorecard images with lightbox zoom
 - F9 and B9 hole tables: Hole | Par | HDCP | [tee yardages], all columns centered
 - Totals footer row in each hole table
+
+### Round Games (`/round-games`) — Admin only
+- Card per format (Team Match Play, Points Round, Texas Scramble, Individual Match Play, Captain's Choice)
+- Each card: format name + informal nickname, assigned round badge, description, "How It Works" bullet list, HDCP note
+- **Configurable parameters** — admin-editable inputs; changes take effect immediately for all scoring and descriptions:
+  - Texas Scramble: HDCP %, finish points (1st/2nd/3rd)
+  - Captain's Choice: HDCP %, min tee balls per player, finish points
+  - Points Round: Magic Ball on/off, blinds on/off, all 6 Stableford point values, regular/blind match points
+  - Team Match Play: blinds on/off, regular/blind match points
+  - Individual Match Play: blinds on/off, match/twosome/blind point values
+- **Match Structure** reference card at bottom: twosome matrix (T1A vs T2A etc.) and team format rules
+- **Reset to Defaults** button restores `DEFAULT_GAME_CONFIG`
+- Round badge shows currently-assigned round from `roundConfigs` (updates live when Schedule changes format)
 
 ### Results (`/results`)
 - Grid: Team × Round with editable point cells (admin)
@@ -542,7 +611,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - WHS handicap tracker for Matt Skidmore (not in GHIN)
 - **HDCP Status cards**: computed WHS index + Teams page sync status
 - **Auto-applies** computed HDCP to Teams page via `updatePlayer` when HDCPs are not locked; shows "projected" post-tournament HDCP when locked
-- **Tournament scores auto-derived** from match data (non-blind R1/R2/R4 with all 18 holes scored); appear/disappear automatically with simulation
+- **Tournament scores auto-derived** from match data (non-blind, non-team-format rounds — excludes `texas_scramble` and `captains_choice` — with all 18 holes scored); appear/disappear automatically with simulation; **permanently saved on `finalizeYear`** with ids `sk-tour-{year}-r{round}`
 - **Score table**: color-coded rows — gold = used in calculation, blue = in 20-score window, gray = outside window; shows differential breakdown
 - **18-hole and 9-hole entry** supported:
   - 18-hole: standard score differential = `(113 / Slope) × (Score − Rating)`
@@ -553,11 +622,38 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ---
 
+## End-of-Year Awards
+
+Two awards tracked in `TournamentState` and displayed throughout the app:
+
+| Award | Field | Default | Image |
+|---|---|---|---|
+| **Sandbagger** | `sandbaggerPlayerId` | `'pitts'` (Ron Pitts) | `public/sandbagger.jpg` |
+| **Toilet Award** | `toiletAwardPlayerId` | `'skidmore'` (Matt Skidmore) | `public/toilet_award.webp` |
+
+- **Dashboard**: `h-5 w-5` thumbnail next to player name in roster cards
+- **Teams**: full-height award image in player row right column; admin assigns/removes via thumbnail buttons with `✕` overlay
+- **Finalize flow**: Step 1 prompts admin to pick both winners before archiving the year
+
+---
+
+## Defending Champions
+
+`defendingChampionTeamId?: string` in `TournamentState`.
+
+- **Auto-set on `finalizeYear`**: `computeChampion` determines the winner; Ryder Cup tiebreaker (tied = defending champion retains)
+- **Manual override**: admin dropdown on Dashboard; trophy button on Teams page
+- **Display**: `🏆 Defending Champs` in font-serif font-bold text-lg text-masters-gold in team name row on both Dashboard and Teams pages
+
+---
+
 ## ScorecardCard Component
 
 Renders the full interactive scorecard for one match. Handles all 5 formats.
 
 **Props:** `match, teams, course, config, interactive?, onScoreChange?, onTeamHoleScoreChange?, onTeeShotChange?`
+
+Reads `gameConfig` from store directly (via `useTournamentStore`) so description labels and Captain's Choice team HDCP reflect live house rules without prop threading.
 
 **Key behavior per format:**
 
@@ -565,13 +661,13 @@ Renders the full interactive scorecard for one match. Handles all 5 formats.
 |---|---|---|---|
 | team_match_play | Per-player gross | Net per hole | Running +/- holes |
 | points_round | Per-player gross | Stableford pts | Running quota delta |
-| texas_scramble | Per-player gross | Net (60% HDCP) | Best-ball running total |
+| texas_scramble | Per-player gross | Net (configurable % HDCP) | Best-ball running total |
 | individual_match | Per-player gross | Net per hole | Two 1v1 + 2v2 rows |
-| captains_choice | Team hole score (admin) + tee shot selector | Net (15% team HDCP) | Running team total |
+| captains_choice | Team hole score (admin) + tee shot selector | Net (configurable % team HDCP) | Running team total |
 
 Stroke dots (`.` / `..`) calculated from `getStrokeDots(courseHdcp, holeHdcpRank)`.
 
-R5: All 4 players share the same `teamHdcp = floor(Σ individual HDCPs × 0.15)`.
+R5: All 4 players share the same `teamHdcp = floor(Σ individual HDCPs × captainsChoiceHdcpPct)`.
 
 ---
 
@@ -580,7 +676,7 @@ R5: All 4 players share the same `teamHdcp = floor(Σ individual HDCPs × 0.15)`
 Called in `ScorecardView` after every score entry:
 
 - `computeMatchPlay(match, holes, hdcps)` — best-ball net per hole, running +/- holes
-- `computePointsRound(match, holes, hdcps)` — gross Stableford vs quota
+- `computePointsRound(match, holes, hdcps)` — gross Stableford vs quota; twosome quota = `coursePar − (hdcpA + hdcpB)` where `coursePar` is derived from the `holes` array
 - `computeScramble(match, holes, hdcps)` — ball count rules (1/2/3/4 by hole range)
 - `computeIndividualMatch(match, holes, hdcps)` — two `compute1v1` results + 2v2
 - `computeCaptainsChoice(teamHoleScores, holes, teamHdcp)` — shared net score
@@ -602,17 +698,18 @@ courseHandicap(index, slope, rating, par)
   → round(index × (slope/113) + (rating - par))
 
 getPlayerCourseHdcp(player, course, tee, round, allPlayers, format = '')
-  → applies netting, 18-cap, format % (60% for texas_scramble)
+  → applies netting, 18-cap, format % from module singleton
   → format param determines percentage — not round number
 
 getRoundHdcpPct(format: string): number | null
-  → 0.6 for texas_scramble, 0.15 for captains_choice, null otherwise
+  → _scramblePct for texas_scramble, _captainsChoicePct for captains_choice, null otherwise
+  → reads from module-level vars (updated via configureHdcpSettings)
 
 formatRoundHdcp(format: string): string
-  → human-readable description of the HDCP treatment for a format
+  → human-readable description using live pct values
 
 computeAllCourseHdcps(players, course, tee, round, allPlayers, format = '')
-  → for captains_choice: all players get same teamHdcp = round(Σ × 0.15)
+  → for captains_choice: all players get same teamHdcp = round(Σ × _captainsChoicePct)
   → otherwise delegates to getPlayerCourseHdcp per player
 
 apply18Cap(netted)
@@ -624,7 +721,21 @@ getStrokeDots(courseHdcp, holeHdcpRank)
   → '..' if player gets 2 strokes on that hole
 
 stablefordPoints(gross, par, strokes)
-  → net = gross - strokes; returns 0/0.5/1/2/4/6/10
+  → reads from _stableford module var (set by configureHdcpSettings)
+  → returns 0/double/bogey/par/birdie/eagle/albatross pts
+
+playerQuota(courseHdcp, coursePar)
+  → Math.round(coursePar / 2) - courseHdcp  (per-player display value)
+
+teamQuota(hdcps, coursePar)
+  → coursePar - sum(hdcps)  (twosome/team quota for match result)
+
+configureHdcpSettings(config)
+  → updates _scramblePct, _captainsChoicePct, _stableford module vars
+  → called by store subscriber on every gameConfig change
+
+getScramblePct() / getCaptainsChoicePct()
+  → read current module-level pct values (used by ScorecardCard labels)
 ```
 
 ---
@@ -632,10 +743,11 @@ stablefordPoints(gross, par, strokes)
 ## Champion Detection (`utils/champion.ts`)
 
 ```
-computeChampion(teams, teamScores, rounds)
+computeChampion(teams, teamScores, rounds, defendingChampionTeamId?)
   → determines winning team by total points
-  → Ryder Cup tiebreaker: if tied, counts individual round wins
-  → returns { championTeam, isTied, tiedTeams } or null if incomplete
+  → Ryder Cup tiebreaker: if tied, counts individual round wins;
+    defending champion retains on tie
+  → returns { champion, isTied, tiedTeams } or null if incomplete
 
 getDefendingChampionId(archivedYears, teams)
   → finds previous year's champion from archivedYears
