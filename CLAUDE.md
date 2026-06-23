@@ -647,6 +647,54 @@ Two awards tracked in `TournamentState` and displayed throughout the app:
 
 ---
 
+## Finalize Tournament
+
+Admin-only action on the Dashboard (live year only). Two-step flow:
+
+- **Step 1** — Admin selects the Sandbagger Award and Toilet Award winners from player dropdowns (pre-populated with current holders). These are saved to `sandbaggerPlayerId` / `toiletAwardPlayerId` in state immediately.
+- **Step 2** — Admin confirms. `finalizeYear()` fires.
+
+### What gets stored
+
+| Data | Where stored | Notes |
+|---|---|---|
+| **Full year snapshot** | `archivedYears[]` | Frozen `ArchivedYear` object (see below) |
+| **Skidmore tournament scores** | `skidmoreScores[]` | Auto-derived from match data; id `sk-tour-{year}-r{round}` |
+| **Defending champion** | `defendingChampionTeamId` | Auto-computed via `computeChampion`; carried into next year |
+| **End-of-year awards** | `sandbaggerPlayerId`, `toiletAwardPlayerId` | Already saved in Step 1; persist into next year |
+
+**ArchivedYear snapshot contains:**
+- `year`, `finalizedAt` (ISO timestamp)
+- `teams` — with subs intact as they were during the year (accurate historical record)
+- `roundConfigs` — all 5 rounds, courses, formats, tee times
+- `matches` — all match data with every hole score
+- `teamScores` — final point totals per round
+- `hdcpLocked` state
+
+**Skidmore score eligibility:** non-blind matches only; excludes `texas_scramble` and `captains_choice` formats; all 18 holes must be entered. Score not added if an entry with that id already exists.
+
+### What gets reset for next year
+
+- `matches` → emptied
+- `teamScores` → emptied
+- `hdcpLocked` → false
+- `year` / `liveYear` → incremented by 1
+- Single-year subs → reverted to original players
+- Permanent replacements → graduate to core roster members (flags cleared)
+
+### How archived data is visible
+
+| Where | What you see |
+|---|---|
+| **Header year dropdown** (admin) | Prior year appears as a selectable option |
+| **History mode** (switching to prior year) | Full read-only view of every page — scores, pairings, standings, roster — exactly as it was |
+| **Dashboard** (live year) | `🏆 Defending Champs` badge on the champion team |
+| **Dashboard** (viewing archived year) | Champion hero card with team color banner and trophy |
+| **Stats page** | Prior year handicap data auto-merged into trend charts |
+| **Skidmore HDCP page** | Tournament round scores appear permanently in the score table |
+
+---
+
 ## ScorecardCard Component
 
 Renders the full interactive scorecard for one match. Handles all 5 formats.
