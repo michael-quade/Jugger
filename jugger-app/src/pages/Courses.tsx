@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { Course, HoleData, CourseTee } from '../types'
@@ -61,6 +61,17 @@ export default function Courses() {
   const [selected, setSelected] = useState<string>(activeCourses[0]?.id ?? '')
   const course = activeCourses.find(c => c.id === selected) ?? activeCourses[0]
 
+  const [stickyTop, setStickyTop] = useState(220)
+  useEffect(() => {
+    const header = document.getElementById('site-header')
+    if (!header) return
+    const update = () => setStickyTop(header.offsetHeight)
+    update()
+    const obs = new ResizeObserver(update)
+    obs.observe(header)
+    return () => obs.disconnect()
+  }, [])
+
   function handleRemoveCourse(id: string) {
     if (!confirm('Delete this course? This cannot be undone.')) return
     removeCourse(id)
@@ -78,8 +89,9 @@ export default function Courses() {
         </div>
       ) : (
         <>
-          {/* Course tabs */}
-          <div className="flex gap-2 flex-wrap items-center">
+          {/* Course tabs — sticky below the site header */}
+          <div className="sticky z-10 -mx-4 px-4 py-2 bg-masters-cream flex gap-2 flex-wrap items-center"
+               style={{ top: stickyTop }}>
             {activeCourses.map(c => (
               <button
                 key={c.id}
