@@ -442,7 +442,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       clearAllMatchScores: () =>
         set(state => ({
-          matches: state.matches.map(m => ({ ...m, scores: {}, result: undefined, magicBall1: undefined, magicBall2: undefined })),
+          matches: state.matches.map(m => ({ ...m, scores: {}, teamHoleScores: {}, teeShotsUsed: {}, result: undefined, magicBall1: undefined, magicBall2: undefined })),
         })),
 
       clearAllTeamScores: () => set({ teamScores: [] }),
