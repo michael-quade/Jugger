@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Cell, RadarChart, Radar,
@@ -52,6 +52,17 @@ type Tab = 'team' | 'scoring' | 'h2h' | 'format' | 'course' | 'hdcp' | 'records'
 
 export default function Analytics() {
   const [activeTab, setActiveTab] = useState<Tab>('team')
+  const [stickyTop, setStickyTop] = useState(220)
+
+  useEffect(() => {
+    const header = document.getElementById('site-header')
+    if (!header) return
+    const update = () => setStickyTop(header.offsetHeight)
+    update()
+    const obs = new ResizeObserver(update)
+    obs.observe(header)
+    return () => obs.disconnect()
+  }, [])
 
   const {
     teams, matches, teamScores, roundConfigs, courses,
@@ -117,8 +128,9 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* Tab bar — sticky below the site header (~224px) */}
-      <div className="sticky top-56 z-10 -mx-4 px-4 bg-masters-cream border-b border-gray-200 flex flex-wrap gap-1 pt-1 pb-2">
+      {/* Tab bar — sticky below the measured site header */}
+      <div className="sticky z-10 -mx-4 px-4 bg-masters-cream border-b border-gray-200 flex flex-wrap gap-1 pt-1 pb-2"
+           style={{ top: stickyTop }}>
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}

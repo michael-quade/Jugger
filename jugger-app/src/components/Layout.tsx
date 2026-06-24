@@ -22,9 +22,9 @@ const NAV = [
   { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
   { to: '/analytics',  label: 'Analytics',    icon: TrendingUp },
-  { to: '/archive',    label: 'Archive',      icon: Archive },
+  { to: '/archive',    label: 'Archive',      icon: Archive,    adminOnly: true },
   { to: '/history',    label: 'Course History', icon: BookOpen },
-  { to: '/print',           label: 'Print All',      icon: Printer },
+  { to: '/print',           label: 'Print All',      icon: Printer,   adminOnly: true },
   { to: '/skidmore-hdcp',  label: 'Skidmore HDCP',  icon: Calculator, adminOnly: true },
 ]
 
@@ -36,7 +36,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Sticky chrome: header + nav + optional history banner */}
-      <div className="sticky top-0 z-50 no-print">
+      <div id="site-header" className="sticky top-0 z-50 no-print">
         {/* Top header */}
         <header className="bg-masters-dark text-white">
           <div className="max-w-7xl mx-auto px-4 py-5 flex items-center gap-4">
