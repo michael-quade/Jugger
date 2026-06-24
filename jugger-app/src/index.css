@@ -75,6 +75,14 @@
   .scorecard-table td {
     border-color: #888 !important;
   }
+  /* Hide score-entry inputs; show print-only score spans instead */
+  .scorecard-table input[type=number] {
+    display: none !important;
+  }
+  .scorecard-table input[type=number]::-webkit-outer-spin-button,
+  .scorecard-table input[type=number]::-webkit-inner-spin-button {
+    display: none !important;
+  }
 }
 
 /* Scorecard table styles */
@@ -114,9 +122,17 @@
   font-weight: 600;
 }
 .scorecard-table .dot-cell {
+  position: relative;
+}
+.scorecard-table .dot-indicator {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
   color: #006747;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
 }
 .scorecard-table .row-result td {
   background-color: #fffbe6;

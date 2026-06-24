@@ -828,22 +828,28 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
         const net   = result.holeNetScores[i]
         const run   = result.running[i]
         return (
-          <td key={h.number} className={getStrokeDots(teamHdcp, h.hdcpOrder) ? 'dot-cell' : ''}>
+          <td key={h.number} className={getStrokeDots(teamHdcp, h.hdcpOrder) ? 'dot-cell' : 'relative'}>
             {interactive && onTeamHoleScoreChange ? (
-              <div className="flex flex-col items-center leading-none">
-                <input
-                  type="number" min={1} max={12}
-                  value={gross ?? ''}
-                  onChange={e => {
-                    const v = e.target.value === '' ? null : parseInt(e.target.value)
-                    onTeamHoleScoreChange(h.number, v)
-                  }}
-                  className="w-full border-none text-center text-xs bg-transparent"
-                />
-                {net != null && (
-                  <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
-                )}
-              </div>
+              <>
+                <div className="flex flex-col items-center leading-none print:hidden">
+                  <input
+                    type="number" min={1} max={12}
+                    value={gross ?? ''}
+                    onChange={e => {
+                      const v = e.target.value === '' ? null : parseInt(e.target.value)
+                      onTeamHoleScoreChange(h.number, v)
+                    }}
+                    className="w-full border-none text-center text-xs bg-transparent"
+                  />
+                  {net != null && (
+                    <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
+                  )}
+                </div>
+                <div className="hidden print:flex flex-col items-center leading-none">
+                  {gross != null && <span>{gross}</span>}
+                  {net != null && <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>}
+                </div>
+              </>
             ) : gross != null ? (
               <div className="flex flex-col items-center leading-none">
                 <span>{gross}</span>
@@ -852,6 +858,9 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
                 )}
               </div>
             ) : null}
+            {getStrokeDots(teamHdcp, h.hdcpOrder) && (
+              <span className="dot-indicator">{getStrokeDots(teamHdcp, h.hdcpOrder)}</span>
+            )}
           </td>
         )
       })}
@@ -1010,25 +1019,30 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
         const net     = score != null && strokes > 0 ? score - strokes : null
 
         return (
-          <td key={h.number} className={dots ? 'dot-cell' : ''}>
+          <td key={h.number} className={dots ? 'dot-cell' : 'relative'}>
             {interactive && onScoreChange ? (
-              <div className="flex flex-col items-center leading-none">
-                <input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={score ?? ''}
-                  onChange={e => {
-                    const v = e.target.value === '' ? null : parseInt(e.target.value)
-                    onScoreChange(pid, h.number, v)
-                  }}
-                  className="w-full border-none text-center text-xs bg-transparent"
-                  placeholder={dots || ''}
-                />
-                {net != null && (
-                  <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>
-                )}
-              </div>
+              <>
+                <div className="flex flex-col items-center leading-none print:hidden">
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={score ?? ''}
+                    onChange={e => {
+                      const v = e.target.value === '' ? null : parseInt(e.target.value)
+                      onScoreChange(pid, h.number, v)
+                    }}
+                    className="w-full border-none text-center text-xs bg-transparent"
+                  />
+                  {net != null && (
+                    <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>
+                  )}
+                </div>
+                <div className="hidden print:flex flex-col items-center leading-none">
+                  {score != null && <span>{score}</span>}
+                  {net != null && <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>}
+                </div>
+              </>
             ) : score != null ? (
               <div className="flex flex-col items-center leading-none">
                 <span>{score}</span>
@@ -1036,9 +1050,8 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
                   <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>
                 )}
               </div>
-            ) : (
-              <span className="text-masters-green opacity-60">{dots}</span>
-            )}
+            ) : null}
+            {dots && <span className="dot-indicator">{dots}</span>}
           </td>
         )
       })}
