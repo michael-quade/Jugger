@@ -21,7 +21,7 @@ const NAV = [
   { to: '/results',      label: 'Team Results', icon: Trophy },
   { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
-  { to: '/stats',      label: 'Stats',        icon: TrendingUp },
+  { to: '/analytics',  label: 'Analytics',    icon: TrendingUp },
   { to: '/archive',    label: 'Archive',      icon: Archive },
   { to: '/history',    label: 'Course History', icon: BookOpen },
   { to: '/print',           label: 'Print All',      icon: Printer },

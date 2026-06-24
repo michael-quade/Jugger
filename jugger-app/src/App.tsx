@@ -7,6 +7,7 @@ import Teams from './pages/Teams'
 import Courses from './pages/Courses'
 import CourseHistory from './pages/CourseHistory'
 import Stats from './pages/Stats'
+import Analytics from './pages/Analytics'
 import FileArchive from './pages/FileArchive'
 import Schedule from './pages/Schedule'
 import Pairings from './pages/Pairings'
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="courses" element={<Courses />} />
         <Route path="history" element={<CourseHistory />} />
         <Route path="stats" element={<Stats />} />
+        <Route path="analytics" element={<Analytics />} />
         <Route path="archive" element={<FileArchive />} />
         <Route path="schedule" element={<Schedule />} />
         <Route path="pairings" element={<Pairings />} />
