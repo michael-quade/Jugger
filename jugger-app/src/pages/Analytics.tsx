@@ -4,10 +4,10 @@ import {
   ResponsiveContainer, ReferenceLine, Cell, RadarChart, Radar,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend,
 } from 'recharts'
-import { Trophy, TrendingUp, Users, Crosshair, BarChart2, BookOpen, Star } from 'lucide-react'
+import { Trophy, TrendingUp, Users, Crosshair, BarChart2, BookOpen, Star, Flag } from 'lucide-react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { PLAYER_HDCP_HISTORY, HDCP_YEARS } from '../data/hdcpHistory'
-import type { Team, ArchivedYear } from '../types'
+import type { Team, ArchivedYear, CtpEntry, CtpDonation } from '../types'
 import {
   computeScoringProfiles, computeH2H, computePartnerRecords,
   computeTeamResults, computeFormatStats, computeCourseStats,
@@ -46,7 +46,7 @@ const SCORE_COLORS = {
   worse:  '#7f1d1d',
 }
 
-type Tab = 'team' | 'scoring' | 'h2h' | 'format' | 'course' | 'hdcp' | 'records'
+type Tab = 'team' | 'scoring' | 'h2h' | 'format' | 'course' | 'hdcp' | 'records' | 'ctp'
 
 // ─── Root page ────────────────────────────────────────────────────────────────
 
@@ -56,6 +56,7 @@ export default function Analytics() {
   const {
     teams, matches, teamScores, roundConfigs, courses,
     archivedYears, liveYear, liveCache, isViewingHistory, courseHistory,
+    ctpEntries, ctpDonations,
   } = useTournamentStore()
 
   const liveTeams = isViewingHistory ? (liveCache?.teams ?? teams) : teams
@@ -102,6 +103,7 @@ export default function Analytics() {
     { id: 'course',  label: 'Course Stats',     icon: BookOpen },
     { id: 'hdcp',    label: 'HDCP Trends',      icon: TrendingUp },
     { id: 'records', label: 'Records',          icon: Users },
+    { id: 'ctp',     label: 'Par 3 CTP',        icon: Flag },
   ]
 
   return (
@@ -115,8 +117,8 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* Tab bar */}
-      <div className="flex flex-wrap gap-1 border-b border-gray-200 pb-1">
+      {/* Tab bar — sticky below the site header (~224px) */}
+      <div className="sticky top-56 z-10 -mx-4 px-4 bg-masters-cream border-b border-gray-200 flex flex-wrap gap-1 pt-1 pb-2">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -140,6 +142,7 @@ export default function Analytics() {
       {activeTab === 'course'  && <CourseStatsTab courseStat={courseStat} />}
       {activeTab === 'hdcp'    && <HdcpTrends     liveTeams={liveTeams} archivedYears={archivedYears} liveYear={liveYear} playerName={playerName} />}
       {activeTab === 'records' && <RecordsTab     records={records} />}
+      {activeTab === 'ctp'     && <CtpAnalyticsTab ctpEntries={ctpEntries} ctpDonations={ctpDonations} scoring={scoring} playerName={playerName} />}
     </div>
   )
 }
@@ -1202,6 +1205,305 @@ function RecordsTab({ records }: { records: ReturnType<typeof computeRecords> })
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Par 3 CTP tab ───────────────────────────────────────────────────────────
+
+function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
+  ctpEntries: CtpEntry[]
+  ctpDonations: CtpDonation[]
+  scoring: ReturnType<typeof computeScoringProfiles>
+  playerName: (id: string) => string
+}) {
+  const [selectedYear, setSelectedYear] = useState<number | 'all'>('all')
+
+  const years = [...new Set(ctpEntries.map(e => e.year))].sort()
+
+  // Prize per hole per year: total paid donations ÷ number of CTP holes that year
+  const yearPrize: Record<number, number> = {}
+  for (const yr of years) {
+    const paid = ctpDonations.filter(d => d.year === yr && d.paid).reduce((s, d) => s + d.amount, 0)
+    const holes = ctpEntries.filter(e => e.year === yr).length
+    yearPrize[yr] = holes > 0 ? paid / holes : 0
+  }
+
+  const filtered = selectedYear === 'all'
+    ? [...ctpEntries].sort((a, b) => b.year - a.year || a.round - b.round || a.hole - b.hole)
+    : ctpEntries.filter(e => e.year === selectedYear).sort((a, b) => a.round - b.round || a.hole - b.hole)
+
+  // Leaderboard — keyed by winnerName string (CTP stores names, not IDs)
+  const winMap: Record<string, { count: number; earnings: number; holes: string[] }> = {}
+  for (const e of ctpEntries) {
+    if (e.winnerName) {
+      if (!winMap[e.winnerName]) winMap[e.winnerName] = { count: 0, earnings: 0, holes: [] }
+      winMap[e.winnerName].count++
+      winMap[e.winnerName].earnings += yearPrize[e.year] ?? 0
+      winMap[e.winnerName].holes.push(`${e.courseName} H${e.hole}`)
+    }
+  }
+  const leaderboard = Object.entries(winMap).sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
+
+  // Hole frequency across all years
+  const holeFreq: Record<string, { courseName: string; hole: number; yardage?: number; timesPlayed: number; timesWon: number }> = {}
+  for (const e of ctpEntries) {
+    const key = `${e.courseName}-${e.hole}`
+    if (!holeFreq[key]) holeFreq[key] = { courseName: e.courseName, hole: e.hole, yardage: e.yardage, timesPlayed: 0, timesWon: 0 }
+    holeFreq[key].timesPlayed++
+    if (e.winnerName) holeFreq[key].timesWon++
+    if (e.yardage && !holeFreq[key].yardage) holeFreq[key].yardage = e.yardage
+  }
+  const holeList = Object.values(holeFreq).sort((a, b) => b.timesPlayed - a.timesPlayed || a.hole - b.hole)
+
+  const totalHoles    = ctpEntries.length
+  const noWinner      = ctpEntries.filter(e => !e.winnerName).length
+  const totalPrize    = leaderboard.reduce((s, [, d]) => s + d.earnings, 0)
+  const allIds        = TEAM_GROUPS.flatMap(g => g.ids)
+
+  // Match player ID → CTP win count by resolving name
+  function ctpWinsById(id: string): number {
+    return winMap[playerName(id)]?.count ?? 0
+  }
+
+  if (ctpEntries.length === 0) {
+    return <EmptyState msg="CTP data will appear once Par 3 CTP entries are recorded on the Par 3 CTP page." />
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Year filter */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Year</span>
+        <div className="flex gap-1 flex-wrap">
+          <button onClick={() => setSelectedYear('all')}
+            className={`px-3 py-1 rounded text-sm font-semibold transition-colors ${selectedYear === 'all' ? 'bg-masters-green text-white' : 'bg-masters-light text-masters-dark hover:bg-masters-green/20'}`}>
+            All
+          </button>
+          {years.map(y => (
+            <button key={y} onClick={() => setSelectedYear(y)}
+              className={`px-3 py-1 rounded text-sm font-semibold transition-colors ${selectedYear === y ? 'bg-masters-green text-white' : 'bg-masters-light text-masters-dark hover:bg-masters-green/20'}`}>
+              {y}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Overview cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="card text-center">
+          <div className="text-3xl font-serif font-bold text-masters-dark">{totalHoles}</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">CTP Holes Played</div>
+        </div>
+        <div className="card text-center">
+          <div className="text-3xl font-serif font-bold text-amber-600">{noWinner}</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">No Winner</div>
+          <div className="text-xs text-gray-400 mt-0.5">{totalHoles > 0 ? ((noWinner / totalHoles) * 100).toFixed(0) : 0}% of holes</div>
+        </div>
+        <div className="card text-center">
+          <div className="text-3xl font-serif font-bold text-masters-green">${totalPrize.toFixed(0)}</div>
+          <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">Total Prize Distributed</div>
+        </div>
+      </div>
+
+      {/* Player leaderboard */}
+      {leaderboard.length > 0 && (
+        <div className="card">
+          <h2 className="section-header">All-Time CTP Leaderboard</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead><tr className="bg-masters-light">
+                <th className="border p-2 text-center w-8">#</th>
+                <th className="border p-2 text-left">Player</th>
+                <th className="border p-2 text-center">Wins</th>
+                <th className="border p-2 text-center">Win Rate</th>
+                <th className="border p-2 text-center">Est. Earnings</th>
+                <th className="border p-2 text-left">Holes Won</th>
+              </tr></thead>
+              <tbody>
+                {leaderboard.map(([name, data], i) => {
+                  const id = allIds.find(id => playerName(id) === name)
+                  const winRate = totalHoles > 0 ? ((data.count / totalHoles) * 100).toFixed(1) : '—'
+                  return (
+                    <tr key={name} className="hover:bg-gray-50">
+                      <td className="border p-2 text-center font-bold text-gray-400">{i + 1}</td>
+                      <td className="border p-2 font-semibold" style={{ color: id ? PLAYER_COLORS[id] : undefined }}>{name}</td>
+                      <td className="border p-2 text-center text-xl font-serif font-bold text-masters-gold">{data.count}</td>
+                      <td className="border p-2 text-center">{winRate}%</td>
+                      <td className="border p-2 text-center font-semibold text-masters-green">${data.earnings.toFixed(0)}</td>
+                      <td className="border p-2 text-gray-500 text-[11px]">
+                        {data.holes.slice(0, 4).join(' · ')}
+                        {data.holes.length > 4 && <span className="text-gray-400"> +{data.holes.length - 4} more</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {/* Players with zero wins */}
+                {allIds
+                  .filter(id => !winMap[playerName(id)])
+                  .map(id => (
+                    <tr key={id} className="hover:bg-gray-50 text-gray-400">
+                      <td className="border p-2 text-center">—</td>
+                      <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
+                      <td className="border p-2 text-center">0</td>
+                      <td className="border p-2 text-center">0%</td>
+                      <td className="border p-2 text-center">$0</td>
+                      <td className="border p-2">—</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Full CTP results log */}
+      <div className="card">
+        <h2 className="section-header">CTP Results Log</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead><tr className="bg-masters-light">
+              <th className="border p-2 text-center">Year</th>
+              <th className="border p-2 text-center">Round</th>
+              <th className="border p-2 text-left">Course</th>
+              <th className="border p-2 text-center">Hole</th>
+              <th className="border p-2 text-center">Yardage</th>
+              <th className="border p-2 text-left">Winner</th>
+              <th className="border p-2 text-center">Paid</th>
+              <th className="border p-2 text-center">→ HIO</th>
+              <th className="border p-2 text-center">Prize</th>
+            </tr></thead>
+            <tbody>
+              {filtered.map(e => {
+                const id = allIds.find(id => playerName(id) === e.winnerName)
+                const prize = e.winnerName && yearPrize[e.year] ? `$${yearPrize[e.year].toFixed(0)}` : '—'
+                return (
+                  <tr key={e.id} className={`hover:bg-gray-50 ${!e.winnerName ? 'opacity-60' : ''}`}>
+                    <td className="border p-2 text-center text-gray-500">{e.year}</td>
+                    <td className="border p-2 text-center">R{e.round}</td>
+                    <td className="border p-2">{e.courseName}</td>
+                    <td className="border p-2 text-center font-bold">{e.hole}</td>
+                    <td className="border p-2 text-center text-gray-400">{e.yardage ? `${e.yardage}y` : '—'}</td>
+                    <td className="border p-2 font-semibold" style={{ color: id ? PLAYER_COLORS[id] : undefined }}>
+                      {e.winnerName ?? <span className="text-gray-300 italic font-normal">No winner</span>}
+                    </td>
+                    <td className="border p-2 text-center">
+                      {e.winnerName ? (e.winnerPaid ? <span className="text-masters-green font-bold">✓</span> : <span className="text-gray-400">○</span>) : '—'}
+                    </td>
+                    <td className="border p-2 text-center">
+                      {e.donatedToHio ? <span className="text-masters-gold font-semibold">${e.hioDonationAmount ?? '?'}</span> : '—'}
+                    </td>
+                    <td className="border p-2 text-center font-semibold text-masters-green">{prize}</td>
+                  </tr>
+                )
+              })}
+              {filtered.length === 0 && (
+                <tr><td colSpan={9} className="border p-4 text-center text-gray-400 italic">No entries for this year</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Hole frequency */}
+      {holeList.length > 0 && (
+        <div className="card">
+          <h2 className="section-header">CTP Holes — Frequency &amp; Difficulty</h2>
+          <p className="text-xs text-gray-400 mb-3">How often each par 3 hole has been played as a CTP hole, and whether it produces a winner</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead><tr className="bg-masters-light">
+                <th className="border p-2 text-left">Course</th>
+                <th className="border p-2 text-center">Hole</th>
+                <th className="border p-2 text-center">Yardage</th>
+                <th className="border p-2 text-center">Times as CTP</th>
+                <th className="border p-2 text-center">With Winner</th>
+                <th className="border p-2 text-center">No Winner</th>
+                <th className="border p-2 text-center">Winner Rate</th>
+              </tr></thead>
+              <tbody>
+                {holeList.map((h, i) => {
+                  const noWin = h.timesPlayed - h.timesWon
+                  const rate = h.timesPlayed > 0 ? (h.timesWon / h.timesPlayed) * 100 : 0
+                  const rateColor = rate >= 80 ? '#22c55e' : rate >= 50 ? '#60a5fa' : '#f97316'
+                  return (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="border p-2">{h.courseName}</td>
+                      <td className="border p-2 text-center font-bold">{h.hole}</td>
+                      <td className="border p-2 text-center text-gray-400">{h.yardage ? `${h.yardage}y` : '—'}</td>
+                      <td className="border p-2 text-center">{h.timesPlayed}</td>
+                      <td className="border p-2 text-center font-semibold text-masters-green">{h.timesWon}</td>
+                      <td className="border p-2 text-center text-amber-600">{noWin}</td>
+                      <td className="border p-2 text-center font-semibold" style={{ color: rateColor }}>
+                        {h.timesPlayed > 0 ? `${rate.toFixed(0)}%` : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Par 3 scoring from match data */}
+      {allIds.some(id => (scoring[id]?.par3.holes ?? 0) > 0) && (
+        <div className="card">
+          <h2 className="section-header">Par 3 Scoring from Match Data</h2>
+          <p className="text-xs text-gray-400 mb-3">Average gross score per par 3 hole from all scored matches. Lower = better.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead><tr className="bg-masters-light">
+                <th className="border p-2 text-left">Player</th>
+                <th className="border p-2 text-center">Par 3 Avg</th>
+                <th className="border p-2 text-center">vs Par</th>
+                <th className="border p-2 text-center">Holes Played</th>
+                <th className="border p-2 text-center">CTP Wins</th>
+              </tr></thead>
+              <tbody>
+                {allIds
+                  .filter(id => (scoring[id]?.par3.holes ?? 0) > 0)
+                  .sort((a, b) => {
+                    const avgA = scoring[a].par3.totalScore / scoring[a].par3.holes
+                    const avgB = scoring[b].par3.totalScore / scoring[b].par3.holes
+                    return avgA - avgB
+                  })
+                  .map(id => {
+                    const p3  = scoring[id].par3
+                    const avg = p3.totalScore / p3.holes
+                    const vp  = avg - 3
+                    return (
+                      <tr key={id} className="hover:bg-gray-50">
+                        <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
+                        <td className="border p-2 text-center font-bold">{avg.toFixed(2)}</td>
+                        <td className="border p-2 text-center font-semibold"
+                          style={{ color: vp < 0 ? '#22c55e' : vp > 0.5 ? '#ef4444' : '#6b7280' }}>
+                          {vp >= 0 ? '+' : ''}{vp.toFixed(2)}
+                        </td>
+                        <td className="border p-2 text-center text-gray-400">{p3.holes}</td>
+                        <td className="border p-2 text-center font-bold text-masters-gold">
+                          {ctpWinsById(id) > 0 ? ctpWinsById(id) : <span className="text-gray-300">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Suggestions */}
+      <div className="card border-l-4 border-masters-gold bg-amber-50/30">
+        <h2 className="text-sm font-bold text-masters-dark mb-2">Additional Par 3 Stats — Not Yet Tracked</h2>
+        <ul className="text-xs text-gray-600 space-y-1.5">
+          <li><span className="font-semibold">Proximity to pin</span> — Distance of tee shot from the cup; requires a new yardage-remaining field per entry</li>
+          <li><span className="font-semibold">Par 3 birdie/bogey rate</span> — Scoring distribution split by par type (par 3 vs par 4/5); analytics currently aggregate all holes together</li>
+          <li><span className="font-semibold">Round-by-round CTP frequency</span> — Breakdown of CTP holes by format (R2 Points Round has the most par 3s per round)</li>
+          <li><span className="font-semibold">CTP→HIO donation history</span> — Year-over-year chart of how CTP winnings flow into the HIO pot</li>
+          <li><span className="font-semibold">Hole-in-one on CTP holes</span> — Whether any CTP holes have produced HIOs historically</li>
+        </ul>
       </div>
     </div>
   )
