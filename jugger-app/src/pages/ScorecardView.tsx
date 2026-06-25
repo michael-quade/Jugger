@@ -224,8 +224,8 @@ export default function ScorecardView() {
       updateMatch(match.id, { magicBall1: simMb1, magicBall2: simMb2 })
     }
 
-    // Simulate CTP winners for eligible matches (all formats)
-    if (showCtpPanel) {
+    // Simulate CTP winners for any non-blind match (keyed by round+hole, not match)
+    if (!match.isBlind) {
       const par3Holes = getPar3Holes(roundConfigs, courses).filter(h => h.round === activeRound)
       const allPlayerNames = teams.flatMap(t => t.players).map(p => p.name)
       const prizePerHole = allPlayerNames.length
