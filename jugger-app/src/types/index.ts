@@ -180,6 +180,7 @@ export interface TournamentState {
   courseHistory: CourseHistoryEntry[]
   admins: AdminCredential[]
   pairingsLocked: boolean
+  lockedRounds: number[]
   hioDonations: HioDonation[]
   skidmoreScores: SkidmoreScore[]
   sandbaggerPlayerId?: string

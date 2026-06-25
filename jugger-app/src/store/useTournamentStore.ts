@@ -51,6 +51,8 @@ interface Actions {
   updateAdmin: (username: string, updates: Partial<AdminCredential>) => void
   removeAdmin: (username: string) => void
   setPairingsLocked: (locked: boolean) => void
+  lockRound: (round: number) => void
+  unlockRound: (round: number) => void
 
   addHioDonation: (donation: HioDonation) => void
   setDonationPaid: (id: string, paid: boolean) => void
@@ -116,6 +118,7 @@ const DEFAULT_STATE: TournamentState = {
   courseHistory: INITIAL_COURSE_HISTORY,
   admins: [],
   pairingsLocked: false,
+  lockedRounds: [],
   hioDonations: INITIAL_HIO_DONATIONS,
   skidmoreScores: INITIAL_SKIDMORE_SCORES,
   sandbaggerPlayerId: 'pitts',
@@ -370,6 +373,11 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       setPairingsLocked: (pairingsLocked) => set({ pairingsLocked }),
 
+      lockRound: (round) =>
+        set(state => ({ lockedRounds: state.lockedRounds.includes(round) ? state.lockedRounds : [...state.lockedRounds, round] })),
+      unlockRound: (round) =>
+        set(state => ({ lockedRounds: state.lockedRounds.filter(r => r !== round) })),
+
       addHioDonation: (donation) =>
         set(state => ({ hioDonations: [...state.hioDonations, donation] })),
 
@@ -605,7 +613,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 18,
+      version: 19,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -721,6 +729,10 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         if (fromVersion < 18) {
           const b = base as any
           if (!b.gameConfig) b.gameConfig = DEFAULT_GAME_CONFIG
+        }
+        if (fromVersion < 19) {
+          const b = base as any
+          if (!b.lockedRounds) b.lockedRounds = []
         }
         return base as TournamentState
       },

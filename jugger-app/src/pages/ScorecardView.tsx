@@ -8,7 +8,7 @@ import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
-import { Printer, Dices, Trash2, Flag, Trophy } from 'lucide-react'
+import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
@@ -27,9 +27,12 @@ function getRoundName(round: number, configs: RoundConfig[]): string {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const canEnterScores = useCanEnterScores()
+  const isRoundLocked = (round: number) => lockedRounds.includes(round)
+  // Scorers cannot edit a locked round; admins always can
+  const canEdit = (round: number) => canEnterScores && (!isRoundLocked(round) || isAdmin)
   const [searchParams] = useSearchParams()
   const [activeRound, setActiveRound] = useState(() => Number(searchParams.get('round')) || 1)
   const [activeMatch, setActiveMatch] = useState<string | null>(() => searchParams.get('match'))
@@ -589,24 +592,39 @@ export default function ScorecardView() {
       <div className="flex gap-2 flex-wrap">
         {[1, 2, 3, 4, 5].map(r => {
           const hasRoundMatches = matches.some(m => m.round === r)
+          const locked = isRoundLocked(r)
           return (
             <div key={r} className="flex items-center gap-0.5">
               <button
                 onClick={() => { setActiveRound(r); setActiveMatch(null) }}
-                className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
+                className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-1.5 ${
                   activeRound === r ? 'bg-masters-green text-white' : 'bg-white border border-gray-300 hover:border-masters-green'
                 }`}
               >
+                {locked && <Lock size={11} className={activeRound === r ? 'text-white/70' : 'text-amber-500'} />}
                 Round {r}
               </button>
               {isAdmin && hasRoundMatches && (
-                <button
-                  onClick={() => handleSimulateRound(r)}
-                  title={`Simulate all Round ${r} matches`}
-                  className="p-1 rounded text-amber-500 hover:text-amber-700 hover:bg-amber-50 transition-colors"
-                >
-                  <Dices size={13} />
-                </button>
+                <>
+                  <button
+                    onClick={() => locked ? unlockRound(r) : lockRound(r)}
+                    title={locked ? `Unlock Round ${r} scores` : `Lock Round ${r} scores`}
+                    className={`p-1 rounded transition-colors ${
+                      locked
+                        ? 'text-amber-500 hover:text-amber-700 hover:bg-amber-50'
+                        : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50'
+                    }`}
+                  >
+                    {locked ? <Lock size={13} /> : <LockOpen size={13} />}
+                  </button>
+                  <button
+                    onClick={() => handleSimulateRound(r)}
+                    title={`Simulate all Round ${r} matches`}
+                    className="p-1 rounded text-amber-500 hover:text-amber-700 hover:bg-amber-50 transition-colors"
+                  >
+                    <Dices size={13} />
+                  </button>
+                </>
               )}
             </div>
           )
@@ -614,6 +632,18 @@ export default function ScorecardView() {
       </div>
 
       <RoundInfoBanner round={activeRound} />
+
+      {isRoundLocked(activeRound) && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+          <Lock size={14} className="shrink-0 text-amber-500" />
+          <span>
+            <strong>Round {activeRound} is locked.</strong>
+            {isAdmin
+              ? ' Scores can still be edited — only Scorer logins are restricted.'
+              : ' Score entry is disabled. Contact an admin to make changes.'}
+          </span>
+        </div>
+      )}
 
       {matches.length === 0 ? (
         <div className="card text-center py-12 text-gray-400">
@@ -746,7 +776,7 @@ export default function ScorecardView() {
                     teams={teams}
                     course={course}
                     config={config}
-                    interactive={canEnterScores && !match.isBlind}
+                    interactive={canEdit(activeRound) && !match.isBlind}
                     onScoreChange={(pid, hole, val) => {
                       setMatchScore(match.id, pid, hole, val)
                       if (config.format === 'texas_scramble') {
@@ -767,7 +797,7 @@ export default function ScorecardView() {
                 {showCtpPanel && (
                   <CtpPanel
                     round={activeRound}
-                    canEdit={canEnterScores}
+                    canEdit={canEdit(activeRound)}
                     canMarkPaid={isAdmin}
                   />
                 )}
@@ -791,7 +821,7 @@ export default function ScorecardView() {
                             <span className="text-xs font-semibold" style={{ color: team?.color ?? '#666' }}>
                               {team?.name ?? 'Team'}
                             </span>
-                            {canEnterScores ? (
+                            {canEdit(activeRound) ? (
                               <button
                                 onClick={() => handleMBToggle(field, !val)}
                                 className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded border font-semibold transition-colors ${
@@ -816,7 +846,7 @@ export default function ScorecardView() {
 
                 <ScoreSummary match={match} teams={teams} course={course} config={config} />
 
-                {canEnterScores ? (
+                {canEdit(activeRound) ? (
                   <div className="card">
                     <label className="label">Match Result</label>
                     <div className="flex gap-2">
