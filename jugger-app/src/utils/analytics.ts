@@ -46,7 +46,7 @@ export interface PlayerScoringProfile {
   par5: ParTypeStat
   front: ParTypeStat
   back:  ParTypeStat
-  roundScores: { year: number; format: RndFormat; gross: number; holes: number }[]
+  roundScores: { year: number; round: number; format: RndFormat; gross: number; holes: number }[]
 }
 
 export interface H2HRecord {
@@ -234,7 +234,7 @@ export function computeScoringProfiles(
 
         if (holesPlayed >= 9) {
           prof.roundScores.push({
-            year: bundle.year, format: rc.format as RndFormat, gross, holes: holesPlayed,
+            year: bundle.year, round: rc.round, format: rc.format as RndFormat, gross, holes: holesPlayed,
           })
         }
       }
@@ -663,7 +663,7 @@ export function computeRecords(
         if (birdies > 0 && (!mostBirdies || birdies > mostBirdies.value))
           mostBirdies   = { value: birdies,    holder: name, year: bundle.year, courseName: cname, detail: `${birdies} birdies · ${gross} gross` }
         if (pars > 0 && (!mostParsRound || pars > mostParsRound.value))
-          mostParsRound = { value: pars,       holder: name, year: bundle.year, courseName: cname, detail: `${gross} gross · ${birdies} birdie(s)` }
+          mostParsRound = { value: pars,       holder: name, year: bundle.year, courseName: cname, detail: `${pars} pars · ${gross} gross` }
         if (bogeys > 0 && (!mostBogeys || bogeys > mostBogeys.value))
           mostBogeys    = { value: bogeys,     holder: name, year: bundle.year, courseName: cname, detail: `${bogeys} bogeys · ${gross} gross` }
         if (doubles > 0 && (!mostDoubles || doubles > mostDoubles.value))

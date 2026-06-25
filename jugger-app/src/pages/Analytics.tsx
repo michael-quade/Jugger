@@ -549,15 +549,26 @@ function PlayerScoring({ scoring }: {
             {/* Round scores chart */}
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Round Gross Scores</p>
-              <ResponsiveContainer width="100%" height={160}>
+              <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={scoring[selectedPlayer].roundScores.map(r => ({
-                  name: `${r.year} R${FORMAT_LABELS[r.format]?.[0] ?? '?'}`,
+                  label1: `${r.year} R${r.round}`,
+                  label2: FORMAT_LABELS[r.format] ?? r.format,
                   gross: r.gross,
                 }))}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                  <XAxis dataKey="label1" height={36}
+                    tick={({ x, y, payload, index }: any) => {
+                      const d = scoring[selectedPlayer].roundScores[index]
+                      return (
+                        <g transform={`translate(${x},${y})`}>
+                          <text x={0} y={0} dy={10} textAnchor="middle" fontSize={9} fill="#374151">{payload.value}</text>
+                          <text x={0} y={0} dy={22} textAnchor="middle" fontSize={8} fill="#9ca3af">{FORMAT_LABELS[d?.format ?? ''] ?? ''}</text>
+                        </g>
+                      )
+                    }}
+                  />
                   <YAxis tick={{ fontSize: 9 }} domain={['auto', 'auto']} />
-                  <Tooltip />
+                  <Tooltip formatter={(v: unknown) => [`${v}`, 'Gross']} labelFormatter={(_, p) => p?.[0]?.payload ? `${p[0].payload.label1} · ${p[0].payload.label2}` : ''} />
                   <Bar dataKey="gross" fill={playerColors[selectedPlayer]} />
                 </BarChart>
               </ResponsiveContainer>
