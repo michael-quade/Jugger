@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useContext, useCallback, createContext } from 'react'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Cell, RadarChart, Radar,
@@ -17,17 +17,37 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PLAYER_COLORS: Record<string, string> = {
+const BASE_PLAYER_COLORS: Record<string, string> = {
   quade: '#1e40af', holcomb: '#3b82f6', butterworth: '#60a5fa', whitman: '#93c5fd',
   pitts: '#b91c1c', gunter: '#ef4444', oxford: '#f87171', oncavage: '#fca5a5',
   woyahn: '#15803d', skidmore: '#22c55e', bender: '#4ade80', morris: '#86efac',
 }
 
-const TEAM_GROUPS = [
+// Extra shades for historical subs/replacements — assigned in order per team slot
+const TEAM_EXTRA_SHADES: Record<string, string[]> = {
+  '#2563EB': ['#1d4ed8', '#1e3a8a', '#7dd3fc', '#bfdbfe'],
+  '#DC2626': ['#b91c1c', '#991b1b', '#fc8181', '#fecdd3'],
+  '#059669': ['#047857', '#065f46', '#6ee7b7', '#d1fae5'],
+}
+
+const BASE_TEAM_GROUPS = [
   { label: 'Billy Baroo', ids: ['quade', 'holcomb', 'butterworth', 'whitman'],  color: '#2563EB' },
   { label: '#ballgame',   ids: ['pitts', 'gunter', 'oxford', 'oncavage'],        color: '#DC2626' },
   { label: 'Silverbacks', ids: ['woyahn', 'skidmore', 'bender', 'morris'],       color: '#059669' },
 ]
+
+interface RosterGroup { label: string; ids: string[]; color: string; teamId: string }
+interface RosterContextValue {
+  teamGroups: RosterGroup[]
+  playerColors: Record<string, string>
+  playerName: (id: string) => string
+}
+
+const RosterContext = createContext<RosterContextValue>({
+  teamGroups: BASE_TEAM_GROUPS.map(g => ({ ...g, teamId: '' })),
+  playerColors: BASE_PLAYER_COLORS,
+  playerName: id => id,
+})
 
 const FORMAT_LABELS: Record<string, string> = {
   team_match_play:  'Team Match Play',
@@ -71,17 +91,10 @@ export default function Analytics() {
   } = useTournamentStore()
 
   const liveTeams = isViewingHistory ? (liveCache?.teams ?? teams) : teams
-  const allPlayers = liveTeams.flatMap(t => t.players)
 
   const courseHistoryTyped: CourseLike[] = courseHistory
     .filter(c => Array.isArray(c.holes) && c.holes.length > 0 && c.par != null && Array.isArray(c.tees) && c.tees.length > 0)
     .map(c => ({ id: c.id, name: c.name, par: c.par!, tees: c.tees!, holes: c.holes! }))
-
-  function playerName(id: string): string {
-    const p = allPlayers.find(pl => pl.id === id)
-    if (!p) return id
-    return p.isSubstitute ? (p.originalName ?? p.name) : p.name
-  }
 
   // Build unified year bundles (archived + live)
   const bundles = useMemo((): YearBundle[] => {
@@ -89,10 +102,57 @@ export default function Analytics() {
     for (const ay of archivedYears) {
       result.push({ year: ay.year, teams: ay.teams, matches: ay.matches, teamScores: ay.teamScores, roundConfigs: ay.roundConfigs })
     }
-    // Live year
     result.push({ year: liveYear, teams: liveTeams, matches, teamScores, roundConfigs })
     return result.sort((a, b) => a.year - b.year)
   }, [archivedYears, liveTeams, liveYear, matches, teamScores, roundConfigs])
+
+  // Build dynamic roster from all bundles — handles subs, permanent replacements, historical roster changes
+  const { resolvedTeamGroups, resolvedPlayerColors, historicalPlayerMap } = useMemo(() => {
+    // Map: player ID → actual name (never originalName — subs played under their own name)
+    const nameMap = new Map<string, string>()
+    for (const bundle of bundles) {
+      for (const team of bundle.teams) {
+        for (const player of team.players) {
+          if (!nameMap.has(player.id)) nameMap.set(player.id, player.name)
+        }
+      }
+    }
+
+    // Start with base groups, extend with any extra IDs found in bundles
+    const extGroups: RosterGroup[] = BASE_TEAM_GROUPS.map(g => ({ ...g, ids: [...g.ids], teamId: '' }))
+    const extColors: Record<string, string> = { ...BASE_PLAYER_COLORS }
+    const extraCountByTeam = [0, 0, 0]
+
+    for (const [id] of nameMap) {
+      const inBase = extGroups.findIndex(g => g.ids.includes(id))
+      if (inBase !== -1) continue // already in base roster
+
+      // Find which team this player belongs to across all bundles
+      let foundTeamIdx = -1
+      outer: for (const bundle of bundles) {
+        for (const team of bundle.teams) {
+          if (team.players.some(p => p.id === id)) {
+            foundTeamIdx = BASE_TEAM_GROUPS.findIndex(g => g.label === team.name)
+            break outer
+          }
+        }
+      }
+      if (foundTeamIdx === -1) continue
+      extGroups[foundTeamIdx].ids.push(id)
+      const shades = TEAM_EXTRA_SHADES[BASE_TEAM_GROUPS[foundTeamIdx].color] ?? []
+      extColors[id] = shades[extraCountByTeam[foundTeamIdx] % Math.max(1, shades.length)] ?? BASE_TEAM_GROUPS[foundTeamIdx].color
+      extraCountByTeam[foundTeamIdx]++
+    }
+
+    // Resolve teamId from live teams by name match
+    extGroups.forEach(g => {
+      g.teamId = liveTeams.find(t => t.name === g.label)?.id ?? ''
+    })
+
+    return { resolvedTeamGroups: extGroups, resolvedPlayerColors: extColors, historicalPlayerMap: nameMap }
+  }, [bundles, liveTeams])
+
+  const playerName = useCallback((id: string): string => historicalPlayerMap.get(id) ?? id, [historicalPlayerMap])
 
   const hasMatchData = bundles.some(b => b.matches.some(m => Object.values(m.scores).some(hs => Object.values(hs).some(s => s != null))))
 
@@ -103,7 +163,7 @@ export default function Analytics() {
   const teamRes    = useMemo(() => computeTeamResults(bundles), [bundles])
   const formatStat = useMemo(() => computeFormatStats(bundles), [bundles])
   const courseStat = useMemo(() => computeCourseStats(bundles, courses, courseHistoryTyped), [bundles, courses, courseHistoryTyped])
-  const records    = useMemo(() => computeRecords(bundles, playerName, courses, courseHistoryTyped), [bundles, courses, courseHistoryTyped])
+  const records    = useMemo(() => computeRecords(bundles, playerName, courses, courseHistoryTyped), [bundles, playerName, courses, courseHistoryTyped])
   const pfmt       = useMemo(() => computePlayerFormatStats(bundles, courses, courseHistoryTyped), [bundles, courses, courseHistoryTyped])
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -118,64 +178,65 @@ export default function Analytics() {
   ]
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-baseline gap-3">
-        <h1 className="text-2xl font-serif font-bold text-masters-dark">Analytics</h1>
-        {!hasMatchData && (
-          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">
-            Hole-score data not yet available — finalize a year to unlock scoring analytics
-          </span>
-        )}
-      </div>
+    <RosterContext.Provider value={{ teamGroups: resolvedTeamGroups, playerColors: resolvedPlayerColors, playerName }}>
+      <div className="space-y-5">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-2xl font-serif font-bold text-masters-dark">Analytics</h1>
+          {!hasMatchData && (
+            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">
+              Hole-score data not yet available — finalize a year to unlock scoring analytics
+            </span>
+          )}
+        </div>
 
-      {/* Tab bar — sticky below the measured site header */}
-      <div className="sticky z-10 -mx-4 px-4 bg-masters-cream border-b border-gray-200 flex flex-wrap gap-1 pt-1 pb-2"
-           style={{ top: stickyTop }}>
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t text-sm font-semibold transition-colors ${
-              activeTab === id
-                ? 'bg-masters-green text-white'
-                : 'text-gray-500 hover:text-masters-dark hover:bg-masters-light'
-            }`}
-          >
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
-      </div>
+        {/* Tab bar — sticky below the measured site header */}
+        <div className="sticky z-10 -mx-4 px-4 bg-masters-cream border-b border-gray-200 flex flex-wrap gap-1 pt-1 pb-2"
+             style={{ top: stickyTop }}>
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t text-sm font-semibold transition-colors ${
+                activeTab === id
+                  ? 'bg-masters-green text-white'
+                  : 'text-gray-500 hover:text-masters-dark hover:bg-masters-light'
+              }`}
+            >
+              <Icon size={13} />
+              {label}
+            </button>
+          ))}
+        </div>
 
-      {activeTab === 'team'    && <TeamResults    teamRes={teamRes} liveTeams={liveTeams} formatStat={formatStat} bundles={bundles} />}
-      {activeTab === 'scoring' && <PlayerScoring  scoring={scoring} playerName={playerName} />}
-      {activeTab === 'h2h'     && <HeadToHead     h2h={h2h} partners={partners} playerName={playerName} />}
-      {activeTab === 'format'  && <FormatStats    pfmt={pfmt} formatStat={formatStat} playerName={playerName} liveTeams={liveTeams} />}
-      {activeTab === 'course'  && <CourseStatsTab courseStat={courseStat} />}
-      {activeTab === 'hdcp'    && <HdcpTrends     liveTeams={liveTeams} archivedYears={archivedYears} liveYear={liveYear} playerName={playerName} />}
-      {activeTab === 'records' && <RecordsTab     records={records} />}
-      {activeTab === 'ctp'     && <CtpAnalyticsTab ctpEntries={ctpEntries} ctpDonations={ctpDonations} scoring={scoring} playerName={playerName} />}
-    </div>
+        {activeTab === 'team'    && <TeamResults    teamRes={teamRes} formatStat={formatStat} bundles={bundles} />}
+        {activeTab === 'scoring' && <PlayerScoring  scoring={scoring} />}
+        {activeTab === 'h2h'     && <HeadToHead     h2h={h2h} partners={partners} />}
+        {activeTab === 'format'  && <FormatStats    pfmt={pfmt} formatStat={formatStat} />}
+        {activeTab === 'course'  && <CourseStatsTab courseStat={courseStat} />}
+        {activeTab === 'hdcp'    && <HdcpTrends     liveTeams={liveTeams} archivedYears={archivedYears} liveYear={liveYear} />}
+        {activeTab === 'records' && <RecordsTab     records={records} />}
+        {activeTab === 'ctp'     && <CtpAnalyticsTab ctpEntries={ctpEntries} ctpDonations={ctpDonations} scoring={scoring} />}
+      </div>
+    </RosterContext.Provider>
   )
 }
 
 // ─── Team Results tab ─────────────────────────────────────────────────────────
 
-function TeamResults({ teamRes, liveTeams, formatStat, bundles }: {
+function TeamResults({ teamRes, formatStat, bundles }: {
   teamRes: ReturnType<typeof computeTeamResults>
-  liveTeams: Team[]
   formatStat: ReturnType<typeof computeFormatStats>
   bundles: YearBundle[]
 }) {
+  const { teamGroups } = useContext(RosterContext)
   const allYears = [...new Set(bundles.map(b => b.year))].sort()
 
   return (
     <div className="space-y-6">
       {/* Championship tally */}
       <div className="grid grid-cols-3 gap-4">
-        {TEAM_GROUPS.map(grp => {
-          const team = liveTeams.find(t => t.name === grp.label)
-          const results = teamRes[team?.id ?? ''] ?? []
+        {teamGroups.map(grp => {
+          const results = teamRes[grp.teamId] ?? []
           const champs  = results.filter(r => r.isChampion).length
           const wins1st = results.filter(r => r.finish === 1).length
           const years   = results.length
@@ -204,9 +265,8 @@ function TeamResults({ teamRes, liveTeams, formatStat, bundles }: {
               </tr>
             </thead>
             <tbody>
-              {TEAM_GROUPS.map(grp => {
-                const team = liveTeams.find(t => t.name === grp.label)
-                const results = teamRes[team?.id ?? ''] ?? []
+              {teamGroups.map(grp => {
+                const results = teamRes[grp.teamId] ?? []
                 const byYear = Object.fromEntries(results.map(r => [r.year, r]))
                 const totalAll = results.reduce((s, r) => s + r.totalPoints, 0)
                 const best = results.length ? Math.max(...results.map(r => r.totalPoints)) : null
@@ -247,9 +307,8 @@ function TeamResults({ teamRes, liveTeams, formatStat, bundles }: {
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend />
-              {TEAM_GROUPS.map(grp => {
-                const team = liveTeams.find(t => t.name === grp.label)
-                const results = teamRes[team?.id ?? ''] ?? []
+              {teamGroups.map(grp => {
+                const results = teamRes[grp.teamId] ?? []
                 const data = results.map(r => ({ year: r.year, points: r.totalPoints }))
                 return (
                   <Line key={grp.label} data={data} type="monotone" dataKey="points" name={grp.label}
@@ -275,9 +334,8 @@ function TeamResults({ teamRes, liveTeams, formatStat, bundles }: {
               </tr>
             </thead>
             <tbody>
-              {TEAM_GROUPS.map(grp => {
-                const team = liveTeams.find(t => t.name === grp.label)
-                const fmts = formatStat[team?.id ?? ''] ?? {}
+              {teamGroups.map(grp => {
+                const fmts = formatStat[grp.teamId] ?? {}
                 return (
                   <tr key={grp.label} className="hover:bg-gray-50">
                     <td className="border p-2 font-semibold" style={{ color: grp.color }}>{grp.label}</td>
@@ -318,7 +376,7 @@ function TeamResults({ teamRes, liveTeams, formatStat, bundles }: {
                       </tr>
                     </thead>
                     <tbody>
-                      {TEAM_GROUPS.map(grp => {
+                      {teamGroups.map(grp => {
                         const team = yearBundle.teams.find(t => t.name === grp.label)
                         if (!team) return null
                         const byRound: Record<number, number> = {}
@@ -346,13 +404,13 @@ function TeamResults({ teamRes, liveTeams, formatStat, bundles }: {
 
 // ─── Player Scoring tab ───────────────────────────────────────────────────────
 
-function PlayerScoring({ scoring, playerName }: {
+function PlayerScoring({ scoring }: {
   scoring: ReturnType<typeof computeScoringProfiles>
-  playerName: (id: string) => string
 }) {
+  const { teamGroups, playerColors, playerName } = useContext(RosterContext)
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null)
 
-  const allIds = TEAM_GROUPS.flatMap(g => g.ids)
+  const allIds = teamGroups.flatMap(g => g.ids)
   const withData = allIds.filter(id => (scoring[id]?.dist.total ?? 0) > 0)
 
   if (withData.length === 0) {
@@ -413,7 +471,7 @@ function PlayerScoring({ scoring, playerName }: {
               </tr>
             </thead>
             <tbody>
-              {TEAM_GROUPS.flatMap(grp =>
+              {teamGroups.flatMap(grp =>
                 grp.ids.filter(id => scoring[id]?.dist.total > 0).map(id => {
                   const p = scoring[id]
                   const d = p.dist
@@ -432,7 +490,7 @@ function PlayerScoring({ scoring, playerName }: {
                       className={`hover:bg-gray-50 cursor-pointer ${selectedPlayer === id ? 'bg-blue-50' : ''}`}
                       onClick={() => setSelectedPlayer(selectedPlayer === id ? null : id)}
                     >
-                      <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
+                      <td className="border p-2 font-semibold" style={{ color: playerColors[id] }}>{playerName(id)}</td>
                       <td className="border p-2 text-center">{avg3?.toFixed(2) ?? '—'}</td>
                       <td className="border p-2 text-center">{avg4?.toFixed(2) ?? '—'}</td>
                       <td className="border p-2 text-center">{avg5?.toFixed(2) ?? '—'}</td>
@@ -456,7 +514,7 @@ function PlayerScoring({ scoring, playerName }: {
       {selectedPlayer && scoring[selectedPlayer] && (
         <div className="card">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="section-header mb-0" style={{ color: PLAYER_COLORS[selectedPlayer] }}>
+            <h3 className="section-header mb-0" style={{ color: playerColors[selectedPlayer] }}>
               {playerName(selectedPlayer)} — Round Scores
             </h3>
             <button className="text-xs text-gray-400 hover:text-masters-green" onClick={() => setSelectedPlayer(null)}>Close ✕</button>
@@ -500,7 +558,7 @@ function PlayerScoring({ scoring, playerName }: {
                   <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                   <YAxis tick={{ fontSize: 9 }} domain={['auto', 'auto']} />
                   <Tooltip />
-                  <Bar dataKey="gross" fill={PLAYER_COLORS[selectedPlayer]} />
+                  <Bar dataKey="gross" fill={playerColors[selectedPlayer]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -525,7 +583,7 @@ function PlayerScoring({ scoring, playerName }: {
               <PolarRadiusAxis tick={{ fontSize: 9 }} />
               {withData.slice(0, 6).map(id => (
                 <Radar key={id} name={playerName(id).split(' ')[0]} dataKey={playerName(id).split(' ')[0]}
-                  stroke={PLAYER_COLORS[id]} fill={PLAYER_COLORS[id]} fillOpacity={0.1} />
+                  stroke={playerColors[id]} fill={playerColors[id]} fillOpacity={0.1} />
               ))}
               <Legend />
               <Tooltip />
@@ -539,12 +597,12 @@ function PlayerScoring({ scoring, playerName }: {
 
 // ─── Head-to-Head tab ─────────────────────────────────────────────────────────
 
-function HeadToHead({ h2h, partners, playerName }: {
+function HeadToHead({ h2h, partners }: {
   h2h: ReturnType<typeof computeH2H>
   partners: ReturnType<typeof computePartnerRecords>
-  playerName: (id: string) => string
 }) {
-  const allIds = TEAM_GROUPS.flatMap(g => g.ids)
+  const { teamGroups, playerColors, playerName } = useContext(RosterContext)
+  const allIds = teamGroups.flatMap(g => g.ids)
   const [p1, setP1] = useState(allIds[0])
   const [p2, setP2] = useState(allIds[4])
 
@@ -558,7 +616,7 @@ function HeadToHead({ h2h, partners, playerName }: {
         <h2 className="section-header">1-on-1 Record</h2>
         <div className="flex items-center gap-4 flex-wrap mb-4">
           <select className="input py-1" value={p1} onChange={e => setP1(e.target.value)}>
-            {TEAM_GROUPS.map(g => (
+            {teamGroups.map(g => (
               <optgroup key={g.label} label={g.label}>
                 {g.ids.map(id => <option key={id} value={id}>{playerName(id)}</option>)}
               </optgroup>
@@ -566,7 +624,7 @@ function HeadToHead({ h2h, partners, playerName }: {
           </select>
           <span className="font-bold text-masters-dark text-lg">vs</span>
           <select className="input py-1" value={p2} onChange={e => setP2(e.target.value)}>
-            {TEAM_GROUPS.map(g => (
+            {teamGroups.map(g => (
               <optgroup key={g.label} label={g.label}>
                 {g.ids.map(id => <option key={id} value={id}>{playerName(id)}</option>)}
               </optgroup>
@@ -577,11 +635,11 @@ function HeadToHead({ h2h, partners, playerName }: {
         {hasH2H ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm font-bold gap-2">
-              <span style={{ color: PLAYER_COLORS[p1] }}>{playerName(p1)}</span>
+              <span style={{ color: playerColors[p1] }}>{playerName(p1)}</span>
               <span className="text-2xl font-serif text-masters-dark">
                 {rec12.wins} – {rec12.halves} – {rec12.losses}
               </span>
-              <span style={{ color: PLAYER_COLORS[p2] }}>{playerName(p2)}</span>
+              <span style={{ color: playerColors[p2] }}>{playerName(p2)}</span>
             </div>
             <p className="text-xs text-center text-gray-400">{rec12.matchesPlayed} match{rec12.matchesPlayed !== 1 ? 'es' : ''} · W-H-L from {playerName(p1)}'s perspective</p>
 
@@ -623,7 +681,7 @@ function HeadToHead({ h2h, partners, playerName }: {
                 <tr className="bg-masters-light">
                   <th className="border p-1.5 text-left min-w-24">vs →</th>
                   {allIds.map(id => (
-                    <th key={id} className="border p-1 text-center" style={{ color: PLAYER_COLORS[id] }}>
+                    <th key={id} className="border p-1 text-center" style={{ color: playerColors[id] }}>
                       {playerName(id).split(' ')[0]}
                     </th>
                   ))}
@@ -632,7 +690,7 @@ function HeadToHead({ h2h, partners, playerName }: {
               <tbody>
                 {allIds.map(rowId => (
                   <tr key={rowId} className="hover:bg-gray-50">
-                    <td className="border p-1.5 font-semibold" style={{ color: PLAYER_COLORS[rowId] }}>
+                    <td className="border p-1.5 font-semibold" style={{ color: playerColors[rowId] }}>
                       {playerName(rowId).split(' ')[0]}
                     </td>
                     {allIds.map(colId => {
@@ -680,8 +738,8 @@ function HeadToHead({ h2h, partners, playerName }: {
                     .sort((a, b) => b.wins - a.wins)
                     .map(r => (
                       <tr key={`${id}-${r.partnerId}`} className="hover:bg-gray-50">
-                        <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
-                        <td className="border p-2" style={{ color: PLAYER_COLORS[r.partnerId] }}>{playerName(r.partnerId)}</td>
+                        <td className="border p-2 font-semibold" style={{ color: playerColors[id] }}>{playerName(id)}</td>
+                        <td className="border p-2" style={{ color: playerColors[r.partnerId] }}>{playerName(r.partnerId)}</td>
                         <td className="border p-2 text-center font-semibold text-masters-green">{r.wins}</td>
                         <td className="border p-2 text-center text-gray-500">{r.ties}</td>
                         <td className="border p-2 text-center font-semibold text-red-500">{r.losses}</td>
@@ -707,13 +765,12 @@ function HeadToHead({ h2h, partners, playerName }: {
 
 // ─── Format Stats tab ─────────────────────────────────────────────────────────
 
-function FormatStats({ pfmt, formatStat, playerName, liveTeams }: {
+function FormatStats({ pfmt, formatStat }: {
   pfmt: ReturnType<typeof computePlayerFormatStats>
   formatStat: ReturnType<typeof computeFormatStats>
-  playerName: (id: string) => string
-  liveTeams: Team[]
 }) {
-  const allIds = TEAM_GROUPS.flatMap(g => g.ids)
+  const { teamGroups, playerColors, playerName } = useContext(RosterContext)
+  const allIds = teamGroups.flatMap(g => g.ids)
   const withData = allIds.filter(id => pfmt[id])
 
   if (withData.length === 0) {
@@ -746,14 +803,14 @@ function FormatStats({ pfmt, formatStat, playerName, liveTeams }: {
               <th className="border p-1" />
             </tr></thead>
             <tbody>
-              {TEAM_GROUPS.flatMap(grp =>
+              {teamGroups.flatMap(grp =>
                 grp.ids.filter(id => pfmt[id]).map(id => {
                   const s = pfmt[id]
                   const mp = s.matchPlayRecord
                   const iv = s.indivRecord
                   return (
                     <tr key={id} className="hover:bg-gray-50">
-                      <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
+                      <td className="border p-2 font-semibold" style={{ color: playerColors[id] }}>{playerName(id)}</td>
                       <td className="border p-2 text-center font-semibold text-masters-green">{mp.wins}</td>
                       <td className="border p-2 text-center text-gray-500">{mp.halves}</td>
                       <td className="border p-2 text-center font-semibold text-red-500">{mp.losses}</td>
@@ -786,9 +843,8 @@ function FormatStats({ pfmt, formatStat, playerName, liveTeams }: {
               <th className="border p-2 text-center">Captain's Choice</th>
             </tr></thead>
             <tbody>
-              {TEAM_GROUPS.map(grp => {
-                const team = liveTeams.find(t => t.name === grp.label)
-                const fmts = formatStat[team?.id ?? ''] ?? {}
+              {teamGroups.map(grp => {
+                const fmts = formatStat[grp.teamId] ?? {}
                 const fmtKeys: RndFormat[] = ['team_match_play', 'individual_match', 'points_round', 'texas_scramble', 'captains_choice']
                 return (
                   <tr key={grp.label} className="hover:bg-gray-50">
@@ -947,13 +1003,13 @@ function CourseStatsTab({ courseStat }: { courseStat: ReturnType<typeof computeC
 
 // ─── HDCP Trends tab (carried from original Stats.tsx) ────────────────────────
 
-function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
+function HdcpTrends({ liveTeams, archivedYears, liveYear }: {
   liveTeams: Team[]
   archivedYears: ArchivedYear[]
   liveYear: number
-  playerName: (id: string) => string
 }) {
-  const allIds = TEAM_GROUPS.flatMap(g => g.ids)
+  const { teamGroups, playerColors, playerName } = useContext(RosterContext)
+  const allIds = teamGroups.flatMap(g => g.ids)
   const [visible, setVisible] = useState<Set<string>>(new Set(allIds))
   const [spotlight, setSpotlight] = useState<string | null>(null)
 
@@ -961,7 +1017,7 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
     const staticYearSet = new Set(HDCP_YEARS)
     const years = [...HDCP_YEARS]
     const history: Record<string, (number | null)[]> = {}
-    allIds.forEach(id => { history[id] = [...PLAYER_HDCP_HISTORY[id]] })
+    allIds.forEach(id => { history[id] = [...(PLAYER_HDCP_HISTORY[id] ?? new Array(HDCP_YEARS.length).fill(null))] })
 
     const newArchived = [...archivedYears]
       .filter(a => !staticYearSet.has(a.year))
@@ -1027,7 +1083,7 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
           </button>
         </div>
         <div className="space-y-2">
-          {TEAM_GROUPS.map(grp => (
+          {teamGroups.map(grp => (
             <div key={grp.label} className="flex flex-wrap gap-1.5">
               <span className="text-xs font-semibold text-gray-500 mr-1 self-center">{grp.label}</span>
               {grp.ids.map(id => (
@@ -1037,7 +1093,7 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
                   className={`text-xs px-2.5 py-1 rounded-full font-semibold border transition-all ${
                     visible.has(id) ? 'text-white border-transparent' : 'bg-white text-gray-400 border-gray-200'
                   }`}
-                  style={visible.has(id) ? { background: PLAYER_COLORS[id], borderColor: PLAYER_COLORS[id] } : {}}
+                  style={visible.has(id) ? { background: playerColors[id], borderColor: playerColors[id] } : {}}
                 >
                   {playerName(id)}
                 </button>
@@ -1060,7 +1116,7 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
             <ReferenceLine y={18} stroke="#c9a84c" strokeDasharray="4 4"
               label={{ value: 'HI 18', fontSize: 10, fill: '#c9a84c' }} />
             {allIds.filter(id => visible.has(id)).map(id => (
-              <Line key={id} type="monotone" dataKey={id} name={playerName(id)} stroke={PLAYER_COLORS[id]}
+              <Line key={id} type="monotone" dataKey={id} name={playerName(id)} stroke={playerColors[id]}
                 strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
             ))}
           </LineChart>
@@ -1070,7 +1126,7 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
       {spotlight && (
         <div className="card">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="section-header mb-0" style={{ color: PLAYER_COLORS[spotlight] }}>
+            <h3 className="section-header mb-0" style={{ color: playerColors[spotlight] }}>
               {playerName(spotlight)} — Year-by-Year Index
             </h3>
             <button className="text-xs text-gray-400 hover:text-masters-green" onClick={() => setSpotlight(null)}>Close ✕</button>
@@ -1109,7 +1165,7 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
               <th className="border p-2 text-center">YoY</th>
             </tr></thead>
             <tbody>
-              {TEAM_GROUPS.flatMap(grp =>
+              {teamGroups.flatMap(grp =>
                 grp.ids.map(id => {
                   const vals = allHistory[id].filter((v): v is number => v !== null)
                   const entries = allHistory[id].map((v, i) => ({ year: allYears[i], v })).filter(e => e.v !== null) as { year: number; v: number }[]
@@ -1121,7 +1177,7 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear, playerName }: {
                   const trendColor = trend === '↓' ? '#16a34a' : trend === '↑' ? '#dc2626' : '#6b7280'
                   return (
                     <tr key={id} className="hover:bg-gray-50">
-                      <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
+                      <td className="border p-2 font-semibold" style={{ color: playerColors[id] }}>{playerName(id)}</td>
                       <td className="border p-2 text-center text-gray-500">{grp.label}</td>
                       <td className="border p-2 text-center">{entries[0]?.year ?? '—'}</td>
                       <td className="border p-2 text-center">{vals.length}</td>
@@ -1224,12 +1280,12 @@ function RecordsTab({ records }: { records: ReturnType<typeof computeRecords> })
 
 // ─── Par 3 CTP tab ───────────────────────────────────────────────────────────
 
-function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
+function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring }: {
   ctpEntries: CtpEntry[]
   ctpDonations: CtpDonation[]
   scoring: ReturnType<typeof computeScoringProfiles>
-  playerName: (id: string) => string
 }) {
+  const { teamGroups, playerColors, playerName } = useContext(RosterContext)
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all')
 
   const years = [...new Set(ctpEntries.map(e => e.year))].sort()
@@ -1272,7 +1328,7 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
   const totalHoles    = ctpEntries.length
   const noWinner      = ctpEntries.filter(e => !e.winnerName).length
   const totalPrize    = leaderboard.reduce((s, [, d]) => s + d.earnings, 0)
-  const allIds        = TEAM_GROUPS.flatMap(g => g.ids)
+  const allIds        = teamGroups.flatMap(g => g.ids)
 
   // Match player ID → CTP win count by resolving name
   function ctpWinsById(id: string): number {
@@ -1340,7 +1396,7 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
                   return (
                     <tr key={name} className="hover:bg-gray-50">
                       <td className="border p-2 text-center font-bold text-gray-400">{i + 1}</td>
-                      <td className="border p-2 font-semibold" style={{ color: id ? PLAYER_COLORS[id] : undefined }}>{name}</td>
+                      <td className="border p-2 font-semibold" style={{ color: id ? playerColors[id] : undefined }}>{name}</td>
                       <td className="border p-2 text-center text-xl font-serif font-bold text-masters-gold">{data.count}</td>
                       <td className="border p-2 text-center">{winRate}%</td>
                       <td className="border p-2 text-center font-semibold text-masters-green">${data.earnings.toFixed(0)}</td>
@@ -1357,7 +1413,7 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
                   .map(id => (
                     <tr key={id} className="hover:bg-gray-50 text-gray-400">
                       <td className="border p-2 text-center">—</td>
-                      <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
+                      <td className="border p-2 font-semibold" style={{ color: playerColors[id] }}>{playerName(id)}</td>
                       <td className="border p-2 text-center">0</td>
                       <td className="border p-2 text-center">0%</td>
                       <td className="border p-2 text-center">$0</td>
@@ -1397,7 +1453,7 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
                     <td className="border p-2">{e.courseName}</td>
                     <td className="border p-2 text-center font-bold">{e.hole}</td>
                     <td className="border p-2 text-center text-gray-400">{e.yardage ? `${e.yardage}y` : '—'}</td>
-                    <td className="border p-2 font-semibold" style={{ color: id ? PLAYER_COLORS[id] : undefined }}>
+                    <td className="border p-2 font-semibold" style={{ color: id ? playerColors[id] : undefined }}>
                       {e.winnerName ?? <span className="text-gray-300 italic font-normal">No winner</span>}
                     </td>
                     <td className="border p-2 text-center">
@@ -1460,7 +1516,7 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
       )}
 
       {/* Par 3 scoring from match data */}
-      {allIds.some(id => (scoring[id]?.par3.holes ?? 0) > 0) && (
+      {allIds.some(id => (scoring[id]?.par3?.holes ?? 0) > 0) && (
         <div className="card">
           <h2 className="section-header">Par 3 Scoring from Match Data</h2>
           <p className="text-xs text-gray-400 mb-3">Average gross score per par 3 hole from all scored matches. Lower = better.</p>
@@ -1475,7 +1531,7 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
               </tr></thead>
               <tbody>
                 {allIds
-                  .filter(id => (scoring[id]?.par3.holes ?? 0) > 0)
+                  .filter(id => (scoring[id]?.par3?.holes ?? 0) > 0)
                   .sort((a, b) => {
                     const avgA = scoring[a].par3.totalScore / scoring[a].par3.holes
                     const avgB = scoring[b].par3.totalScore / scoring[b].par3.holes
@@ -1487,7 +1543,7 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring, playerName }: {
                     const vp  = avg - 3
                     return (
                       <tr key={id} className="hover:bg-gray-50">
-                        <td className="border p-2 font-semibold" style={{ color: PLAYER_COLORS[id] }}>{playerName(id)}</td>
+                        <td className="border p-2 font-semibold" style={{ color: playerColors[id] }}>{playerName(id)}</td>
                         <td className="border p-2 text-center font-bold">{avg.toFixed(2)}</td>
                         <td className="border p-2 text-center font-semibold"
                           style={{ color: vp < 0 ? '#22c55e' : vp > 0.5 ? '#ef4444' : '#6b7280' }}>
