@@ -107,16 +107,24 @@ export interface RecordEntry {
   value: string
   holder: string
   year: number
+  courseName?: string
   detail?: string
 }
 
 export interface RecordBook {
-  lowestGross:      RecordEntry | null
-  mostBirdies:      RecordEntry | null
-  mostEagles:       RecordEntry | null
-  biggestMatchWin:  RecordEntry | null
-  bestQuotaBeat:    RecordEntry | null
-  mostParsFront:    RecordEntry | null
+  lowestGross:          RecordEntry | null
+  lowestNet:            RecordEntry | null
+  mostEagles:           RecordEntry | null
+  mostBirdies:          RecordEntry | null
+  mostParsRound:        RecordEntry | null
+  mostBogeys:           RecordEntry | null
+  mostDoubles:          RecordEntry | null
+  mostDoublePlus:       RecordEntry | null
+  biggestMatchWin:      RecordEntry | null
+  bestQuotaBeat:        RecordEntry | null
+  mostStablefordPts:         RecordEntry | null
+  lowestCaptainsChoiceGross: RecordEntry | null
+  lowestCaptainsChoiceNet:   RecordEntry | null
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
@@ -563,20 +571,28 @@ export function computeRecords(
   playerName: (id: string) => string,
   courses: CourseLike[],
   courseHistory: CourseLike[],
+  captainsChoicePct = 0.15,
 ): RecordBook {
-  type RawRec = { value: number; holder: string; year: number; detail: string }
-  let lowestGross:  RawRec | null = null
-  let mostBirdies:  RawRec | null = null
-  let mostEagles:   RawRec | null = null
-  let biggestWin:   RawRec | null = null
-  let bestQuota:    RawRec | null = null
-  let mostParsFront: RawRec | null = null
+  type RawRec = { value: number; holder: string; year: number; detail: string; courseName: string }
+  let lowestGross:          RawRec | null = null
+  let lowestNet:            RawRec | null = null
+  let mostEagles:           RawRec | null = null
+  let mostBirdies:          RawRec | null = null
+  let mostParsRound:        RawRec | null = null
+  let mostBogeys:           RawRec | null = null
+  let mostDoubles:          RawRec | null = null
+  let mostDoublePlus:       RawRec | null = null
+  let biggestWin:           RawRec | null = null
+  let bestQuota:            RawRec | null = null
+  let mostStablefordPts:         RawRec | null = null
+  let lowestCaptainsChoiceGross: RawRec | null = null
+  let lowestCaptainsChoiceNet:   RawRec | null = null
 
   for (const bundle of bundles) {
     for (const match of bundle.matches) {
       if (match.isBlind) continue
       const rc = bundle.roundConfigs.find(r => r.round === match.round)
-      if (!rc || rc.format === 'captains_choice') continue
+      if (!rc) continue
 
       const course = findCourse(rc.courseId, courses, courseHistory)
       if (!course?.holes?.length) continue
@@ -585,37 +601,80 @@ export function computeRecords(
       for (const h of course.holes) holeMap[h.number] = h
 
       const hdcps = playerHdcpsForRound(bundle.teams, rc, course)
+      const cname = course.name
 
-      // Per-player round records
+      // ── Captain's Choice: team score from teamHoleScores ─────────────────
+      if (rc.format === 'captains_choice') {
+        if (match.teamHoleScores) {
+          const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+          const teamHdcp = Math.floor(allPids.reduce((s, pid) => s + (hdcps[pid] ?? 0), 0) * captainsChoicePct)
+          let teamGross = 0, teamNet = 0, holes = 0, complete = true
+          for (const hole of course.holes) {
+            const s = match.teamHoleScores[hole.number]
+            if (s == null) { complete = false; break }
+            teamGross += s
+            teamNet   += s - holeStrokes(teamHdcp, hole.hdcpOrder)
+            holes++
+          }
+          if (complete && holes === 18) {
+            const team = bundle.teams.find(t => t.players.some(p => match.twosome1.playerIds.includes(p.id)))
+            const holder = team?.name ?? 'Unknown'
+            if (!lowestCaptainsChoiceGross || teamGross < lowestCaptainsChoiceGross.value)
+              lowestCaptainsChoiceGross = { value: teamGross, holder, year: bundle.year, courseName: cname, detail: `${teamNet} net · ${teamHdcp} team HDCP` }
+            if (!lowestCaptainsChoiceNet || teamNet < lowestCaptainsChoiceNet.value)
+              lowestCaptainsChoiceNet   = { value: teamNet,   holder, year: bundle.year, courseName: cname, detail: `${teamGross} gross · ${teamHdcp} team HDCP` }
+          }
+        }
+        continue
+      }
+
+      // ── Per-player individual round records ───────────────────────────────
       for (const [pid, holeScores] of Object.entries(match.scores)) {
-        let gross = 0, holes = 0, birdies = 0, eagles = 0, frontPars = 0
+        let gross = 0, net = 0, holes = 0
+        let eagles = 0, birdies = 0, pars = 0, bogeys = 0, doubles = 0, doublePlus = 0
+        let stableford = 0
 
         for (const [hn, score] of Object.entries(holeScores)) {
           if (score == null) continue
           const hole = holeMap[parseInt(hn)]
           if (!hole) continue
-          gross += score; holes++
+          gross += score
+          net   += score - holeStrokes(hdcps[pid] ?? 0, hole.hdcpOrder)
+          holes++
           const cat = scoreCat(score, hole.par)
           if (cat === 'eagle')  eagles++
           if (cat === 'birdie') birdies++
-          if (cat === 'par' && hole.number <= 9) frontPars++
+          if (cat === 'par')    pars++
+          if (cat === 'bogey')  bogeys++
+          if (cat === 'double') doubles++
+          if (cat === 'double' || cat === 'worse') doublePlus++
+          if (rc.format === 'points_round') stableford += stablefordSimple(score, hole.par)
         }
         if (holes < 18) continue
 
         const name = playerName(pid)
-        const rFmt = rc.format.replace(/_/g, ' ')
 
         if (!lowestGross || gross < lowestGross.value)
-          lowestGross = { value: gross, holder: name, year: bundle.year, detail: `R${match.round} · ${rFmt}` }
-        if (!mostBirdies || birdies > mostBirdies.value)
-          mostBirdies = { value: birdies, holder: name, year: bundle.year, detail: `${gross} gross · ${eagles} eagle(s)` }
-        if (!mostEagles || eagles > mostEagles.value)
-          mostEagles  = { value: eagles,  holder: name, year: bundle.year, detail: `${birdies} birdies that round` }
-        if (!mostParsFront || frontPars > mostParsFront.value)
-          mostParsFront = { value: frontPars, holder: name, year: bundle.year, detail: `${gross} gross total` }
+          lowestGross   = { value: gross,      holder: name, year: bundle.year, courseName: cname, detail: `R${match.round}` }
+        if (!lowestNet || net < lowestNet.value)
+          lowestNet     = { value: net,        holder: name, year: bundle.year, courseName: cname, detail: `${gross} gross` }
+        if (eagles > 0 && (!mostEagles || eagles > mostEagles.value))
+          mostEagles    = { value: eagles,     holder: name, year: bundle.year, courseName: cname, detail: `${eagles} eagle(s) · ${gross} gross` }
+        if (birdies > 0 && (!mostBirdies || birdies > mostBirdies.value))
+          mostBirdies   = { value: birdies,    holder: name, year: bundle.year, courseName: cname, detail: `${birdies} birdies · ${gross} gross` }
+        if (pars > 0 && (!mostParsRound || pars > mostParsRound.value))
+          mostParsRound = { value: pars,       holder: name, year: bundle.year, courseName: cname, detail: `${gross} gross · ${birdies} birdie(s)` }
+        if (bogeys > 0 && (!mostBogeys || bogeys > mostBogeys.value))
+          mostBogeys    = { value: bogeys,     holder: name, year: bundle.year, courseName: cname, detail: `${bogeys} bogeys · ${gross} gross` }
+        if (doubles > 0 && (!mostDoubles || doubles > mostDoubles.value))
+          mostDoubles   = { value: doubles,    holder: name, year: bundle.year, courseName: cname, detail: `${doubles} doubles · ${gross} gross` }
+        if (doublePlus > 0 && (!mostDoublePlus || doublePlus > mostDoublePlus.value))
+          mostDoublePlus = { value: doublePlus, holder: name, year: bundle.year, courseName: cname, detail: `${doublePlus} dbl+ · ${gross} gross` }
+        if (rc.format === 'points_round' && stableford > 0 && (!mostStablefordPts || stableford > mostStablefordPts.value))
+          mostStablefordPts = { value: stableford, holder: name, year: bundle.year, courseName: cname, detail: `${stableford % 1 === 0 ? stableford : stableford.toFixed(1)} pts · ${gross} gross` }
       }
 
-      // Match play biggest win
+      // ── Match play biggest win ─────────────────────────────────────────────
       if (rc.format === 'team_match_play' || rc.format === 'individual_match') {
         const process1v1 = (pA: string, pB: string) => {
           let score = 0, played = 0
@@ -629,21 +688,20 @@ export function computeRecords(
             played++
           }
           if (played < 9) return
-          const margin   = Math.abs(score)
+          const margin    = Math.abs(score)
           const remaining = 18 - played
           const winner = score > 0 ? pA : score < 0 ? pB : null
           if (!winner || margin === 0) return
           const winLabel = remaining === 0 ? `${margin} UP` : `${margin}&${remaining}`
           const detail   = `vs ${playerName(score > 0 ? pB : pA)} · ${winLabel}`
           if (!biggestWin || margin > biggestWin.value)
-            biggestWin = { value: margin, holder: playerName(winner), year: bundle.year, detail }
+            biggestWin = { value: margin, holder: playerName(winner), year: bundle.year, courseName: cname, detail }
         }
 
         if (rc.format === 'individual_match') {
           process1v1(match.twosome1.playerIds[0], match.twosome2.playerIds[0])
           process1v1(match.twosome1.playerIds[1], match.twosome2.playerIds[1])
         } else {
-          // Team best-ball margin
           const [t1p1, t1p2] = match.twosome1.playerIds
           const [t2p1, t2p2] = match.twosome2.playerIds
           let score = 0, played = 0
@@ -667,12 +725,12 @@ export function computeRecords(
             const winners   = score > 0 ? `${playerName(t1p1)}/${playerName(t1p2)}` : `${playerName(t2p1)}/${playerName(t2p2)}`
             const losers    = score > 0 ? `${playerName(t2p1)}/${playerName(t2p2)}` : `${playerName(t1p1)}/${playerName(t1p2)}`
             if (!biggestWin || margin > biggestWin.value)
-              biggestWin = { value: margin, holder: winners, year: bundle.year, detail: `vs ${losers} · ${winLabel}` }
+              biggestWin = { value: margin, holder: winners, year: bundle.year, courseName: cname, detail: `vs ${losers} · ${winLabel}` }
           }
         }
       }
 
-      // Points Round best quota beat
+      // ── Points Round: quota beat + highest individual Stableford ──────────
       if (rc.format === 'points_round') {
         const coursePar = course.holes.reduce((s, h) => s + h.par, 0)
         for (const tw of [match.twosome1, match.twosome2]) {
@@ -689,22 +747,29 @@ export function computeRecords(
           const beat = pts - quota
           const name = `${playerName(pa)} / ${playerName(pb)}`
           if (!bestQuota || beat > bestQuota.value)
-            bestQuota = { value: beat, holder: name, year: bundle.year, detail: `${pts} pts vs Q:${quota}` }
+            bestQuota = { value: beat, holder: name, year: bundle.year, courseName: cname, detail: `${pts} pts vs Q:${quota}` }
         }
       }
     }
   }
 
   const fmt = (r: RawRec | null, prefix = ''): RecordEntry | null =>
-    r ? { value: `${prefix}${r.value}`, holder: r.holder, year: r.year, detail: r.detail } : null
+    r ? { value: `${prefix}${r.value}`, holder: r.holder, year: r.year, courseName: r.courseName, detail: r.detail } : null
 
   return {
-    lowestGross:   fmt(lowestGross),
-    mostBirdies:   fmt(mostBirdies),
-    mostEagles:    fmt(mostEagles),
-    biggestMatchWin: biggestWin ? { value: biggestWin.detail?.split('·')[1]?.trim() ?? `${biggestWin.value} UP`, holder: biggestWin.holder, year: biggestWin.year, detail: biggestWin.detail } : null,
-    bestQuotaBeat: fmt(bestQuota, '+'),
-    mostParsFront: fmt(mostParsFront),
+    lowestGross:          fmt(lowestGross),
+    lowestNet:            fmt(lowestNet),
+    mostEagles:           fmt(mostEagles),
+    mostBirdies:          fmt(mostBirdies),
+    mostParsRound:        fmt(mostParsRound),
+    mostBogeys:           fmt(mostBogeys),
+    mostDoubles:          fmt(mostDoubles),
+    mostDoublePlus:       fmt(mostDoublePlus),
+    biggestMatchWin:      biggestWin ? { value: biggestWin.detail?.split('·')[1]?.trim() ?? `${biggestWin.value} UP`, holder: biggestWin.holder, year: biggestWin.year, courseName: biggestWin.courseName, detail: biggestWin.detail } : null,
+    bestQuotaBeat:        fmt(bestQuota, '+'),
+    mostStablefordPts:         fmt(mostStablefordPts),
+    lowestCaptainsChoiceGross: fmt(lowestCaptainsChoiceGross),
+    lowestCaptainsChoiceNet:   fmt(lowestCaptainsChoiceNet),
   }
 }
 

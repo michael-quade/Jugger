@@ -87,7 +87,7 @@ export default function Analytics() {
   const {
     teams, matches, teamScores, roundConfigs, courses,
     archivedYears, liveYear, liveCache, isViewingHistory, courseHistory,
-    ctpEntries, ctpDonations,
+    ctpEntries, ctpDonations, gameConfig,
   } = useTournamentStore()
 
   const liveTeams = isViewingHistory ? (liveCache?.teams ?? teams) : teams
@@ -163,7 +163,7 @@ export default function Analytics() {
   const teamRes    = useMemo(() => computeTeamResults(bundles), [bundles])
   const formatStat = useMemo(() => computeFormatStats(bundles), [bundles])
   const courseStat = useMemo(() => computeCourseStats(bundles, courses, courseHistoryTyped), [bundles, courses, courseHistoryTyped])
-  const records    = useMemo(() => computeRecords(bundles, playerName, courses, courseHistoryTyped), [bundles, playerName, courses, courseHistoryTyped])
+  const records    = useMemo(() => computeRecords(bundles, playerName, courses, courseHistoryTyped, gameConfig.captainsChoiceHdcpPct), [bundles, playerName, courses, courseHistoryTyped, gameConfig.captainsChoiceHdcpPct])
   const pfmt       = useMemo(() => computePlayerFormatStats(bundles, courses, courseHistoryTyped), [bundles, courses, courseHistoryTyped])
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -1202,12 +1202,19 @@ function HdcpTrends({ liveTeams, archivedYears, liveYear }: {
 
 function RecordsTab({ records }: { records: ReturnType<typeof computeRecords> }) {
   const cats: { key: keyof typeof records; label: string; icon: string; desc: string }[] = [
-    { key: 'lowestGross',     label: 'Lowest Gross Round',      icon: '🏌️', desc: 'Best 18-hole gross score' },
-    { key: 'mostBirdies',     label: 'Most Birdies in a Round', icon: '🐦', desc: 'Most birdies in a single 18-hole round' },
-    { key: 'mostEagles',      label: 'Most Eagles in a Round',  icon: '🦅', desc: 'Most eagles/better in a single round' },
-    { key: 'biggestMatchWin', label: 'Biggest Match Play Win',  icon: '⚔️', desc: 'Largest hole margin in match play' },
-    { key: 'bestQuotaBeat',   label: 'Best Quota Beat',         icon: '📊', desc: 'Most points above twosome quota in Points Round' },
-    { key: 'mostParsFront',   label: 'Most Pars — Front Nine',  icon: '🎯', desc: 'Most par or better holes on the front 9' },
+    { key: 'lowestGross',          label: 'Lowest Gross Round',         icon: '🏌️', desc: 'Best 18-hole gross score' },
+    { key: 'lowestNet',            label: 'Lowest Net Round',           icon: '📉', desc: 'Best 18-hole net score (after strokes)' },
+    { key: 'mostEagles',           label: 'Most Eagles in a Round',     icon: '🦅', desc: 'Most eagles or better in a single round' },
+    { key: 'mostBirdies',          label: 'Most Birdies in a Round',    icon: '🐦', desc: 'Most birdies in a single 18-hole round' },
+    { key: 'mostParsRound',        label: 'Most Pars in a Round',       icon: '🎯', desc: 'Most par holes in a single 18-hole round' },
+    { key: 'mostBogeys',           label: 'Most Bogeys in a Round',     icon: '😬', desc: 'Most bogeys in a single 18-hole round' },
+    { key: 'mostDoubles',          label: 'Most Double Bogeys',         icon: '😤', desc: 'Most double bogeys (+2) in a single round' },
+    { key: 'mostDoublePlus',       label: 'Most Double Bogey+',         icon: '💀', desc: 'Most double bogeys or worse in a single round' },
+    { key: 'biggestMatchWin',      label: 'Biggest Match Play Win',     icon: '⚔️', desc: 'Largest hole margin in match play' },
+    { key: 'bestQuotaBeat',        label: 'Best Quota Beat',            icon: '📊', desc: 'Most points above twosome quota in Points Round' },
+    { key: 'mostStablefordPts',         label: 'Most Points in a Round',          icon: '⭐', desc: 'Highest individual gross Stableford points in a Points Round' },
+    { key: 'lowestCaptainsChoiceGross', label: "Lowest Cap'n Choice Gross",       icon: '🚢', desc: "Lowest gross team score in Captain's Choice" },
+    { key: 'lowestCaptainsChoiceNet',   label: "Lowest Cap'n Choice Net",         icon: '⛵', desc: "Lowest net team score in Captain's Choice (after team HDCP)" },
   ]
 
   const hasAny = cats.some(c => records[c.key] !== null)
@@ -1234,7 +1241,7 @@ function RecordsTab({ records }: { records: ReturnType<typeof computeRecords> })
                 <div className="mt-2 border-t pt-2">
                   <div className="text-2xl font-serif font-bold text-masters-gold">{rec.value}</div>
                   <div className="text-sm font-semibold text-masters-dark mt-0.5">{rec.holder}</div>
-                  <div className="text-xs text-gray-400">{rec.year}</div>
+                  <div className="text-xs text-gray-400">{rec.year}{rec.courseName ? ` · ${rec.courseName}` : ''}</div>
                   {rec.detail && <div className="text-xs text-gray-500 mt-1">{rec.detail}</div>}
                 </div>
               ) : (
@@ -1255,6 +1262,7 @@ function RecordsTab({ records }: { records: ReturnType<typeof computeRecords> })
               <th className="border p-2 text-center">Value</th>
               <th className="border p-2 text-left">Holder</th>
               <th className="border p-2 text-center">Year</th>
+              <th className="border p-2 text-left">Course</th>
               <th className="border p-2 text-left">Detail</th>
             </tr></thead>
             <tbody>
@@ -1266,6 +1274,7 @@ function RecordsTab({ records }: { records: ReturnType<typeof computeRecords> })
                     <td className="border p-2 text-center font-bold text-masters-gold">{rec?.value ?? '—'}</td>
                     <td className="border p-2 font-semibold">{rec?.holder ?? '—'}</td>
                     <td className="border p-2 text-center text-gray-500">{rec?.year ?? '—'}</td>
+                    <td className="border p-2 text-gray-400">{rec?.courseName ?? '—'}</td>
                     <td className="border p-2 text-gray-400">{rec?.detail ?? ''}</td>
                   </tr>
                 )
