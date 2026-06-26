@@ -65,7 +65,8 @@ export interface MatchPlayResult {
   running: number[]  // running status after each hole; positive = twosome1 leading
   holesPlayed: number
   winner: 'twosome1' | 'twosome2' | 'all_square' | null
-  winLabel: string   // e.g. "3&2", "1 UP", "All Square"
+  winLabel: string         // e.g. "3&2", "1 UP", "All Square" — frozen at decision point
+  decisionHoleIndex?: number  // 0-indexed hole where match was decided (may differ from last scored hole)
 }
 
 export function computeMatchPlay(
@@ -81,7 +82,13 @@ export function computeMatchPlay(
   const runningArr: number[] = []
   let holesPlayed = 0
 
-  for (const hole of holes) {
+  // Track when the match is first clinched (margin exceeds remaining holes)
+  let decidedIdx: number | null = null
+  let decidedMargin = 0
+  let decidedRemaining = 0
+
+  for (let hi = 0; hi < holes.length; hi++) {
+    const hole = holes[hi]
     const t1p1 = match.scores[t1.playerIds[0]]?.[hole.number]
     const t1p2 = match.scores[t1.playerIds[1]]?.[hole.number]
     const t2p1 = match.scores[t2.playerIds[0]]?.[hole.number]
@@ -103,36 +110,38 @@ export function computeMatchPlay(
     const t1best = Math.min(t1p1Net, t1p2Net)
     const t2best = Math.min(t2p1Net, t2p2Net)
 
-    if (t1best < t2best) {
-      holeResults.push('w1')
-      running++
-    } else if (t2best < t1best) {
-      holeResults.push('w2')
-      running--
-    } else {
-      holeResults.push('h')
-    }
+    if (t1best < t2best) { holeResults.push('w1'); running++ }
+    else if (t2best < t1best) { holeResults.push('w2'); running-- }
+    else holeResults.push('h')
     runningArr.push(running)
+
+    // Detect the first hole where the match is clinched
+    if (decidedIdx === null) {
+      const rem = holes.length - hi - 1
+      if (Math.abs(running) > rem) {
+        decidedIdx = hi
+        decidedMargin = Math.abs(running)
+        decidedRemaining = rem
+      }
+    }
   }
 
   let winner: MatchPlayResult['winner'] = null
   let winLabel = ''
 
-  if (holesPlayed > 0) {
-    const remaining = 18 - holesPlayed
+  if (decidedIdx !== null) {
+    // Match was clinched before (or exactly at) the final hole — freeze at that result
+    winner = running > 0 ? 'twosome1' : 'twosome2'
+    winLabel = decidedRemaining === 0 ? `${decidedMargin} UP` : `${decidedMargin}&${decidedRemaining}`
+  } else if (holesPlayed === 18) {
+    // All 18 played, never clinched early — use final running
     const absRunning = Math.abs(running)
-
-    if (holesPlayed === 18) {
-      if (running > 0) { winner = 'twosome1'; winLabel = `${running} UP` }
-      else if (running < 0) { winner = 'twosome2'; winLabel = `${absRunning} UP` }
-      else { winner = 'all_square'; winLabel = 'All Square' }
-    } else if (absRunning > remaining) {
-      winLabel = `${absRunning}&${remaining}`
-      winner = running > 0 ? 'twosome1' : 'twosome2'
-    }
+    if (running > 0) { winner = 'twosome1'; winLabel = `${running} UP` }
+    else if (running < 0) { winner = 'twosome2'; winLabel = `${absRunning} UP` }
+    else { winner = 'all_square'; winLabel = 'All Square' }
   }
 
-  return { holeResults, running: runningArr, holesPlayed, winner, winLabel }
+  return { holeResults, running: runningArr, holesPlayed, winner, winLabel, decisionHoleIndex: decidedIdx ?? undefined }
 }
 
 // ─── Individual Match Play (Round 4) ─────────────────────────────────────────
@@ -143,6 +152,7 @@ export interface IndividualMatch1v1Result {
   holesPlayed: number
   winner: 'p1' | 'p2' | 'all_square' | null
   winLabel: string
+  decisionHoleIndex?: number  // 0-indexed hole where match was decided
 }
 
 export interface IndividualMatchResult {
@@ -163,7 +173,12 @@ function compute1v1(
   const runningArr: number[] = []
   let holesPlayed = 0
 
-  for (const hole of holes) {
+  let decidedIdx: number | null = null
+  let decidedMargin = 0
+  let decidedRemaining = 0
+
+  for (let hi = 0; hi < holes.length; hi++) {
+    const hole = holes[hi]
     const s1 = scores[p1Id]?.[hole.number]
     const s2 = scores[p2Id]?.[hole.number]
 
@@ -181,25 +196,31 @@ function compute1v1(
     else if (net2 < net1) { holeResults.push('w2'); running-- }
     else holeResults.push('h')
     runningArr.push(running)
+
+    if (decidedIdx === null) {
+      const rem = holes.length - hi - 1
+      if (Math.abs(running) > rem) {
+        decidedIdx = hi
+        decidedMargin = Math.abs(running)
+        decidedRemaining = rem
+      }
+    }
   }
 
   let winner: IndividualMatch1v1Result['winner'] = null
   let winLabel = ''
 
-  if (holesPlayed > 0) {
-    const remaining = 18 - holesPlayed
+  if (decidedIdx !== null) {
+    winner = running > 0 ? 'p1' : 'p2'
+    winLabel = decidedRemaining === 0 ? `${decidedMargin} UP` : `${decidedMargin}&${decidedRemaining}`
+  } else if (holesPlayed === 18) {
     const abs = Math.abs(running)
-    if (holesPlayed === 18) {
-      if (running > 0) { winner = 'p1'; winLabel = `${running} UP` }
-      else if (running < 0) { winner = 'p2'; winLabel = `${abs} UP` }
-      else { winner = 'all_square'; winLabel = 'All Square' }
-    } else if (abs > remaining) {
-      winLabel = `${abs}&${remaining}`
-      winner = running > 0 ? 'p1' : 'p2'
-    }
+    if (running > 0) { winner = 'p1'; winLabel = `${running} UP` }
+    else if (running < 0) { winner = 'p2'; winLabel = `${abs} UP` }
+    else { winner = 'all_square'; winLabel = 'All Square' }
   }
 
-  return { holeResults, running: runningArr, holesPlayed, winner, winLabel }
+  return { holeResults, running: runningArr, holesPlayed, winner, winLabel, decisionHoleIndex: decidedIdx ?? undefined }
 }
 
 export function computeIndividualMatch(

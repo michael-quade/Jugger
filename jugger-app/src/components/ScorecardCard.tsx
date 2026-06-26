@@ -318,11 +318,14 @@ function Individual2v2ResultRow({ result, match, course, teams }: {
   function cellContent(i: number) {
     const res = result.holeResults[i]
     if (res === null) return null
+    const isPostDecision = result.decisionHoleIndex !== undefined && i > result.decisionHoleIndex
+    const isDecision = result.decisionHoleIndex === i && result.winner != null
     const holeLabel = res === 'w1' ? t1Init : res === 'w2' ? t2Init : '—'
     const holeColor = res === 'w1' ? t1Color : res === 'w2' ? t2Color : '#9ca3af'
     const { label: cumLabel, color: cumColor } = standing(result.running[i])
     return (
-      <div className="flex flex-col items-center gap-[2px] py-[1px]">
+      <div className={`flex flex-col items-center gap-[2px] py-[1px] ${isPostDecision ? 'opacity-40' : ''}`}>
+        {isDecision && <span className="text-[5px] leading-none text-masters-gold font-bold">✓</span>}
         <span className="text-[8px] font-bold leading-none" style={{ color: holeColor }}>{holeLabel}</span>
         <span className="text-[6px] font-semibold leading-none" style={{ color: cumColor }}>{cumLabel}</span>
       </div>
@@ -386,6 +389,8 @@ function MatchPlayResultRow({ perspective, result, course, twosome, teams, rowLa
     const res = result.holeResults[i]
     if (res === null) return null
 
+    const isPostDecision = result.decisionHoleIndex !== undefined && i > result.decisionHoleIndex
+    const isDecision = result.decisionHoleIndex === i && result.winner != null
     const fromPov = perspective === 'twosome1' ? res : (res === 'w1' ? 'w2' : res === 'w2' ? 'w1' : 'h')
     const r = perspective === 'twosome1' ? result.running[i] : -result.running[i]
 
@@ -396,7 +401,8 @@ function MatchPlayResultRow({ perspective, result, course, twosome, teams, rowLa
     const cumClass = r > 0 ? 'text-masters-green' : r < 0 ? 'text-red-500' : 'text-gray-400'
 
     return (
-      <div className="flex flex-col items-center gap-[1px]">
+      <div className={`flex flex-col items-center gap-[1px] ${isPostDecision ? 'opacity-40' : ''}`}>
+        {isDecision && <span className="text-[5px] leading-none text-masters-gold font-bold">✓</span>}
         <span className={`text-[8px] font-bold leading-none ${holeClass}`}>{holeLabel}</span>
         <span className={`text-[7px] font-semibold leading-none ${cumClass}`}>{cumLabel}</span>
       </div>
@@ -509,12 +515,15 @@ function IndividualMatch1v1ResultRow({ result, p1Id, p2Id, course, teams }: Indi
     const res = result.holeResults[i]
     if (res === null) return null
 
+    const isPostDecision = result.decisionHoleIndex !== undefined && i > result.decisionHoleIndex
+    const isDecision = result.decisionHoleIndex === i && result.winner != null
     const holeLabel = res === 'w1' ? p1Init : res === 'w2' ? p2Init : '—'
     const holeColor = res === 'w1' ? p1Color : res === 'w2' ? p2Color : '#9ca3af'
     const { label: cumLabel, color: cumColor } = standing(result.running[i])
 
     return (
-      <div className="flex flex-col items-center gap-[2px] py-[1px]">
+      <div className={`flex flex-col items-center gap-[2px] py-[1px] ${isPostDecision ? 'opacity-40' : ''}`}>
+        {isDecision && <span className="text-[5px] leading-none text-masters-gold font-bold">✓</span>}
         <span className="text-[9px] font-bold leading-none" style={{ color: holeColor }}>{holeLabel}</span>
         <span className="text-[7px] font-semibold leading-none" style={{ color: cumColor }}>{cumLabel}</span>
       </div>

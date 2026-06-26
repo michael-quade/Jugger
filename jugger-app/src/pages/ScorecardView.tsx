@@ -199,6 +199,56 @@ export default function ScorecardView() {
     })
   }
 
+  function autoUpdateMatchResult(currentMatch: Match) {
+    if (!course || !config) return
+    if (config.format !== 'team_match_play' && config.format !== 'individual_match') return
+
+    const allPlayers = teams.flatMap(t => t.players)
+    const allPids = [...currentMatch.twosome1.playerIds, ...currentMatch.twosome2.playerIds]
+    const localHdcps: Record<string, number> = {}
+    allPids.forEach(pid => {
+      const player = allPlayers.find(p => p.id === pid)
+      if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
+    })
+
+    if (config.format === 'team_match_play') {
+      const mpRes = computeMatchPlay(currentMatch, course.holes, localHdcps)
+      if (!mpRes.winner) return
+      const t1 = teams.find(t => t.id === currentMatch.twosome1.teamId)
+      const t2 = teams.find(t => t.id === currentMatch.twosome2.teamId)
+      const result = mpRes.winner === 'all_square'
+        ? 'All Square'
+        : `${(mpRes.winner === 'twosome1' ? t1 : t2)?.name ?? 'Team'} wins ${mpRes.winLabel}`
+      updateMatch(currentMatch.id, { result })
+
+    } else if (config.format === 'individual_match') {
+      const imRes = computeIndividualMatch(currentMatch, course.holes, localHdcps)
+      const parts: string[] = []
+
+      for (const { res, p1Id, p2Id, label } of [
+        { res: imRes.matchA, p1Id: currentMatch.twosome1.playerIds[0], p2Id: currentMatch.twosome2.playerIds[0], label: 'A' },
+        { res: imRes.matchB, p1Id: currentMatch.twosome1.playerIds[1], p2Id: currentMatch.twosome2.playerIds[1], label: 'B' },
+      ]) {
+        if (!res.winner) continue
+        const p1Last = allPlayers.find(p => p.id === p1Id)?.name.split(' ').slice(-1)[0] ?? '?'
+        const p2Last = allPlayers.find(p => p.id === p2Id)?.name.split(' ').slice(-1)[0] ?? '?'
+        if (res.winner === 'all_square') parts.push(`${label}: AS`)
+        else if (res.winner === 'p1') parts.push(`${label}: ${p1Last} ${res.winLabel}`)
+        else parts.push(`${label}: ${p2Last} ${res.winLabel}`)
+      }
+
+      if (!currentMatch.isBlind && imRes.match2v2?.winner) {
+        const w = imRes.match2v2.winner
+        const t1 = teams.find(t => t.id === currentMatch.twosome1.teamId)
+        const t2 = teams.find(t => t.id === currentMatch.twosome2.teamId)
+        if (w === 'all_square') parts.push('2v2: AS')
+        else parts.push(`2v2: ${(w === 'twosome1' ? t1 : t2)?.name ?? 'Team'} ${imRes.match2v2.winLabel}`)
+      }
+
+      if (parts.length > 0) updateMatch(currentMatch.id, { result: parts.join(' · ') })
+    }
+  }
+
   function handleMBToggle(field: 'magicBall1' | 'magicBall2', val: boolean) {
     if (!match || !config || config.format !== 'points_round' || match.isBlind) return
     updateMatch(match.id, { [field]: val })
@@ -357,6 +407,11 @@ export default function ScorecardView() {
     }
 
     checkAndShowChampion()
+
+    if (config.format === 'team_match_play' || config.format === 'individual_match') {
+      const cur = useTournamentStore.getState().matches.find(m => m.id === match.id)
+      if (cur) autoUpdateMatchResult(cur)
+    }
   }
 
   function checkAndShowChampion() {
@@ -785,6 +840,10 @@ export default function ScorecardView() {
                       if (config.format === 'individual_match') {
                         recomputeIndividualMatchTeamScores(useTournamentStore.getState().matches)
                       }
+                      if (config.format === 'team_match_play' || config.format === 'individual_match') {
+                        const cur = useTournamentStore.getState().matches.find(m => m.id === match.id)
+                        if (cur) autoUpdateMatchResult(cur)
+                      }
                     }}
                     onTeamHoleScoreChange={(hole, val) => {
                       setTeamHoleScore(match.id, hole, val)
@@ -848,7 +907,12 @@ export default function ScorecardView() {
 
                 {canEdit(activeRound) ? (
                   <div className="card">
-                    <label className="label">Match Result</label>
+                    <label className="label">
+                      Match Result
+                      {(config?.format === 'team_match_play' || config?.format === 'individual_match') && (
+                        <span className="ml-1 text-[10px] text-gray-400 normal-case font-normal">(auto-updated)</span>
+                      )}
+                    </label>
                     <div className="flex gap-2">
                       <input
                         className="input flex-1"

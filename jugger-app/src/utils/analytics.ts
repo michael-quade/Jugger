@@ -676,26 +676,46 @@ export function computeRecords(
 
       // ── Match play biggest win ─────────────────────────────────────────────
       if (rc.format === 'team_match_play' || rc.format === 'individual_match') {
-        const process1v1 = (pA: string, pB: string) => {
+        // Detect decision point: first hole where margin exceeds remaining holes.
+        // Freeze the result there — play continues past that point for blind scoring.
+        function decidedResult(holes: HoleData[], runFn: (hole: HoleData) => number | null) {
           let score = 0, played = 0
-          for (const hole of course.holes) {
+          let decidedMargin = 0, decidedRemaining = 0, hasDecision = false
+          for (let hi = 0; hi < holes.length; hi++) {
+            const delta = runFn(holes[hi])
+            if (delta == null) continue
+            score += delta
+            played++
+            if (!hasDecision) {
+              const rem = holes.length - hi - 1
+              if (Math.abs(score) > rem) {
+                hasDecision = true
+                decidedMargin = Math.abs(score)
+                decidedRemaining = rem
+              }
+            }
+          }
+          if (played < 9 || score === 0) return null
+          const margin    = hasDecision ? decidedMargin    : Math.abs(score)
+          const remaining = hasDecision ? decidedRemaining : 18 - played
+          const winLabel  = remaining === 0 ? `${margin} UP` : `${margin}&${remaining}`
+          return { score, margin, winLabel }
+        }
+
+        const process1v1 = (pA: string, pB: string) => {
+          const res = decidedResult(course.holes, hole => {
             const sa = match.scores[pA]?.[hole.number]
             const sb = match.scores[pB]?.[hole.number]
-            if (sa == null || sb == null) continue
+            if (sa == null || sb == null) return null
             const nA = sa - holeStrokes(hdcps[pA] ?? 0, hole.hdcpOrder)
             const nB = sb - holeStrokes(hdcps[pB] ?? 0, hole.hdcpOrder)
-            if (nA < nB) score++; else if (nB < nA) score--
-            played++
-          }
-          if (played < 9) return
-          const margin    = Math.abs(score)
-          const remaining = 18 - played
-          const winner = score > 0 ? pA : score < 0 ? pB : null
-          if (!winner || margin === 0) return
-          const winLabel = remaining === 0 ? `${margin} UP` : `${margin}&${remaining}`
-          const detail   = `vs ${playerName(score > 0 ? pB : pA)} · ${winLabel}`
-          if (!biggestWin || margin > biggestWin.value)
-            biggestWin = { value: margin, holder: playerName(winner), year: bundle.year, courseName: cname, detail }
+            return nA < nB ? 1 : nB < nA ? -1 : 0
+          })
+          if (!res) return
+          const winner = res.score > 0 ? pA : pB
+          const detail = `vs ${playerName(res.score > 0 ? pB : pA)} · ${res.winLabel}`
+          if (!biggestWin || res.margin > biggestWin.value)
+            biggestWin = { value: res.margin, holder: playerName(winner), year: bundle.year, courseName: cname, detail }
         }
 
         if (rc.format === 'individual_match') {
@@ -704,28 +724,23 @@ export function computeRecords(
         } else {
           const [t1p1, t1p2] = match.twosome1.playerIds
           const [t2p1, t2p2] = match.twosome2.playerIds
-          let score = 0, played = 0
-          for (const hole of course.holes) {
+          const res = decidedResult(course.holes, hole => {
             const s1a = match.scores[t1p1]?.[hole.number]
             const s1b = match.scores[t1p2]?.[hole.number]
             const s2a = match.scores[t2p1]?.[hole.number]
             const s2b = match.scores[t2p2]?.[hole.number]
-            if (s1a == null || s1b == null || s2a == null || s2b == null) continue
+            if (s1a == null || s1b == null || s2a == null || s2b == null) return null
             const n1 = Math.min(s1a - holeStrokes(hdcps[t1p1] ?? 0, hole.hdcpOrder),
                                 s1b - holeStrokes(hdcps[t1p2] ?? 0, hole.hdcpOrder))
             const n2 = Math.min(s2a - holeStrokes(hdcps[t2p1] ?? 0, hole.hdcpOrder),
                                 s2b - holeStrokes(hdcps[t2p2] ?? 0, hole.hdcpOrder))
-            if (n1 < n2) score++; else if (n2 < n1) score--
-            played++
-          }
-          if (played >= 9 && score !== 0) {
-            const margin    = Math.abs(score)
-            const remaining = 18 - played
-            const winLabel  = remaining === 0 ? `${margin} UP` : `${margin}&${remaining}`
-            const winners   = score > 0 ? `${playerName(t1p1)}/${playerName(t1p2)}` : `${playerName(t2p1)}/${playerName(t2p2)}`
-            const losers    = score > 0 ? `${playerName(t2p1)}/${playerName(t2p2)}` : `${playerName(t1p1)}/${playerName(t1p2)}`
-            if (!biggestWin || margin > biggestWin.value)
-              biggestWin = { value: margin, holder: winners, year: bundle.year, courseName: cname, detail: `vs ${losers} · ${winLabel}` }
+            return n1 < n2 ? 1 : n2 < n1 ? -1 : 0
+          })
+          if (res) {
+            const winners = res.score > 0 ? `${playerName(t1p1)}/${playerName(t1p2)}` : `${playerName(t2p1)}/${playerName(t2p2)}`
+            const losers  = res.score > 0 ? `${playerName(t2p1)}/${playerName(t2p2)}` : `${playerName(t1p1)}/${playerName(t1p2)}`
+            if (!biggestWin || res.margin > biggestWin.value)
+              biggestWin = { value: res.margin, holder: winners, year: bundle.year, courseName: cname, detail: `vs ${losers} · ${res.winLabel}` }
           }
         }
       }
