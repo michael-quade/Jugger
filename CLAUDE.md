@@ -158,7 +158,7 @@ jugger-app/src/
   index.css                     # Tailwind + custom component styles
   types/index.ts                # All TypeScript interfaces
   store/
-    useTournamentStore.ts       # Zustand store v18 (all state + actions)
+    useTournamentStore.ts       # Zustand store v19 (all state + actions)
     useAuthStore.ts             # Auth state (admin/scorer login)
   lib/supabase.ts               # Supabase client init (null if env vars absent)
   hooks/useSupabaseSync.ts      # Real-time sync hook + useSyncStatus
@@ -173,8 +173,11 @@ jugger-app/src/
     courseData.ts               # 4 courses (holes, pars, yardages, tees) + ROUND_CONFIGS
     initialData.ts              # INITIAL_TEAMS, INITIAL_COURSE_HISTORY, donations,
                                 #   INITIAL_SKIDMORE_SCORES (18 historical rounds)
-    hdcpHistory.ts              # Static HDCP history 2006–2025; Stats merges with
+    hdcpHistory.ts              # Static HDCP history 2006–2025; Analytics merges with
                                 #   archivedYears dynamically for 2026+
+    analytics.ts                # Historical data computation: scoring profiles, H2H,
+                                #   partner records, team results, format/course stats,
+                                #   records, player format breakdowns; YearBundle type
   components/
     Layout.tsx                  # Sticky chrome (header + nav + history banner in one
                                 #   sticky wrapper), Outlet
@@ -197,7 +200,7 @@ jugger-app/src/
     Results.tsx                 # Editable team standings table
     CtpPage.tsx                 # Par 3 CTP pot management
     HoleInOne.tsx               # HIO champion tracking + pot management
-    Stats.tsx                   # Handicap history charts (auto-merged from archivedYears)
+    Analytics.tsx               # 8-tab historical data explorer (replaces Stats page)
     FileArchive.tsx             # Supabase Storage file browser
     CourseHistory.tsx           # Course database — primary course add/edit/delete;
                                 #   assign to tournament round (admin)
@@ -326,7 +329,7 @@ TournamentState {
   liveCache: Omit<ArchivedYear, 'finalizedAt'> | null
   teams, courses, roundConfigs, matches, teamScores
   holeInOnes, ctpEntries, ctpDonations, ctpHioHistory
-  hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations
+  hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds: number[], hioDonations
   skidmoreScores: SkidmoreScore[]
   sandbaggerPlayerId?: string       // player id holding Sandbagger Award
   toiletAwardPlayerId?: string      // player id holding Toilet Award
@@ -341,12 +344,12 @@ AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
 
 ## State Management
 
-### Zustand Store (`useTournamentStore`) — version 18
+### Zustand Store (`useTournamentStore`) — version 19
 
-Persists to `localStorage` key `jugger-tournament-2026`. All 18 versions have migration functions.
+Persists to `localStorage` key `jugger-tournament-2026`. All 19 versions have migration functions.
 
 **Key actions:**
-- `setYear / lockHandicaps / setPairingsLocked`
+- `setYear / lockHandicaps / setPairingsLocked / lockRound(round) / unlockRound(round)`
 - `updatePlayer / addPlayer / removePlayer / updateTeamName / updateTeamColor`
 - `substitutePlayer` — replaces a player with a single-year sub (reverts on `finalizeYear`)
 - `revertSubstitute` — restores original player before finalization
@@ -401,7 +404,7 @@ Not persisted (session-only).
 | `matches` | `match_id`, `tournament_year` | `match_json` (Match object) |
 | `team_scores` | `tournament_year`, `team_id`, `round` | `points`, `notes` |
 
-**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig`
+**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig`
 
 ### Sync Behavior
 - **On load:** Supabase wins over localStorage if rows exist
@@ -435,10 +438,10 @@ Not persisted (session-only).
 | Team Results | Read | Read | Edit scores |
 | Par 3 CTP | Read | Read | Full |
 | Hole in One | Read | Read | Full |
-| Stats | Read | Read | Read |
-| Archive | Read | Read | Upload/delete files |
+| Analytics | Read | Read | Read |
+| **Archive** | **Hidden** | **Hidden** | Upload/delete files |
 | History | Read | Read | Add/edit/delete courses; assign to round |
-| Print All | Print | Print | Print |
+| **Print All** | **Hidden** | **Hidden** | Print |
 | **Skidmore HDCP** | **Hidden** | **Hidden** | Full (add/edit scores, auto-applies HDCP) |
 
 ### Account Management
@@ -453,7 +456,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ## Navigation Order
 
-1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Round Games *(admin only)* · 8. Team Results · 9. Par 3 CTP · 10. Hole in One · 11. Stats · 12. Archive · 13. History · 14. Print All · 15. Skidmore HDCP *(admin only)*
+1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Round Games *(admin only)* · 8. Team Results · 9. Par 3 CTP · 10. Hole in One · 11. Analytics · 12. Archive *(admin only)* · 13. Course History · 14. Print All *(admin only)* · 15. Skidmore HDCP *(admin only)*
 
 ---
 
@@ -535,7 +538,9 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Admin-only: **Simulate Scores** (per-round or global), Clear Scores, Clear All Scores
   - Simulate includes Magic Ball random assignment for non-blind Points Round matches
   - Clear sets `magicBall1/2: undefined` in addition to clearing scores
+- **Per-round score locking** — admin can lock/unlock individual rounds; locked rounds show a padlock icon on the round tab; scorers cannot enter scores, toggle Magic Ball, or edit match results on locked rounds; admins retain full access; a banner explains lock status
 - Auto-recomputes team scores when scores change (format-specific logic)
+- **Auto-populates `match.result`** on every score entry and simulate for `team_match_play` and `individual_match` formats
 - Deep links: `?match={matchId}&round={round}`
 
 ### Courses (`/{year} Courses` at `/courses`)
@@ -580,14 +585,21 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Claim Pot: sums all paid unclaimed donations → sets `potClaimed` on HIO entry
 - Per-player $20/year donation tracking with paid toggle (admin)
 
-### Stats (`/stats`)
-- Recharts LineChart: handicap trends for all 12 players across all recorded years
-- Data auto-merged: static `data/hdcpHistory.ts` (2006–2025) + dynamic `archivedYears` + live year — no manual edits needed when a year is finalized
-- Year range filter, player visibility toggles, team group controls
-- Colors keyed to team (3 shades per team)
-- Career summary header shows latest available year
+### Analytics (`/analytics`)
+8-tab historical data explorer powered by `utils/analytics.ts`. Data sourced from all `archivedYears` + live year bundled as `YearBundle[]`. Handles subs and permanent replacements via dynamic roster resolution across all bundles.
 
-### Archive (`/archive`)
+- **Team Results** — year-by-year points per round, bar charts, podium finishes
+- **Player Scoring** — gross scoring distribution (eagle/birdie/par/bogey/double/worse) per player; scoring profile breakdown; radar comparison
+- **Head-to-Head** — W/L/T matrix between every player pair; twosome partner records
+- **Format Stats** — points per round by format, team performance per format
+- **Course Stats** — scoring by course; difficulty comparison across rounds
+- **HDCP Trends** — Recharts LineChart for all players across all recorded years; auto-merged from `data/hdcpHistory.ts` (2006–2025) + archived + live year; year range filter, player visibility toggles, team group controls; 3 shades per team
+- **Records** — all-time records tiles (biggest win, lowest net, most Stableford pts, longest drive used, etc.); Cap'n Choice split into gross + net; dormie/decision logic via `decidedResult()` helper
+- **Par 3 CTP** — historical CTP winners and donation tracking
+
+Tab bar is sticky below the measured site header (uses `ResizeObserver` on `#site-header`).
+
+### Archive (`/archive`) — Admin only
 - Supabase Storage bucket `jugger-archive`
 - File tree organized by year folder
 - Type badges, file sizes, view/download links
@@ -601,7 +613,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Assign to Tournament Round** — admin only; sets course + round config; round labels dynamic based on `roundConfigs.format`
 - Built-in `hist-*` entries seeded from `initialData.ts`
 
-### Print All (`/print`)
+### Print All (`/print`) — Admin only
 - react-to-print renders all match scorecards, 2 per 8.5×11 page
 - Cut line between top/bottom halves
 - Round headers, page breaks between rounds
@@ -690,7 +702,7 @@ Admin-only action on the Dashboard (live year only). Two-step flow:
 | **History mode** (switching to prior year) | Full read-only view of every page — scores, pairings, standings, roster — exactly as it was |
 | **Dashboard** (live year) | `🏆 Defending Champs` badge on the champion team |
 | **Dashboard** (viewing archived year) | Champion hero card with team color banner and trophy |
-| **Stats page** | Prior year handicap data auto-merged into trend charts |
+| **Analytics page** | Prior year data auto-merged into all tabs (scoring, H2H, records, HDCP trends, etc.) |
 | **Skidmore HDCP page** | Tournament round scores appear permanently in the score table |
 
 ---
@@ -717,16 +729,18 @@ Stroke dots (`.` / `..`) calculated from `getStrokeDots(courseHdcp, holeHdcpRank
 
 R5: All 4 players share the same `teamHdcp = floor(Σ individual HDCPs × captainsChoiceHdcpPct)`.
 
+**Dormie / match-decided display:** For `team_match_play` and `individual_match`, result rows freeze the win label at the hole where the match is clinched (margin > holes remaining). Post-decision hole cells are dimmed (opacity-40); a small gold checkmark appears at the decision hole column across all result row types.
+
 ---
 
 ## Scoring Computation (`utils/matchplay.ts`)
 
 Called in `ScorecardView` after every score entry:
 
-- `computeMatchPlay(match, holes, hdcps)` — best-ball net per hole, running +/- holes
+- `computeMatchPlay(match, holes, hdcps)` — best-ball net per hole, running +/- holes; returns `decisionHoleIndex` (0-indexed hole where match was clinched); `winLabel` frozen at that point (e.g. `3&2`)
 - `computePointsRound(match, holes, hdcps)` — gross Stableford vs quota; twosome quota = `coursePar − (hdcpA + hdcpB)` where `coursePar` is derived from the `holes` array
 - `computeScramble(match, holes, hdcps)` — ball count rules (1/2/3/4 by hole range)
-- `computeIndividualMatch(match, holes, hdcps)` — two `compute1v1` results + 2v2
+- `computeIndividualMatch(match, holes, hdcps)` — two `compute1v1` results + 2v2; `compute1v1` also returns `decisionHoleIndex` and frozen `winLabel`
 - `computeCaptainsChoice(teamHoleScores, holes, teamHdcp)` — shared net score
 
 Team scores recomputed in `ScorecardView` after each change:
@@ -802,6 +816,41 @@ getDefendingChampionId(archivedYears, teams)
 ```
 
 Dashboard renders a champion hero card with team color banner and trophy when all rounds are complete.
+
+---
+
+## Analytics Computation (`utils/analytics.ts`)
+
+Key exported functions (all consume `YearBundle[]` + course data):
+
+```
+computeScoringProfiles(bundles, courses, courseHistory)
+  → per-player scoring distribution (eagle/birdie/par/bogey/double/worse counts + pcts)
+
+computeH2H(bundles, courses, courseHistory)
+  → W/L/T matrix for every player pair; twosome partner records
+
+computePartnerRecords(bundles, courses, courseHistory)
+  → win/loss/tie stats for every partnership combination
+
+computeTeamResults(bundles)
+  → year-by-year points per round per team; podium finish counts
+
+computeFormatStats(bundles)
+  → points distribution by format; team performance per format
+
+computeCourseStats(bundles, courses, courseHistory)
+  → scoring averages and difficulty comparison per course
+
+computeRecords(bundles, playerName, courses, courseHistory, captainsChoicePct)
+  → all-time records tiles; uses decidedResult() for match-play margins
+
+computePlayerFormatStats(bundles, courses, courseHistory)
+  → per-player breakdown per format (pts earned, win rate, scoring avg)
+
+YearBundle { year, teams, matches, teamScores, roundConfigs }
+  → unified type for archived + live year data
+```
 
 ---
 
