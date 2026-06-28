@@ -150,8 +150,8 @@
   font-size: 10px;
 }
 
-/* Mobile scorecard: wider cells so stepper buttons are tappable */
-@media (max-width: 639px) {
+/* Mobile/landscape scorecard: wider cells so stepper buttons are tappable */
+@media (max-width: 1023px) {
   .scorecard-table th,
   .scorecard-table td {
     min-width: 30px;

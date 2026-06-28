@@ -705,13 +705,13 @@ export default function ScorecardView() {
           Generate pairings first to view scorecards.
         </div>
       ) : (
-        <div className="flex flex-col sm:flex-row gap-4 items-start">
-          {/* Match list — horizontal pill row on mobile, sidebar on desktop */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+          {/* Match list — horizontal pill row on mobile/landscape, sidebar on desktop */}
           <div className="
             flex flex-row overflow-x-auto no-scrollbar gap-2 pb-1 -mx-4 px-4
-            sm:flex-col sm:overflow-visible sm:shrink-0 sm:w-40 sm:gap-0 sm:space-y-2 sm:pb-0 sm:-mx-0 sm:px-0
+            lg:flex-col lg:overflow-visible lg:shrink-0 lg:w-40 lg:gap-0 lg:space-y-2 lg:pb-0 lg:mx-0 lg:px-0
           ">
-            <p className="hidden sm:block text-xs font-bold text-gray-400 uppercase tracking-wide shrink-0">{getRoundName(activeRound, roundConfigs)}</p>
+            <p className="hidden lg:block text-xs font-bold text-gray-400 uppercase tracking-wide shrink-0">{getRoundName(activeRound, roundConfigs)}</p>
             {roundMatches.length === 0 && (
               <p className="text-sm text-gray-400 shrink-0">No matches for this round.</p>
             )}
@@ -730,7 +730,7 @@ export default function ScorecardView() {
                   <button
                     key={m.id}
                     onClick={() => setActiveMatch(m.id)}
-                    className={`shrink-0 sm:w-full text-left rounded border p-2 text-sm transition-colors ${
+                    className={`shrink-0 lg:w-full text-left rounded border p-2 text-sm transition-colors ${
                       activeMatch === m.id
                         ? 'border-masters-green bg-masters-light'
                         : 'border-gray-200 hover:border-gray-300'
@@ -745,7 +745,7 @@ export default function ScorecardView() {
                       </div>
                     </div>
                     {/* Player names: visible on desktop, hidden on mobile to keep pills compact */}
-                    <div className="hidden sm:block text-xs text-gray-500 mt-0.5">
+                    <div className="hidden lg:block text-xs text-gray-500 mt-0.5">
                       {(config?.format === 'texas_scramble' || config?.format === 'captains_choice')
                         ? [...m.twosome1.playerIds, ...m.twosome2.playerIds]
                             .map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id)
@@ -1380,7 +1380,7 @@ function RoundInfoBanner({ round }: { round: number }) {
     <div className="bg-masters-light border border-masters-green/20 rounded-lg p-4 space-y-3">
       {/* Header row — tappable on mobile to toggle details */}
       <div
-        className="flex items-center justify-between gap-2 sm:cursor-default cursor-pointer"
+        className="flex items-center justify-between gap-2 lg:cursor-default cursor-pointer"
         onClick={() => setExpanded(e => !e)}
       >
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1389,11 +1389,11 @@ function RoundInfoBanner({ round }: { round: number }) {
         </div>
         <ChevronDown
           size={16}
-          className={`sm:hidden shrink-0 text-masters-dark transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          className={`lg:hidden shrink-0 text-masters-dark transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
         />
       </div>
       {/* Expandable body — always visible on desktop, toggle on mobile */}
-      <div className={`space-y-3 ${expanded ? 'block' : 'hidden'} sm:block`}>
+      <div className={`space-y-3 ${expanded ? 'block' : 'hidden'} lg:block`}>
         <p className="text-sm text-gray-700">{info.description}</p>
         <div className="grid sm:grid-cols-2 gap-4">
           <div>

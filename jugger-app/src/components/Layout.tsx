@@ -32,9 +32,9 @@ const NAV = [
 const BOTTOM_NAV = [
   { to: '/',           label: 'Home',     icon: LayoutDashboard },
   { to: '/scorecards', label: 'Scores',   icon: ClipboardList },
-  { to: '/results',    label: 'Results',  icon: Trophy },
-  { to: '/teams',      label: 'Teams',    icon: Users },
+  { to: '/ctp',        label: 'Par 3',    icon: Crosshair },
   { to: '/schedule',   label: 'Schedule', icon: Calendar },
+  { to: '/results',    label: 'Results',  icon: Trophy },
 ]
 
 export default function Layout() {
@@ -48,14 +48,14 @@ export default function Layout() {
       <div id="site-header" className="sticky top-0 z-50 no-print">
         {/* Top header */}
         <header className="bg-masters-dark text-white">
-          <div className="max-w-7xl mx-auto px-4 py-2 sm:py-5 flex items-center gap-2 sm:gap-4">
-            <Link to="/" className="flex items-center gap-2 sm:gap-4 hover:opacity-80 transition-opacity">
-              <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-14 w-14 sm:h-36 sm:w-36 shrink-0 object-contain" />
+          <div className="max-w-7xl mx-auto px-4 py-2 lg:py-5 flex items-center gap-2 lg:gap-4">
+            <Link to="/" className="flex items-center gap-2 lg:gap-4 hover:opacity-80 transition-opacity">
+              <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-14 w-14 lg:h-36 lg:w-36 shrink-0 object-contain" />
               <div>
-                <h1 className="font-serif text-lg sm:text-3xl font-bold leading-tight tracking-wide">
+                <h1 className="font-serif text-lg lg:text-3xl font-bold leading-tight tracking-wide">
                   Juggerknocker Invitational
                 </h1>
-                <p className="text-masters-gold text-xs sm:text-sm font-semibold tracking-widest mt-0.5 uppercase">
+                <p className="text-masters-gold text-xs lg:text-sm font-semibold tracking-widest mt-0.5 uppercase">
                   {year} Season
                 </p>
               </div>
@@ -104,7 +104,7 @@ export default function Layout() {
                     }
                   >
                     <Icon size={13} />
-                    <span className="hidden sm:inline">{label}</span>
+                    <span className="hidden lg:inline">{label}</span>
                   </NavLink>
                 </li>
               ))}
@@ -132,17 +132,17 @@ export default function Layout() {
       </div>
 
       {/* Main content — extra bottom padding on mobile to clear the fixed bottom nav */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 sm:pb-6">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 lg:pb-6">
         <Outlet />
       </main>
 
       {/* Footer */}
-      <footer className="bg-masters-dark text-masters-gold/70 text-center text-xs py-2 no-print mb-14 sm:mb-0">
+      <footer className="bg-masters-dark text-masters-gold/70 text-center text-xs py-2 no-print mb-14 lg:mb-0">
         {year} Juggerknocker Invitational
       </footer>
 
       {/* Mobile bottom nav — hidden on sm+ */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-masters-green border-t border-black/20 sm:hidden no-print">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-masters-green border-t border-black/20 lg:hidden no-print">
         <div className="flex">
           {BOTTOM_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink

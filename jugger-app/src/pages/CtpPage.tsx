@@ -550,6 +550,8 @@ export default function CtpPage() {
 
   const [showHistory, setShowHistory] = useState(false)
   const [activeRound, setActiveRound] = useState<number | 'all'>('all')
+  const [potExpanded, setPotExpanded] = useState(false)
+  const [contribExpanded, setContribExpanded] = useState(false)
 
   const allPlayers = teams.flatMap(t => t.players)
   const allPlayerNames = allPlayers.map(p => p.name)
@@ -674,23 +676,55 @@ export default function CtpPage() {
         </div>
       ) : (
         <>
-          {/* Pot banner */}
-          <CtpPotBanner
-            par3Count={par3Count}
-            playerCount={playerCount}
-            totalPot={totalCollected}
-            paidCount={paidCount}
-            totalDonors={thisYearDonations.length}
-          />
+          {/* Pot banner — collapsed by default on mobile */}
+          <div>
+            <button
+              className="lg:hidden w-full flex items-center justify-between text-left px-1 py-2"
+              onClick={() => setPotExpanded(e => !e)}
+            >
+              <span className="font-semibold text-masters-dark text-sm">
+                Pot Summary · {par3Count} holes · {fmtDollars(par3Count)} per player
+              </span>
+              <ChevronDown
+                size={14}
+                className={`text-gray-400 shrink-0 transition-transform duration-200 ${potExpanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <div className={`${potExpanded ? 'block' : 'hidden'} lg:block`}>
+              <CtpPotBanner
+                par3Count={par3Count}
+                playerCount={playerCount}
+                totalPot={totalCollected}
+                paidCount={paidCount}
+                totalDonors={thisYearDonations.length}
+              />
+            </div>
+          </div>
 
-          {/* Payment grid */}
+          {/* Payment grid — collapsed by default on mobile */}
           {isInitialized && thisYearDonations.length > 0 && (
-            <PaymentGrid
-              donations={thisYearDonations}
-              isAdmin={isAdmin}
-              par3Count={par3Count}
-              onToggle={setCtpDonationPaid}
-            />
+            <div>
+              <button
+                className="lg:hidden w-full flex items-center justify-between text-left px-1 py-2"
+                onClick={() => setContribExpanded(e => !e)}
+              >
+                <span className="font-semibold text-masters-dark text-sm">
+                  Player Contributions · {thisYearDonations.filter(d => d.paid).length}/{thisYearDonations.length} paid
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={`text-gray-400 shrink-0 transition-transform duration-200 ${contribExpanded ? 'rotate-180' : ''}`}
+                />
+              </button>
+              <div className={`${contribExpanded ? 'block' : 'hidden'} lg:block`}>
+                <PaymentGrid
+                  donations={thisYearDonations}
+                  isAdmin={isAdmin}
+                  par3Count={par3Count}
+                  onToggle={setCtpDonationPaid}
+                />
+              </div>
+            </div>
           )}
 
           {!isInitialized && isAdmin && (

@@ -841,7 +841,7 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
             {interactive && onTeamHoleScoreChange ? (
               <>
                 {/* Mobile: ▲/value/▼ stepper */}
-                <div className="flex flex-col items-center sm:hidden print:hidden select-none">
+                <div className="flex flex-col items-center lg:hidden print:hidden select-none">
                   <button
                     type="button"
                     onClick={() => onTeamHoleScoreChange(h.number, gross == null ? h.par : Math.min(12, gross + 1))}
@@ -858,7 +858,7 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
                   {net != null && <span className="text-[6px] font-semibold leading-none text-gray-400">{run}</span>}
                 </div>
                 {/* Desktop: number input */}
-                <div className="hidden sm:flex flex-col items-center leading-none print:hidden">
+                <div className="hidden lg:flex flex-col items-center leading-none print:hidden">
                   <input
                     type="number" inputMode="numeric" min={1} max={12}
                     value={gross ?? ''}
@@ -1051,7 +1051,7 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
             {interactive && onScoreChange ? (
               <>
                 {/* Mobile: ▲/value/▼ stepper — no keyboard required */}
-                <div className="flex flex-col items-center sm:hidden print:hidden select-none">
+                <div className="flex flex-col items-center lg:hidden print:hidden select-none">
                   <button
                     type="button"
                     onClick={() => onScoreChange(pid, h.number, score == null ? h.par : Math.min(12, score + 1))}
@@ -1068,7 +1068,7 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
                   {net != null && <span className="text-[6px] font-bold text-masters-green leading-none">{net}</span>}
                 </div>
                 {/* Desktop: number input */}
-                <div className="hidden sm:flex flex-col items-center leading-none print:hidden">
+                <div className="hidden lg:flex flex-col items-center leading-none print:hidden">
                   <input
                     type="number"
                     inputMode="numeric"
