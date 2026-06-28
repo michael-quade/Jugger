@@ -8,7 +8,7 @@ import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
-import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen } from 'lucide-react'
+import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
@@ -705,12 +705,15 @@ export default function ScorecardView() {
           Generate pairings first to view scorecards.
         </div>
       ) : (
-        <div className="flex gap-4 items-start">
-          {/* Match list — fixed narrow sidebar */}
-          <div className="shrink-0 w-40 space-y-2">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{getRoundName(activeRound, roundConfigs)}</p>
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          {/* Match list — horizontal pill row on mobile, sidebar on desktop */}
+          <div className="
+            flex flex-row overflow-x-auto no-scrollbar gap-2 pb-1 -mx-4 px-4
+            sm:flex-col sm:overflow-visible sm:shrink-0 sm:w-40 sm:gap-0 sm:space-y-2 sm:pb-0 sm:-mx-0 sm:px-0
+          ">
+            <p className="hidden sm:block text-xs font-bold text-gray-400 uppercase tracking-wide shrink-0">{getRoundName(activeRound, roundConfigs)}</p>
             {roundMatches.length === 0 && (
-              <p className="text-sm text-gray-400">No matches for this round.</p>
+              <p className="text-sm text-gray-400 shrink-0">No matches for this round.</p>
             )}
             {(() => {
               const regularMatches = roundMatches.filter(m => !m.isBlind)
@@ -727,7 +730,7 @@ export default function ScorecardView() {
                   <button
                     key={m.id}
                     onClick={() => setActiveMatch(m.id)}
-                    className={`w-full text-left rounded border p-2 text-sm transition-colors ${
+                    className={`shrink-0 sm:w-full text-left rounded border p-2 text-sm transition-colors ${
                       activeMatch === m.id
                         ? 'border-masters-green bg-masters-light'
                         : 'border-gray-200 hover:border-gray-300'
@@ -741,7 +744,8 @@ export default function ScorecardView() {
                         {scored && <span className="badge bg-masters-light text-masters-green">●</span>}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5">
+                    {/* Player names: visible on desktop, hidden on mobile to keep pills compact */}
+                    <div className="hidden sm:block text-xs text-gray-500 mt-0.5">
                       {(config?.format === 'texas_scramble' || config?.format === 'captains_choice')
                         ? [...m.twosome1.playerIds, ...m.twosome2.playerIds]
                             .map(id => teams.flatMap(t => t.players).find(p => p.id === id)?.name.split(' ')[0] ?? id)
@@ -1361,6 +1365,7 @@ function getFormatInfo(gc: GameConfig): Record<string, FormatInfo> {
 }
 
 function RoundInfoBanner({ round }: { round: number }) {
+  const [expanded, setExpanded] = useState(false)
   const { roundConfigs, courses, gameConfig } = useTournamentStore(s => ({
     roundConfigs: s.roundConfigs, courses: s.courses, gameConfig: s.gameConfig,
   }))
@@ -1373,32 +1378,45 @@ function RoundInfoBanner({ round }: { round: number }) {
 
   return (
     <div className="bg-masters-light border border-masters-green/20 rounded-lg p-4 space-y-3">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="font-serif font-bold text-masters-dark text-base">{info.label}</h2>
-        {courseLabel && <span className="text-xs text-gray-500">{courseLabel}</span>}
-      </div>
-      <p className="text-sm text-gray-700">{info.description}</p>
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Scoring</p>
-          <ul className="space-y-1">
-            {info.scoring.map(s => (
-              <li key={s.label} className="flex items-baseline gap-2 text-xs">
-                <span className="font-semibold text-masters-dark shrink-0">{s.label}</span>
-                <span className="text-gray-500">{s.detail}</span>
-              </li>
-            ))}
-          </ul>
+      {/* Header row — tappable on mobile to toggle details */}
+      <div
+        className="flex items-center justify-between gap-2 sm:cursor-default cursor-pointer"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="font-serif font-bold text-masters-dark text-base">{info.label}</h2>
+          {courseLabel && <span className="text-xs text-gray-500">{courseLabel}</span>}
         </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">{info.totalPoints} Team Points Available</p>
-          <div className="flex flex-wrap gap-2">
-            {info.points.map(p => (
-              <div key={p.label} className="bg-white border border-masters-green/30 rounded px-2 py-1 text-xs">
-                <span className="font-bold text-masters-green">{p.value}</span>
-                <span className="text-gray-500 ml-1">{p.label}</span>
-              </div>
-            ))}
+        <ChevronDown
+          size={16}
+          className={`sm:hidden shrink-0 text-masters-dark transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+        />
+      </div>
+      {/* Expandable body — always visible on desktop, toggle on mobile */}
+      <div className={`space-y-3 ${expanded ? 'block' : 'hidden'} sm:block`}>
+        <p className="text-sm text-gray-700">{info.description}</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Scoring</p>
+            <ul className="space-y-1">
+              {info.scoring.map(s => (
+                <li key={s.label} className="flex items-baseline gap-2 text-xs">
+                  <span className="font-semibold text-masters-dark shrink-0">{s.label}</span>
+                  <span className="text-gray-500">{s.detail}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">{info.totalPoints} Team Points Available</p>
+            <div className="flex flex-wrap gap-2">
+              {info.points.map(p => (
+                <div key={p.label} className="bg-white border border-masters-green/30 rounded px-2 py-1 text-xs">
+                  <span className="font-bold text-masters-green">{p.value}</span>
+                  <span className="text-gray-500 ml-1">{p.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

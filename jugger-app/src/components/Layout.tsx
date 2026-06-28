@@ -28,6 +28,15 @@ const NAV = [
   { to: '/skidmore-hdcp',  label: 'Skidmore HDCP',  icon: Calculator, adminOnly: true },
 ]
 
+// Five most-used pages pinned to the mobile bottom bar
+const BOTTOM_NAV = [
+  { to: '/',           label: 'Home',     icon: LayoutDashboard },
+  { to: '/scorecards', label: 'Scores',   icon: ClipboardList },
+  { to: '/results',    label: 'Results',  icon: Trophy },
+  { to: '/teams',      label: 'Teams',    icon: Users },
+  { to: '/schedule',   label: 'Schedule', icon: Calendar },
+]
+
 export default function Layout() {
   const { year, liveYear, archivedYears, isViewingHistory, switchToYear, returnToLive } = useTournamentStore()
   const { connected } = useSyncStatus()
@@ -39,14 +48,14 @@ export default function Layout() {
       <div id="site-header" className="sticky top-0 z-50 no-print">
         {/* Top header */}
         <header className="bg-masters-dark text-white">
-          <div className="max-w-7xl mx-auto px-4 py-5 flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
-              <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-36 w-36 shrink-0 object-contain" />
+          <div className="max-w-7xl mx-auto px-4 py-2 sm:py-5 flex items-center gap-2 sm:gap-4">
+            <Link to="/" className="flex items-center gap-2 sm:gap-4 hover:opacity-80 transition-opacity">
+              <img src={`${import.meta.env.BASE_URL}Juggerknocker Invitational logo.png`} alt="Juggerknocker Invitational" className="h-14 w-14 sm:h-36 sm:w-36 shrink-0 object-contain" />
               <div>
-                <h1 className="font-serif text-3xl font-bold leading-tight tracking-wide">
+                <h1 className="font-serif text-lg sm:text-3xl font-bold leading-tight tracking-wide">
                   Juggerknocker Invitational
                 </h1>
-                <p className="text-masters-gold text-sm font-semibold tracking-widest mt-0.5 uppercase">
+                <p className="text-masters-gold text-xs sm:text-sm font-semibold tracking-widest mt-0.5 uppercase">
                   {year} Season
                 </p>
               </div>
@@ -77,12 +86,12 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Sub-nav */}
+        {/* Sub-nav — scrolls horizontally on mobile instead of wrapping */}
         <nav className="bg-masters-green text-white shadow">
           <div className="max-w-7xl mx-auto px-4">
-            <ul className="flex flex-wrap gap-0.5 py-1">
+            <ul className="flex gap-0.5 py-1 overflow-x-auto no-scrollbar">
               {NAV.filter(({ adminOnly }) => !adminOnly || isAdmin).map(({ to, label, icon: Icon }) => (
-                <li key={to}>
+                <li key={to} className="shrink-0">
                   <NavLink
                     to={to}
                     end={to === '/'}
@@ -122,15 +131,36 @@ export default function Layout() {
         )}
       </div>
 
-      {/* Main content */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
+      {/* Main content — extra bottom padding on mobile to clear the fixed bottom nav */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 sm:pb-6">
         <Outlet />
       </main>
 
       {/* Footer */}
-      <footer className="bg-masters-dark text-masters-gold/70 text-center text-xs py-2 no-print">
+      <footer className="bg-masters-dark text-masters-gold/70 text-center text-xs py-2 no-print mb-14 sm:mb-0">
         {year} Juggerknocker Invitational
       </footer>
+
+      {/* Mobile bottom nav — hidden on sm+ */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-masters-green border-t border-black/20 sm:hidden no-print">
+        <div className="flex">
+          {BOTTOM_NAV.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) =>
+                `flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition-colors ${
+                  isActive ? 'text-masters-gold' : 'text-white/80'
+                }`
+              }
+            >
+              <Icon size={20} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   )
 }

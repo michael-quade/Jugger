@@ -12,6 +12,10 @@
   }
 }
 
+/* Hide scrollbar while keeping scroll functionality */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 @layer components {
   .btn-primary {
     @apply bg-masters-green text-white px-4 py-2 rounded font-semibold hover:bg-masters-dark transition-colors text-sm;
@@ -144,4 +148,23 @@
   text-align: center;
   background: transparent;
   font-size: 10px;
+}
+
+/* Mobile scorecard: wider cells so stepper buttons are tappable */
+@media (max-width: 639px) {
+  .scorecard-table th,
+  .scorecard-table td {
+    min-width: 30px;
+    padding: 0;
+  }
+  .scorecard-table .player-name {
+    min-width: 58px;
+    font-size: 8px;
+    padding-left: 2px;
+  }
+  .scorecard-table .hole-out,
+  .scorecard-table .hole-in,
+  .scorecard-table .hole-total {
+    min-width: 26px;
+  }
 }

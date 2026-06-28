@@ -840,9 +840,27 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
           <td key={h.number} className={getStrokeDots(teamHdcp, h.hdcpOrder) ? 'dot-cell' : 'relative'}>
             {interactive && onTeamHoleScoreChange ? (
               <>
-                <div className="flex flex-col items-center leading-none print:hidden">
+                {/* Mobile: ▲/value/▼ stepper */}
+                <div className="flex flex-col items-center sm:hidden print:hidden select-none">
+                  <button
+                    type="button"
+                    onClick={() => onTeamHoleScoreChange(h.number, gross == null ? h.par : Math.min(12, gross + 1))}
+                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+                  >▲</button>
+                  <span className={`text-[11px] font-bold leading-none ${gross == null ? 'text-gray-300' : ''}`}>
+                    {gross ?? '·'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onTeamHoleScoreChange(h.number, gross == null ? h.par : Math.max(1, gross - 1))}
+                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+                  >▼</button>
+                  {net != null && <span className="text-[6px] font-semibold leading-none text-gray-400">{run}</span>}
+                </div>
+                {/* Desktop: number input */}
+                <div className="hidden sm:flex flex-col items-center leading-none print:hidden">
                   <input
-                    type="number" min={1} max={12}
+                    type="number" inputMode="numeric" min={1} max={12}
                     value={gross ?? ''}
                     onChange={e => {
                       const v = e.target.value === '' ? null : parseInt(e.target.value)
@@ -854,6 +872,7 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
                     <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
                   )}
                 </div>
+                {/* Print */}
                 <div className="hidden print:flex flex-col items-center leading-none">
                   {gross != null && <span>{gross}</span>}
                   {net != null && <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>}
@@ -1031,9 +1050,28 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
           <td key={h.number} className={dots ? 'dot-cell' : 'relative'}>
             {interactive && onScoreChange ? (
               <>
-                <div className="flex flex-col items-center leading-none print:hidden">
+                {/* Mobile: ▲/value/▼ stepper — no keyboard required */}
+                <div className="flex flex-col items-center sm:hidden print:hidden select-none">
+                  <button
+                    type="button"
+                    onClick={() => onScoreChange(pid, h.number, score == null ? h.par : Math.min(12, score + 1))}
+                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+                  >▲</button>
+                  <span className={`text-[11px] font-bold leading-none ${score == null ? 'text-gray-300' : ''}`}>
+                    {score ?? '·'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onScoreChange(pid, h.number, score == null ? h.par : Math.max(1, score - 1))}
+                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+                  >▼</button>
+                  {net != null && <span className="text-[6px] font-bold text-masters-green leading-none">{net}</span>}
+                </div>
+                {/* Desktop: number input */}
+                <div className="hidden sm:flex flex-col items-center leading-none print:hidden">
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     max={12}
                     value={score ?? ''}
@@ -1047,6 +1085,7 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
                     <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>
                   )}
                 </div>
+                {/* Print */}
                 <div className="hidden print:flex flex-col items-center leading-none">
                   {score != null && <span>{score}</span>}
                   {net != null && <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>}
