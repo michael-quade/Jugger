@@ -89,7 +89,7 @@ export default function Layout() {
         {/* Sub-nav — scrolls horizontally on mobile instead of wrapping */}
         <nav className="bg-masters-green text-white shadow">
           <div className="max-w-7xl mx-auto px-4">
-            <ul className="flex gap-0.5 py-1 overflow-x-auto no-scrollbar lg:nav-scrollable">
+            <ul className="flex gap-0.5 py-1 overflow-x-auto nav-scrollable">
               {NAV.filter(({ adminOnly }) => !adminOnly || isAdmin).map(({ to, label, icon: Icon }) => (
                 <li key={to} className="shrink-0">
                   <NavLink

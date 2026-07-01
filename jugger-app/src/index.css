@@ -150,7 +150,13 @@
   font-size: 10px;
 }
 
-/* Desktop nav: restore scrollbar so overflow items (History, Print, Skidmore) are discoverable */
+/* Nav scrollbar: hidden on mobile (bottom nav handles primary links), visible on desktop */
+.nav-scrollable {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.nav-scrollable::-webkit-scrollbar { display: none; }
+
 @media (min-width: 1024px) {
   .nav-scrollable {
     -ms-overflow-style: auto;
