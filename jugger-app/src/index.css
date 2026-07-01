@@ -150,6 +150,26 @@
   font-size: 10px;
 }
 
+/* Desktop nav: restore scrollbar so overflow items (History, Print, Skidmore) are discoverable */
+@media (min-width: 1024px) {
+  .nav-scrollable {
+    -ms-overflow-style: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+  }
+  .nav-scrollable::-webkit-scrollbar {
+    display: block;
+    height: 4px;
+  }
+  .nav-scrollable::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+  }
+  .nav-scrollable::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
 /* Mobile/landscape scorecard: wider cells so stepper buttons are tappable */
 @media (max-width: 1023px) {
   .scorecard-table th,
