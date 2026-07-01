@@ -18,7 +18,7 @@ const NAV = [
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
   { to: '/courses',      label: 'Courses',      icon: MapPin },
   { to: '/round-games',  label: 'Round Games',  icon: Gamepad2, adminOnly: true },
-  { to: '/results',      label: 'Team Results', icon: Trophy },
+  { to: '/results',      label: 'Team Results', icon: Trophy,  adminOnly: true },
   { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
   { to: '/analytics',  label: 'Analytics',    icon: TrendingUp },
