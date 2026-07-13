@@ -187,6 +187,7 @@ export interface TournamentState {
   toiletAwardPlayerId?: string
   defendingChampionTeamId?: string
   gameConfig: GameConfig
+  location?: string
 }
 
 export interface CourseHistoryRound {

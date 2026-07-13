@@ -37,9 +37,23 @@ const BOTTOM_NAV = [
   { to: '/results',    label: 'Results',  icon: Trophy },
 ]
 
+function formatDateRange(configs: { date?: string }[], year: number): string {
+  const prefix = String(year)
+  const dates = configs.map(c => c.date).filter(d => d?.startsWith(prefix)) as string[]
+  if (dates.length === 0) return ''
+  dates.sort()
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const first = new Date(dates[0] + 'T12:00:00')
+  const last  = new Date(dates[dates.length - 1] + 'T12:00:00')
+  if (first.getMonth() === last.getMonth())
+    return `${MONTHS[first.getMonth()]} ${first.getDate()}–${last.getDate()}, ${first.getFullYear()}`
+  return `${MONTHS[first.getMonth()]} ${first.getDate()} – ${MONTHS[last.getMonth()]} ${last.getDate()}, ${last.getFullYear()}`
+}
+
 export default function Layout() {
-  const { year, liveYear, archivedYears, isViewingHistory, switchToYear, returnToLive } = useTournamentStore()
+  const { year, liveYear, archivedYears, isViewingHistory, switchToYear, returnToLive, roundConfigs, location } = useTournamentStore()
   const { connected } = useSyncStatus()
+  const dateRange = formatDateRange(roundConfigs, year)
   const isAdmin = useIsAdmin()
 
   return (
@@ -58,6 +72,12 @@ export default function Layout() {
                 <p className="text-masters-gold text-xs lg:text-sm font-semibold tracking-widest mt-0.5 uppercase">
                   {year} Season
                 </p>
+                {location && (
+                  <p className="text-white/70 text-[10px] lg:text-xs leading-tight mt-0.5">{location}</p>
+                )}
+                {dateRange && (
+                  <p className="text-white/60 text-[10px] lg:text-xs leading-tight">{dateRange}</p>
+                )}
               </div>
             </Link>
             {/* Admin year selector */}

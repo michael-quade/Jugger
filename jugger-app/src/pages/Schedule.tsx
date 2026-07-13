@@ -41,7 +41,7 @@ function fmt24to12(t: string): string {
 const MATCH_LABELS = ['Match A', 'Match B', 'Match C'] as const
 
 export default function Schedule() {
-  const { roundConfigs, courses, courseHistory, setCourse, setRoundConfig, matches, teams, clearRoundMatches } = useTournamentStore()
+  const { roundConfigs, courses, courseHistory, setCourse, setRoundConfig, matches, teams, clearRoundMatches, location, setLocation } = useTournamentStore()
 
   // CourseHistory entries that have tee data but aren't already in the courses array
   const courseIds = new Set(courses.map(c => c.id))
@@ -111,6 +111,19 @@ export default function Schedule() {
       <p className="text-sm text-gray-500">
         {isAdmin ? 'Set dates, tee times, and which tees to play for each round.' : 'Dates, tee times, and course assignments for each round.'}
       </p>
+      <div className="flex items-center gap-2">
+        <span className="label mb-0">Location</span>
+        {isAdmin ? (
+          <input
+            className="input w-48"
+            value={location ?? ''}
+            placeholder="City, State"
+            onChange={e => setLocation(e.target.value)}
+          />
+        ) : (
+          <span className="text-sm text-gray-700">{location ?? '—'}</span>
+        )}
+      </div>
 
       <div className="space-y-4">
         {sorted.map(rc => {

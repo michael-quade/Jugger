@@ -66,6 +66,7 @@ interface Actions {
   setToiletAwardPlayer: (id: string | null) => void
   setDefendingChampion: (teamId: string | null) => void
   setGameConfig: (config: GameConfig) => void
+  setLocation: (location: string) => void
 
   clearMatchScores: (matchId: string) => void
   clearAllMatchScores: () => void
@@ -124,6 +125,7 @@ const DEFAULT_STATE: TournamentState = {
   sandbaggerPlayerId: 'pitts',
   toiletAwardPlayerId: 'skidmore',
   gameConfig: DEFAULT_GAME_CONFIG,
+  location: 'Pinehurst, NC',
 }
 
 export const useTournamentStore = create<TournamentState & Actions>()(
@@ -423,6 +425,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       setToiletAwardPlayer: (id) => set({ toiletAwardPlayerId: id ?? undefined }),
       setDefendingChampion: (teamId) => set({ defendingChampionTeamId: teamId ?? undefined }),
       setGameConfig: (config) => set({ gameConfig: config }),
+      setLocation: (location) => set({ location }),
 
       clearMatchScores: (matchId) =>
         set(state => {
@@ -613,7 +616,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 19,
+      version: 20,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -733,6 +736,10 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         if (fromVersion < 19) {
           const b = base as any
           if (!b.lockedRounds) b.lockedRounds = []
+        }
+        if (fromVersion < 20) {
+          const b = base as any
+          if (!b.location) b.location = 'Pinehurst, NC'
         }
         return base as TournamentState
       },
