@@ -37,6 +37,7 @@ export default function ScorecardView() {
   const [activeRound, setActiveRound] = useState(() => Number(searchParams.get('round')) || 1)
   const [activeMatch, setActiveMatch] = useState<string | null>(() => searchParams.get('match'))
   const printRef = useRef<HTMLDivElement>(null)
+  const printRoundRef = useRef<HTMLDivElement>(null)
 
   const [championModal, setChampionModal] = useState<{ team: Team; isComplete: boolean } | null>(null)
 
@@ -59,6 +60,12 @@ export default function ScorecardView() {
     content: () => printRef.current,
     pageStyle: `@page { size: letter; margin: 0.35in; } body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }`,
     documentTitle: match ? `Jugger ${year} — ${match.label}` : `Jugger ${year} Scorecard`,
+  })
+
+  const handlePrintRound = useReactToPrint({
+    content: () => printRoundRef.current,
+    pageStyle: `@page { size: letter; margin: 0.35in; } body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }`,
+    documentTitle: `Jugger ${year} — ${getRoundName(activeRound, roundConfigs)}`,
   })
 
   // Shared team score computation for points_round — call after any MB toggle.
@@ -803,12 +810,22 @@ export default function ScorecardView() {
                       </button>
                     </div>
                   )}
-                  <button
-                    onClick={handlePrint}
-                    className="btn-secondary flex items-center gap-1.5 text-sm"
-                  >
-                    <Printer size={14} /> Print Scorecard
-                  </button>
+                  {isAdmin && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handlePrint}
+                        className="btn-secondary flex items-center gap-1.5 text-sm"
+                      >
+                        <Printer size={14} /> Print Scorecard
+                      </button>
+                      <button
+                        onClick={handlePrintRound}
+                        className="btn-ghost flex items-center gap-1.5 text-sm"
+                      >
+                        <Printer size={14} /> Print Round
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Admin: assign which team's scorecard shows CTP entry (team formats) */}
@@ -938,8 +955,40 @@ export default function ScorecardView() {
         </div>
       )}
     </div>
+
+    {/* Hidden round print content — 2 scorecards per page, same layout as Print All */}
+    <div ref={printRoundRef} className="hidden" aria-hidden="true">
+      {config && course && chunk(roundMatches, 2).map((pair, pi) => (
+        <div key={pi} className="print-page-break bg-white">
+          <div className="scorecard-half">
+            <ScorecardCard match={pair[0]} teams={teams} course={course} config={config} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '0 12px', gap: 6, color: '#9ca3af' }}>
+            <span style={{ fontSize: 13, lineHeight: 1, transform: 'rotate(270deg)', display: 'inline-block', flexShrink: 0 }}>✂</span>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #d1d5db' }} />
+            <span style={{ fontSize: 9, letterSpacing: '0.08em', flexShrink: 0, userSelect: 'none' }}>CUT</span>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #d1d5db' }} />
+          </div>
+          {pair[1] ? (
+            <div className="scorecard-half">
+              <ScorecardCard match={pair[1]} teams={teams} course={course} config={config} />
+            </div>
+          ) : (
+            <div className="scorecard-half flex items-center justify-center text-gray-200">
+              <span className="font-serif text-sm">Juggerknocker Invitational {year}</span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
     </>
   )
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size))
+  return result
 }
 
 function ChampionModal({ team, year, isComplete, onClose }: { team: Team; year: number; isComplete: boolean; onClose: () => void }) {
