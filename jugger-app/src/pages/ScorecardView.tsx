@@ -56,15 +56,17 @@ export default function ScorecardView() {
     (isTeamFmt && match.id === `${activeRound}-${effectiveCtpTeamId}`)
   ))
 
+  const PRINT_STYLE = `@page { size: letter landscape; margin: 0.35in; } body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }`
+
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
-    pageStyle: `@page { size: letter; margin: 0.35in; } body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }`,
+    pageStyle: PRINT_STYLE,
     documentTitle: match ? `Jugger ${year} — ${match.label}` : `Jugger ${year} Scorecard`,
   })
 
   const handlePrintRound = useReactToPrint({
     content: () => printRoundRef.current,
-    pageStyle: `@page { size: letter; margin: 0.35in; } body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }`,
+    pageStyle: PRINT_STYLE,
     documentTitle: `Jugger ${year} — ${getRoundName(activeRound, roundConfigs)}`,
   })
 
@@ -956,8 +958,8 @@ export default function ScorecardView() {
       )}
     </div>
 
-    {/* Hidden round print content — 2 scorecards per page, same layout as Print All */}
-    <div ref={printRoundRef} className="hidden" aria-hidden="true">
+    {/* Round print content — positioned off-screen so react-to-print can render it */}
+    <div ref={printRoundRef} style={{ position: 'absolute', left: '-9999px', top: 0, width: '10.3in' }} aria-hidden="true">
       {config && course && chunk(roundMatches, 2).map((pair, pi) => (
         <div key={pi} className="print-page-break bg-white">
           <div className="scorecard-half">

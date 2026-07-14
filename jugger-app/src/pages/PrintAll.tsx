@@ -19,10 +19,7 @@ export default function PrintAll() {
 
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
-    pageStyle: `
-      @page { size: letter; margin: 0.35in; }
-      body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-    `,
+    pageStyle: `@page { size: letter landscape; margin: 0.35in; } body { font-size: 8pt; background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }`,
     documentTitle: `Jugger ${year} Scorecards`,
   })
 
