@@ -9,6 +9,7 @@ export interface Player {
   isSubstitute?: boolean
   originalName?: string
   originalHandicapIndex?: number
+  originalGhinNumber?: string
   isPermanentReplacement?: boolean
   replacedPlayerName?: string
 }

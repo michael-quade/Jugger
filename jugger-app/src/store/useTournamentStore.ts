@@ -172,9 +172,11 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   ...p,
                   name: subName,
                   handicapIndex: subHdcp,
+                  ghinNumber: undefined,
                   isSubstitute: true,
                   originalName: p.isSubstitute ? p.originalName : p.name,
                   originalHandicapIndex: p.isSubstitute ? p.originalHandicapIndex : p.handicapIndex,
+                  originalGhinNumber: p.isSubstitute ? p.originalGhinNumber : p.ghinNumber,
                 }
               ),
             }
@@ -191,9 +193,11 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   ...p,
                   name: p.originalName ?? p.name,
                   handicapIndex: p.originalHandicapIndex ?? p.handicapIndex,
+                  ghinNumber: p.originalGhinNumber,
                   isSubstitute: false,
                   originalName: undefined,
                   originalHandicapIndex: undefined,
+                  originalGhinNumber: undefined,
                 }
               ),
             }
@@ -235,6 +239,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   isSubstitute: false,
                   originalName: undefined,
                   originalHandicapIndex: undefined,
+                  originalGhinNumber: undefined,
                 }
               ),
             }
