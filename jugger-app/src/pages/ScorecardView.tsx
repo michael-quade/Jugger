@@ -27,7 +27,7 @@ function getRoundName(round: number, configs: RoundConfig[]): string {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, setMatchScore, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, setMatchScore, setMatchScoresBatch, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const canEnterScores = useCanEnterScores()
   const isRoundLocked = (round: number) => lockedRounds.includes(round)
@@ -269,11 +269,9 @@ export default function ScorecardView() {
   function handleSimulate() {
     if (!match || !course || !config) return
     const simScores = simulateMatchScores(match, course, config, teams)
-    Object.entries(simScores).forEach(([pid, holes]) => {
-      Object.entries(holes).forEach(([hole, score]) => {
-        setMatchScore(match.id, pid, Number(hole), score)
-      })
-    })
+    // Batch all scores into one store update to avoid Supabase realtime feedback
+    // mid-loop that would overwrite scores set earlier in the iteration.
+    setMatchScoresBatch(match.id, simScores as Match['scores'])
     // Randomly assign Magic Ball for Round 2 regular matches
     let simMb1 = match.magicBall1
     let simMb2 = match.magicBall2
@@ -467,9 +465,7 @@ export default function ScorecardView() {
         }
       } else {
         const simScores = simulateMatchScores(m, crs, rc, teams)
-        Object.entries(simScores).forEach(([pid, holes]) => {
-          Object.entries(holes).forEach(([hole, score]) => setMatchScore(m.id, pid, Number(hole), score))
-        })
+        setMatchScoresBatch(m.id, simScores as Match['scores'])
         if (rc.format === 'points_round') {
           updateMatch(m.id, { magicBall1: Math.random() < 0.5, magicBall2: Math.random() < 0.5 })
         }
@@ -958,8 +954,8 @@ export default function ScorecardView() {
       )}
     </div>
 
-    {/* Round print content — positioned off-screen so react-to-print can render it */}
-    <div ref={printRoundRef} style={{ position: 'absolute', left: '-9999px', top: 0, width: '10.3in' }} aria-hidden="true">
+    {/* Round print content — hidden on screen via @media screen; renders normally in react-to-print's print iframe */}
+    <div ref={printRoundRef} className="print-round-preview" aria-hidden="true">
       {config && course && chunk(roundMatches, 2).map((pair, pi) => (
         <div key={pi} className="print-page-break bg-white">
           <div className="scorecard-half">

@@ -29,6 +29,7 @@ interface Actions {
   setMatches: (matches: Match[]) => void
   updateMatch: (matchId: string, updates: Partial<Match>) => void
   setMatchScore: (matchId: string, playerId: string, hole: number, score: number | null) => void
+  setMatchScoresBatch: (matchId: string, scores: Match['scores']) => void
   setTeamHoleScore: (matchId: string, hole: number, score: number | null) => void
   setTeeShot: (matchId: string, hole: number, playerId: string | null) => void
 
@@ -311,6 +312,27 @@ export const useTournamentStore = create<TournamentState & Actions>()(
               if (propagate && m.isBlind && m.round === sourceMatch!.round) {
                 const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
                 if (blindPids.includes(playerId)) return applyScore(m)
+              }
+              return m
+            }),
+          }
+        }),
+
+      setMatchScoresBatch: (matchId, scores) =>
+        set(state => {
+          const sourceMatch = state.matches.find(m => m.id === matchId)
+          const propagate = sourceMatch && !sourceMatch.isBlind
+          return {
+            matches: state.matches.map(m => {
+              if (m.id === matchId) return { ...m, scores: { ...m.scores, ...scores } }
+              if (propagate && m.isBlind && m.round === sourceMatch!.round) {
+                const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+                const overlayScores: Match['scores'] = {}
+                for (const pid of blindPids) {
+                  if (scores[pid]) overlayScores[pid] = { ...(m.scores[pid] ?? {}), ...scores[pid] }
+                }
+                if (Object.keys(overlayScores).length > 0)
+                  return { ...m, scores: { ...m.scores, ...overlayScores } }
               }
               return m
             }),

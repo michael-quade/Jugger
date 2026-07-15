@@ -150,6 +150,11 @@
   font-size: 10px;
 }
 
+/* Hidden on screen but visible in react-to-print's print iframe (screen media doesn't apply there) */
+@media screen {
+  .print-round-preview { display: none; }
+}
+
 /* Nav scrollbar: hidden on mobile (bottom nav handles primary links), visible on desktop */
 .nav-scrollable {
   -ms-overflow-style: none;
