@@ -229,6 +229,7 @@ Player {
   isSubstitute?: boolean          // single-year sub; reverts after finalizeYear
   originalName?: string           // original player name when subbed out
   originalHandicapIndex?: number  // original HDCP when subbed out
+  originalGhinNumber?: string     // original GHIN when subbed out; restored on revert
   isPermanentReplacement?: boolean // permanent roster change; kept after finalizeYear
   replacedPlayerName?: string     // name of the player they replaced
 }
@@ -335,6 +336,7 @@ TournamentState {
   toiletAwardPlayerId?: string      // player id holding Toilet Award
   defendingChampionTeamId?: string  // team id of prior year's champion
   gameConfig: GameConfig            // house rules; wired into scoring calculations
+  location?: string                 // trip destination (e.g. 'Pinehurst, NC'); shown in header
 }
 
 AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
@@ -344,9 +346,9 @@ AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
 
 ## State Management
 
-### Zustand Store (`useTournamentStore`) — version 19
+### Zustand Store (`useTournamentStore`) — version 20
 
-Persists to `localStorage` key `jugger-tournament-2026`. All 19 versions have migration functions.
+Persists to `localStorage` key `jugger-tournament-2026`. All 20 versions have migration functions.
 
 **Key actions:**
 - `setYear / lockHandicaps / setPairingsLocked / lockRound(round) / unlockRound(round)`
@@ -356,7 +358,9 @@ Persists to `localStorage` key `jugger-tournament-2026`. All 19 versions have mi
 - `permanentlyReplacePlayer` — replaces a player permanently (kept after `finalizeYear`)
 - `makeSubPermanent` — upgrades an existing sub to a permanent replacement
 - `setCourse / setRoundConfig`
+- `setLocation(location)` — update trip destination string; shown in header
 - `setMatches / updateMatch / setMatchScore / setTeamHoleScore / setTeeShot`
+- `setMatchScoresBatch(matchId, scores)` — applies all player/hole scores in one atomic store update (avoids Supabase realtime feedback loop during simulate)
 - `setTeamScore / clearAllTeamScores / clearTeamScoresForRound`
 - `clearMatchScores / clearAllMatchScores / clearRoundMatches`
 - `addAdmin / updateAdmin / removeAdmin`
@@ -375,7 +379,7 @@ Persists to `localStorage` key `jugger-tournament-2026`. All 19 versions have mi
 - `addCourseHistory / updateCourseHistory / deleteCourseHistory`
 - `addSkidmoreScore / updateSkidmoreScore / removeSkidmoreScore`
 
-**Score propagation:** When a non-blind match score changes, the store automatically propagates those scores to the player's corresponding blind match in the same round.
+**Score propagation:** When a non-blind match score changes (`setMatchScore` or `setMatchScoresBatch`), the store automatically propagates those scores to the player's corresponding blind match in the same round.
 
 **GameConfig sync:** After store creation, a module-level subscriber calls `configureHdcpSettings(state.gameConfig)` on every state change so handicap calculations stay in sync without threading config through every call site.
 
@@ -404,7 +408,7 @@ Not persisted (session-only).
 | `matches` | `match_id`, `tournament_year` | `match_json` (Match object) |
 | `team_scores` | `tournament_year`, `team_id`, `round` | `points`, `notes` |
 
-**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig`
+**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig, location`
 
 ### Sync Behavior
 - **On load:** Supabase wins over localStorage if rows exist
@@ -422,7 +426,7 @@ Not persisted (session-only).
 |---|---|---|
 | **Admin** | Shield icon → sign-in form | Everything: edit rosters, courses, schedule, pairings, scores, results, accounts |
 | **Scorer** | Same sign-in form | Enter scores, toggle Magic Ball, record match results |
-| **Guest** | No login | Read-only view of all pages except Pairings, Round Games, and Skidmore HDCP |
+| **Guest** | No login | Read-only view of all pages except Pairings, Round Games, Team Results, and Skidmore HDCP |
 
 ### Page-Level Access
 
@@ -435,7 +439,7 @@ Not persisted (session-only).
 | Scorecards | Read | Enter scores, Magic Ball, match result | Full + simulate + clear |
 | Courses | Read | Read | Full (edit hole data) |
 | **Round Games** | **Hidden** | **Hidden** | Full (view rules, edit house parameters) |
-| Team Results | Read | Read | Edit scores |
+| **Team Results** | **Hidden** | **Hidden** | Edit scores |
 | Par 3 CTP | Read | Read | Full |
 | Hole in One | Read | Read | Full |
 | Analytics | Read | Read | Read |
@@ -456,7 +460,9 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ## Navigation Order
 
-1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Round Games *(admin only)* · 8. Team Results · 9. Par 3 CTP · 10. Hole in One · 11. Analytics · 12. Archive *(admin only)* · 13. Course History · 14. Print All *(admin only)* · 15. Skidmore HDCP *(admin only)*
+1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Round Games *(admin only)* · 8. Team Results *(admin only)* · 9. Par 3 CTP · 10. Hole in One · 11. Analytics · 12. Archive *(admin only)* · 13. Course History · 14. Print All *(admin only)* · 15. Skidmore HDCP *(admin only)*
+
+**Mobile bottom nav** (fixed bar, `lg:hidden`): Home → Scores → Par 3 → Schedule → Results. Nav labels are icon-only on mobile (text hidden via `hidden lg:inline`). Top sub-nav scrolls horizontally on mobile (`overflow-x-auto no-scrollbar`); on desktop it shows a thin white scrollbar (`.nav-scrollable`) when items overflow so admin-only pages remain discoverable.
 
 ---
 
@@ -482,6 +488,9 @@ Both use SHA-256 password hashing via Web Crypto API.
 - `.badge` — small pill chip
 - `.no-print` — hidden in print mode
 - `.scorecard-table` — scorecard-specific table styling (`.dot-cell`, `.row-par`, etc.)
+- `.no-scrollbar` — hides scrollbar visually while keeping scroll behavior (used on mobile nav and match pill row)
+- `.nav-scrollable` — shows thin white scrollbar on desktop nav (`@media (min-width: 1024px)`); hidden on mobile
+- `.print-round-preview` — hidden on screen (`@media screen { display: none }`); renders normally in react-to-print's print iframe so Print Round content is accessible without being visible to the user
 
 ### Fonts
 - **Serif:** Playfair Display (headers, team names)
@@ -490,6 +499,8 @@ Both use SHA-256 password hashing via Web Crypto API.
 ### Header Layout
 - Entire chrome (header + sub-nav + history banner) wrapped in one `sticky top-0 z-50` div — all three scroll as a unit and stay pinned
 - Header: tournament logo, title (links to Dashboard), year badge, sync status dot, admin widget
+- Logo and title are responsive: `h-14 w-14 lg:h-36 lg:w-36` / `text-lg lg:text-3xl`
+- Below the year badge: `location` (e.g. "Pinehurst, NC") and date range (e.g. "August 27–29, 2026") derived from `roundConfigs` dates filtered to the current year — both hidden if not set or if dates don't match the current year (prevents stale dates after `finalizeYear`)
 - Admin year selector (dropdown) — visible only when archived years exist and user is admin
 - History mode amber banner with "Return to {liveYear}" button
 
@@ -509,6 +520,8 @@ Both use SHA-256 password hashing via Web Crypto API.
 ### Teams (`/teams`)
 - Edit player name / handicap index / GHIN number (admin only)
 - **Substitute player system** — admin can swap a player for a single-year sub; sub reverts to original player on `finalizeYear`; badge: `SUB`
+  - Original player's GHIN is saved to `originalGhinNumber` and cleared from the active record; sub's GHIN field starts blank
+  - **Revert** restores original name, HDCP, and GHIN; `makeSubPermanent` clears `originalGhinNumber`
 - **Permanent replacement** — admin can permanently replace a player; carried forward on `finalizeYear`; badge: `PERM`
 - **Make Sub Permanent** — upgrades an existing sub to a permanent roster member
 - HDCP table: raw, netted, capped, final HDCPs for all rounds; column headers show course name and format; note distinguishes 60% scramble rounds dynamically based on `roundConfigs.format`
@@ -517,6 +530,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Defending Champions** — team name row shows `🏆 Defending Champs` text; admin can click it to remove, or click `🏆` on other teams to assign
 
 ### Schedule (`/schedule`)
+- **Location field** at top — admin-editable text input for trip destination (e.g. "Pinehurst, NC"); displayed in the site header
 - Per-round card: format selector (admin), date/tee pickers (admin), tee times for Match A/B/C
 - Player names shown under each match tee time
 - **Scorecard links** under player names for each match (also shows blind matches)
@@ -531,13 +545,17 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Scorecard link on every match card
 
 ### Scorecards (`/scorecards`)
-- Round tabs (1–5) + match selector list
-- **Round Info Banner** — per-round description panel above matches; reads live from `gameConfig` via `getFormatInfo(gc)` so all point values, pcts, and descriptions update instantly when house rules change
+- Round tabs (1–5) + match selector list (horizontal pill row on mobile, vertical sidebar on desktop)
+- **Round Info Banner** — per-round description panel above matches; collapsible on mobile (collapsed by default); reads live from `gameConfig` via `getFormatInfo(gc)` so all point values, pcts, and descriptions update instantly when house rules change
 - Per-match scorecard via `ScorecardCard` component (see below)
-- Score entry inputs (canEnterScores role)
-- Admin-only: **Simulate Scores** (per-round or global), Clear Scores, Clear All Scores
+- Score entry: desktop uses number inputs; mobile uses ▲/▼ stepper buttons (`lg:hidden`) — first tap from null sets to par
+- Admin-only: **Simulate Scores** (per-round or global), **Clear Scores**, Clear All Scores
+  - Simulate uses `setMatchScoresBatch` (one atomic update) to avoid Supabase realtime feedback loop overwriting scores mid-simulation
   - Simulate includes Magic Ball random assignment for non-blind Points Round matches
   - Clear sets `magicBall1/2: undefined` in addition to clearing scores
+- **Print Scorecard** and **Print Round** buttons — admin only; all printing uses letter landscape, 0.35in margins
+  - Print Scorecard: prints the currently selected match
+  - Print Round: prints all matches for the active round, 2 per page with cut line (same layout as Print All); content hidden on screen via `.print-round-preview` class
 - **Per-round score locking** — admin can lock/unlock individual rounds; locked rounds show a padlock icon on the round tab; scorers cannot enter scores, toggle Magic Ball, or edit match results on locked rounds; admins retain full access; a banner explains lock status
 - Auto-recomputes team scores when scores change (format-specific logic)
 - **Auto-populates `match.result`** on every score entry and simulate for `team_match_play` and `individual_match` formats
@@ -565,11 +583,12 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Reset to Defaults** button restores `DEFAULT_GAME_CONFIG`
 - Round badge shows currently-assigned round from `roundConfigs` (updates live when Schedule changes format)
 
-### Results (`/results`)
+### Results (`/results`) — Admin only
 - Grid: Team × Round with editable point cells (admin)
 - Max points shown per round (9, 15, 7, 12, 7)
 - Winner row highlighted with trophy
 - CTP quick-link
+- Hidden from guests and scorers (standings visible on Dashboard instead)
 
 ### Par 3 CTP (`/ctp`)
 - Auto-counts par-3 holes across all rounds from course data
@@ -577,6 +596,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Per-hole CTP entry: round, hole, yardage, winner, paid toggle
 - CTP donation tracker per player
 - Historical CTP→HIO transfer bar chart
+- **Mobile**: Pot Summary and Player Contributions sections collapsed by default (chevron toggle); CTP results visible first
 
 ### Hole in One (`/hole-in-one`)
 - HIO pot hero: current pot total, contributor count
@@ -614,10 +634,10 @@ Tab bar is sticky below the measured site header (uses `ResizeObserver` on `#sit
 - Built-in `hist-*` entries seeded from `initialData.ts`
 
 ### Print All (`/print`) — Admin only
-- react-to-print renders all match scorecards, 2 per 8.5×11 page
+- react-to-print renders all match scorecards, 2 per page
 - Cut line between top/bottom halves
 - Round headers, page breaks between rounds
-- @page: letter, 0.35in margins
+- `@page`: letter landscape, 0.35in margins; `scorecard-half` height 3.6in (fits 2 per landscape page)
 
 ### Skidmore HDCP (`/skidmore-hdcp`) — Admin only
 - WHS handicap tracker for Matt Skidmore (not in GHIN)
