@@ -184,10 +184,27 @@ export default function RoundGames() {
         </button>
       </div>
 
+      {/* Quick-jump pill bar */}
+      <div className="flex flex-wrap gap-2">
+        {(Object.entries(FORMAT_META) as [RoundFormat, typeof FORMAT_META[RoundFormat]][]).map(([format, meta]) => {
+          const round = assignedRound(format)
+          return (
+            <a
+              key={format}
+              href={`#rg-${format}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-masters-green text-masters-green text-xs font-semibold hover:bg-masters-green hover:text-white transition-colors no-underline"
+            >
+              {round && <span className="bg-masters-gold text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold leading-none shrink-0">{round}</span>}
+              {meta.name}
+            </a>
+          )
+        })}
+      </div>
+
       {(Object.entries(FORMAT_META) as [RoundFormat, typeof FORMAT_META[RoundFormat]][]).map(([format, meta]) => {
         const round = assignedRound(format)
         return (
-          <div key={format} className="card overflow-hidden">
+          <div key={format} id={`rg-${format}`} className="card overflow-hidden scroll-mt-28">
             {/* Header */}
             <div className="flex items-center justify-between gap-3 px-5 py-3 bg-masters-light border-b border-gray-200">
               <div className="flex items-center gap-3">
