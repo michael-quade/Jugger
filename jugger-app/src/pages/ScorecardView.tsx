@@ -7,7 +7,7 @@ import ScorecardCard from '../components/ScorecardCard'
 import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
-import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas } from '../utils/matchplay'
 import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
@@ -19,6 +19,7 @@ const FORMAT_DISPLAY: Record<string, string> = {
   texas_scramble:   'Texas Scramble',
   individual_match: 'Individual Match Play',
   captains_choice:  "Captain's Choice",
+  vegas:            'Vegas',
 }
 
 function getRoundName(round: number, configs: RoundConfig[]): string {
@@ -208,9 +209,45 @@ export default function ScorecardView() {
     })
   }
 
+  function recomputeVegasTeamScores(currentMatches: typeof matches) {
+    if (!course || !config || config.format !== 'vegas') return
+    const allPlayers = teams.flatMap(t => t.players)
+    const vegasMatches = currentMatches.filter(m => m.round === config.round)
+    const teamPts: Record<string, number> = {}
+    teams.forEach(t => { teamPts[t.id] = 0 })
+
+    for (const m of vegasMatches) {
+      const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+      const allFullyScored = allPids.every(pid =>
+        course.holes.every(h => m.scores[pid]?.[h.number] != null)
+      )
+      if (!allFullyScored) continue
+      const localHdcps: Record<string, number> = {}
+      allPids.forEach(pid => {
+        const player = allPlayers.find(p => p.id === pid)
+        if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
+      })
+      const gc = useTournamentStore.getState().gameConfig ?? DEFAULT_GAME_CONFIG
+      const vRes = computeVegas(m, course.holes, localHdcps, {
+        birdieMultiplier: gc.vegasBirdieMultiplier,
+        eagleMultiplier: gc.vegasEagleMultiplier,
+        albatrossMultiplier: gc.vegasAlbatrossMultiplier,
+      })
+      if (!vRes.winner) continue
+      const pts = m.isBlind ? gc.vegasBlindMatchPts : gc.vegasRegularMatchPts
+      if (vRes.winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
+      else if (vRes.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
+      else { teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2 }
+    }
+
+    teams.forEach(t => {
+      setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
+    })
+  }
+
   function autoUpdateMatchResult(currentMatch: Match) {
     if (!course || !config) return
-    if (config.format !== 'team_match_play' && config.format !== 'individual_match') return
+    if (config.format !== 'team_match_play' && config.format !== 'individual_match' && config.format !== 'vegas') return
 
     const allPlayers = teams.flatMap(t => t.players)
     const allPids = [...currentMatch.twosome1.playerIds, ...currentMatch.twosome2.playerIds]
@@ -255,6 +292,27 @@ export default function ScorecardView() {
       }
 
       if (parts.length > 0) updateMatch(currentMatch.id, { result: parts.join(' · ') })
+
+    } else if (config.format === 'vegas') {
+      const allPids = [...currentMatch.twosome1.playerIds, ...currentMatch.twosome2.playerIds]
+      const localHdcps: Record<string, number> = {}
+      allPids.forEach(pid => {
+        const player = allPlayers.find(p => p.id === pid)
+        if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
+      })
+      const gc = useTournamentStore.getState().gameConfig ?? DEFAULT_GAME_CONFIG
+      const vRes = computeVegas(currentMatch, course.holes, localHdcps, {
+        birdieMultiplier: gc.vegasBirdieMultiplier,
+        eagleMultiplier: gc.vegasEagleMultiplier,
+        albatrossMultiplier: gc.vegasAlbatrossMultiplier,
+      })
+      if (!vRes.winner) return
+      const t1 = teams.find(t => t.id === currentMatch.twosome1.teamId)
+      const t2 = teams.find(t => t.id === currentMatch.twosome2.teamId)
+      const result = vRes.winner === 'all_square'
+        ? `All Square — ${vRes.total1} pts each`
+        : `${(vRes.winner === 'twosome1' ? t1 : t2)?.name ?? 'Team'} wins ${vRes.winLabel}`
+      updateMatch(currentMatch.id, { result })
     }
   }
 
@@ -349,6 +407,9 @@ export default function ScorecardView() {
     } else if (config.format === 'individual_match') {
       const latestMatches = useTournamentStore.getState().matches
       recomputeIndividualMatchTeamScores(latestMatches)
+    } else if (config.format === 'vegas') {
+      const latestMatches = useTournamentStore.getState().matches
+      recomputeVegasTeamScores(latestMatches)
     } else if (config.format === 'team_match_play' || config.format === 'points_round') {
       // Recompute team scores for this round from ALL scored matches.
       // simScores covers the current match's players; blind matches that share
@@ -415,7 +476,7 @@ export default function ScorecardView() {
 
     checkAndShowChampion()
 
-    if (config.format === 'team_match_play' || config.format === 'individual_match') {
+    if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas') {
       const cur = useTournamentStore.getState().matches.find(m => m.id === match.id)
       if (cur) autoUpdateMatchResult(cur)
     }
@@ -555,6 +616,31 @@ export default function ScorecardView() {
           else if (w === 'twosome2') teamPts[m.twosome2.teamId] += 1
           else { teamPts[m.twosome1.teamId] += 0.5; teamPts[m.twosome2.teamId] += 0.5 }
         }
+      }
+      teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    } else if (rc.format === 'vegas') {
+      const roundGc = useTournamentStore.getState().gameConfig ?? DEFAULT_GAME_CONFIG
+      const teamPts: Record<string, number> = {}
+      teams.forEach(t => { teamPts[t.id] = 0 })
+      for (const m of roundMatchesAll) {
+        const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const allFullyScored = allPids.every(pid => crs.holes.every(h => m.scores[pid]?.[h.number] != null))
+        if (!allFullyScored) continue
+        const localHdcps: Record<string, number> = {}
+        allPids.forEach(pid => {
+          const player = allPlayers.find(p => p.id === pid)
+          if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
+        })
+        const vRes = computeVegas(m, crs.holes, localHdcps, {
+          birdieMultiplier: roundGc.vegasBirdieMultiplier,
+          eagleMultiplier: roundGc.vegasEagleMultiplier,
+          albatrossMultiplier: roundGc.vegasAlbatrossMultiplier,
+        })
+        if (!vRes.winner) continue
+        const pts = m.isBlind ? roundGc.vegasBlindMatchPts : roundGc.vegasRegularMatchPts
+        if (vRes.winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
+        else if (vRes.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
+        else { teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2 }
       }
       teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
     } else {
@@ -859,7 +945,10 @@ export default function ScorecardView() {
                       if (config.format === 'individual_match') {
                         recomputeIndividualMatchTeamScores(useTournamentStore.getState().matches)
                       }
-                      if (config.format === 'team_match_play' || config.format === 'individual_match') {
+                      if (config.format === 'vegas') {
+                        recomputeVegasTeamScores(useTournamentStore.getState().matches)
+                      }
+                      if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas') {
                         const cur = useTournamentStore.getState().matches.find(m => m.id === match.id)
                         if (cur) autoUpdateMatchResult(cur)
                       }
@@ -1406,6 +1495,23 @@ function getFormatInfo(gc: GameConfig): Record<string, FormatInfo> {
         { label: '1st place', value: `${gc.teamFinish1stPts} pts` },
         { label: '2nd place', value: `${gc.teamFinish2ndPts} pts` },
         { label: '3rd place', value: `${gc.teamFinish3rdPts} pt` },
+      ],
+    },
+    vegas: {
+      label: 'Vegas',
+      totalPoints: gc.vegasRegularMatchPts * 3 + gc.vegasBlindMatchPts * 3,
+      description: 'Each twosome combines their net scores into a two-digit Vegas number. Lower number wins the hole and earns points equal to the difference. Birdie, eagle, and albatross by the winning team multiply those points.',
+      scoring: [
+        { label: 'Net scoring', detail: 'Gross minus per-hole handicap strokes' },
+        { label: 'Vegas number', detail: 'Lower net as tens digit, higher net as units digit (e.g., net 4+5 → 45)' },
+        { label: 'Hole pts', detail: '|t1 Vegas − t2 Vegas|; lower number wins' },
+        { label: `Birdie multiplier`, detail: `${gc.vegasBirdieMultiplier}× hole points` },
+        { label: `Eagle multiplier`, detail: `${gc.vegasEagleMultiplier}× hole points` },
+        { label: `Albatross multiplier`, detail: `${gc.vegasAlbatrossMultiplier}× hole points` },
+      ],
+      points: [
+        { label: 'Regular match', value: `${gc.vegasRegularMatchPts} pts` },
+        { label: 'Blind match', value: `${gc.vegasBlindMatchPts} pt` },
       ],
     },
   }

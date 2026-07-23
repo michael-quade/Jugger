@@ -92,6 +92,22 @@ const FORMAT_META: Record<RoundFormat, {
     hasBlinds: false,
     isTeamFormat: true,
   },
+  vegas: {
+    name: 'Vegas',
+    nickname: undefined,
+    description: 'Each twosome combines their two net scores into a two-digit "Vegas number" (lower score first). The difference in Vegas numbers is the hole\'s point value. Birdie, eagle, and albatross multiply the points won.',
+    mechanics: [
+      'Net scores used — each player\'s gross minus handicap strokes',
+      'Vegas number = low net as tens digit, high net as units digit (e.g., net 4+5 → 45)',
+      'Hole points = |team1 Vegas − team2 Vegas|; lower number wins the hole',
+      'Birdie on winning team = points doubled · Eagle = tripled · Albatross = quadrupled (all configurable)',
+      'Match winner = team with most cumulative points after 18 holes',
+      'Regular match: 2 pts · Blind match: 1 pt',
+    ],
+    hdcpNote: '100% full netted + capped course HDCP per player',
+    hasBlinds: true,
+    isTeamFormat: false,
+  },
 }
 
 interface NumberInputProps {
@@ -189,14 +205,14 @@ export default function RoundGames() {
         {(Object.entries(FORMAT_META) as [RoundFormat, typeof FORMAT_META[RoundFormat]][]).map(([format, meta]) => {
           const round = assignedRound(format)
           return (
-            <a
+            <button
               key={format}
-              href={`#rg-${format}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-masters-green text-masters-green text-xs font-semibold hover:bg-masters-green hover:text-white transition-colors no-underline"
+              onClick={() => document.getElementById(`rg-${format}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-masters-green text-masters-green text-xs font-semibold hover:bg-masters-green hover:text-white transition-colors"
             >
               {round && <span className="bg-masters-gold text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold leading-none shrink-0">{round}</span>}
               {meta.name}
-            </a>
+            </button>
           )
         })}
       </div>
@@ -471,6 +487,59 @@ export default function RoundGames() {
                         <div className="text-xs text-gray-500">Per blind match winner</div>
                       </div>
                       <NumberInput value={cfg.blindMatchPts} onChange={v => update('blindMatchPts', v)} min={0} step={0.5} />
+                    </div>
+                  </div>
+                )}
+
+                {format === 'vegas' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-medium text-gray-700">Blind Matches</div>
+                        <div className="text-xs text-gray-500">Applies to new pairing generation</div>
+                      </div>
+                      <Toggle
+                        checked={cfg.vegasEnableBlinds}
+                        onChange={v => update('vegasEnableBlinds', v)}
+                        label={cfg.vegasEnableBlinds ? 'Yes' : 'No'}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-medium text-gray-700">Regular Match Points</div>
+                        <div className="text-xs text-gray-500">Awarded to match winner</div>
+                      </div>
+                      <NumberInput value={cfg.vegasRegularMatchPts} onChange={v => update('vegasRegularMatchPts', v)} min={1} />
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-medium text-gray-700">Blind Match Points</div>
+                        <div className="text-xs text-gray-500">Awarded to blind match winner</div>
+                      </div>
+                      <NumberInput value={cfg.vegasBlindMatchPts} onChange={v => update('vegasBlindMatchPts', v)} min={0} step={0.5} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-700 mb-2">Score Multipliers</div>
+                      <div className="text-xs text-gray-500 mb-2">Applied when winning team has the specified shot on a hole</div>
+                      <div className="space-y-1.5">
+                        {([
+                          ['Birdie (−1)', 'vegasBirdieMultiplier'],
+                          ['Eagle (−2)', 'vegasEagleMultiplier'],
+                          ['Albatross (−3 or better)', 'vegasAlbatrossMultiplier'],
+                        ] as [string, keyof GameConfig][]).map(([label, key]) => (
+                          <div key={key} className="flex items-center justify-between gap-4">
+                            <span className="text-xs text-gray-600">{label}</span>
+                            <NumberInput
+                              value={cfg[key] as number}
+                              onChange={v => update(key, v)}
+                              min={1} max={10} suffix="×"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-400 italic">
+                      Current: {cfg.vegasRegularMatchPts}/{cfg.vegasBlindMatchPts} pts · Birdie {cfg.vegasBirdieMultiplier}× · Eagle {cfg.vegasEagleMultiplier}× · Albatross {cfg.vegasAlbatrossMultiplier}×
                     </div>
                   </div>
                 )}

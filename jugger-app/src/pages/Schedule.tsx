@@ -12,6 +12,7 @@ const FORMAT_LABELS: Record<string, string> = {
   texas_scramble: 'Texas Scramble',
   individual_match: 'Individual Match Play',
   captains_choice: "Captain's Choice",
+  vegas: 'Vegas',
 }
 
 const FORMAT_RULES: Record<string, string> = {
@@ -25,6 +26,8 @@ const FORMAT_RULES: Record<string, string> = {
     'Each player plays own ball, NET scoring. Individual match = 1 pt. Twosome best-ball sub-match = 1 pt. Blind = ½ pt.',
   captains_choice:
     "Captain picks the shot. HDCP = floor(team aggregate × 15%). Min 3 tee balls per player. 1st=4, 2nd=2, 3rd=1 pt.",
+  vegas:
+    'Two-digit Vegas numbers from net scores. Lower number wins the hole; difference = pts. Birdie=2×, Eagle=3×, Albatross=4× (configurable). Match = 2 pts, Blind = 1 pt.',
 }
 
 function fmt24to12(t: string): string {

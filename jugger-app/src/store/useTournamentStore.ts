@@ -99,6 +99,12 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   teamFinish1stPts: 4,
   teamFinish2ndPts: 2,
   teamFinish3rdPts: 1,
+  vegasBirdieMultiplier: 2,
+  vegasEagleMultiplier: 3,
+  vegasAlbatrossMultiplier: 4,
+  vegasRegularMatchPts: 2,
+  vegasBlindMatchPts: 1,
+  vegasEnableBlinds: true,
 }
 
 const DEFAULT_STATE: TournamentState = {
@@ -643,7 +649,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 20,
+      version: 21,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -767,6 +773,16 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         if (fromVersion < 20) {
           const b = base as any
           if (!b.location) b.location = 'Pinehurst, NC'
+        }
+        if (fromVersion < 21) {
+          const b = base as any
+          if (!b.gameConfig) b.gameConfig = DEFAULT_GAME_CONFIG
+          if (b.gameConfig.vegasBirdieMultiplier === undefined) b.gameConfig.vegasBirdieMultiplier = 2
+          if (b.gameConfig.vegasEagleMultiplier === undefined) b.gameConfig.vegasEagleMultiplier = 3
+          if (b.gameConfig.vegasAlbatrossMultiplier === undefined) b.gameConfig.vegasAlbatrossMultiplier = 4
+          if (b.gameConfig.vegasRegularMatchPts === undefined) b.gameConfig.vegasRegularMatchPts = 2
+          if (b.gameConfig.vegasBlindMatchPts === undefined) b.gameConfig.vegasBlindMatchPts = 1
+          if (b.gameConfig.vegasEnableBlinds === undefined) b.gameConfig.vegasEnableBlinds = true
         }
         return base as TournamentState
       },

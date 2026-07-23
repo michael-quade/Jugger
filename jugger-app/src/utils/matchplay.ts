@@ -272,6 +272,117 @@ export function computeCaptainsChoice(
   return { holeNetScores, running, total: cum, holesPlayed, isDone: holesPlayed === 18 }
 }
 
+// ─── Vegas (Two-Digit Number Points Format) ──────────────────────────────────
+
+export interface VegasConfig {
+  birdieMultiplier: number    // default 2
+  eagleMultiplier: number     // default 3
+  albatrossMultiplier: number // default 4
+}
+
+export interface VegasHoleResult {
+  t1Net: [number | null, number | null]  // net scores for twosome1's two players
+  t2Net: [number | null, number | null]  // net scores for twosome2's two players
+  t1Vegas: number | null   // 2-digit Vegas number for twosome1
+  t2Vegas: number | null   // 2-digit Vegas number for twosome2
+  rawPts: number | null    // |t1Vegas − t2Vegas|
+  multiplier: number       // 1, 2, 3, or 4 based on winning team's best gross
+  finalPts: number | null  // rawPts × multiplier; positive = twosome1 wins hole
+}
+
+export interface VegasResult {
+  holeResults: VegasHoleResult[]
+  running: number[]   // cumulative pts after each hole; positive = twosome1 leads
+  total1: number
+  total2: number
+  holesPlayed: number
+  winner: 'twosome1' | 'twosome2' | 'all_square' | null
+  winLabel: string
+}
+
+export function computeVegas(
+  match: Pick<Match, 'twosome1' | 'twosome2' | 'scores'>,
+  holes: Course['holes'],
+  playerHdcps: Record<string, number>,
+  config: VegasConfig,
+): VegasResult {
+  const t1 = match.twosome1
+  const t2 = match.twosome2
+  const holeResults: VegasHoleResult[] = []
+  const running: number[] = []
+  let cum = 0
+  let holesPlayed = 0
+
+  for (const hole of holes) {
+    const g1a = match.scores[t1.playerIds[0]]?.[hole.number] ?? null
+    const g1b = match.scores[t1.playerIds[1]]?.[hole.number] ?? null
+    const g2a = match.scores[t2.playerIds[0]]?.[hole.number] ?? null
+    const g2b = match.scores[t2.playerIds[1]]?.[hole.number] ?? null
+
+    if (g1a == null || g1b == null || g2a == null || g2b == null) {
+      holeResults.push({ t1Net: [null, null], t2Net: [null, null], t1Vegas: null, t2Vegas: null, rawPts: null, multiplier: 1, finalPts: null })
+      running.push(cum)
+      continue
+    }
+
+    holesPlayed++
+
+    const s1a = holeStrokes(playerHdcps[t1.playerIds[0]] ?? 0, hole.hdcpOrder)
+    const s1b = holeStrokes(playerHdcps[t1.playerIds[1]] ?? 0, hole.hdcpOrder)
+    const s2a = holeStrokes(playerHdcps[t2.playerIds[0]] ?? 0, hole.hdcpOrder)
+    const s2b = holeStrokes(playerHdcps[t2.playerIds[1]] ?? 0, hole.hdcpOrder)
+
+    const n1a = g1a - s1a
+    const n1b = g1b - s1b
+    const n2a = g2a - s2a
+    const n2b = g2b - s2b
+
+    const t1Lo = Math.min(n1a, n1b)
+    const t1Hi = Math.max(n1a, n1b)
+    const t2Lo = Math.min(n2a, n2b)
+    const t2Hi = Math.max(n2a, n2b)
+
+    const t1Vegas = t1Lo * 10 + t1Hi
+    const t2Vegas = t2Lo * 10 + t2Hi
+    const rawPts = Math.abs(t1Vegas - t2Vegas)
+
+    // Winner is the team with the lower Vegas number
+    const winnerIsT1 = t1Vegas < t2Vegas
+    const winnerIsT2 = t2Vegas < t1Vegas
+
+    // Multiplier: based on winning team's best GROSS score vs par
+    let multiplier = 1
+    if (winnerIsT1 || winnerIsT2) {
+      const wG1 = winnerIsT1 ? g1a : g2a
+      const wG2 = winnerIsT1 ? g1b : g2b
+      const bestGross = Math.min(wG1, wG2)
+      const diff = hole.par - bestGross  // positive = under par
+      if (diff >= 3) multiplier = config.albatrossMultiplier
+      else if (diff === 2) multiplier = config.eagleMultiplier
+      else if (diff === 1) multiplier = config.birdieMultiplier
+    }
+
+    const signedPts = winnerIsT1 ? rawPts * multiplier : winnerIsT2 ? -(rawPts * multiplier) : 0
+    cum += signedPts
+
+    holeResults.push({ t1Net: [n1a, n1b], t2Net: [n2a, n2b], t1Vegas, t2Vegas, rawPts, multiplier, finalPts: signedPts })
+    running.push(cum)
+  }
+
+  const total1 = Math.max(0, cum)
+  const total2 = Math.max(0, -cum)
+
+  let winner: VegasResult['winner'] = null
+  let winLabel = ''
+  if (holesPlayed === 18) {
+    if (cum > 0) { winner = 'twosome1'; winLabel = `${cum} pts` }
+    else if (cum < 0) { winner = 'twosome2'; winLabel = `${Math.abs(cum)} pts` }
+    else { winner = 'all_square'; winLabel = 'All Square' }
+  }
+
+  return { holeResults, running, total1, total2, holesPlayed, winner, winLabel }
+}
+
 // ─── Points Round (Gross Stableford with Quota) ───────────────────────────────
 
 export interface PointsRoundResult {

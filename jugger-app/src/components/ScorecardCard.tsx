@@ -1,7 +1,7 @@
 import type { Match, Team, Course, RoundConfig, Player } from '../types'
 import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp } from '../utils/handicap'
 import { getPlayerName } from '../utils/pairings'
-import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, type MatchPlayResult, type PointsRoundResult, type ScrambleResult, type CaptainsChoiceResult, type IndividualMatch1v1Result, type IndividualMatchResult } from '../utils/matchplay'
+import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas, type MatchPlayResult, type PointsRoundResult, type ScrambleResult, type CaptainsChoiceResult, type IndividualMatch1v1Result, type IndividualMatchResult, type VegasResult } from '../utils/matchplay'
 import { useTournamentStore, DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 
 interface Props {
@@ -28,6 +28,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
     texas_scramble:   `Texas Scramble · ${scrPct}% HDCP · Best 1/2/3/4 balls by hole range`,
     individual_match: 'Individual Match Play · Net Scoring · Each match = 1pt',
     captains_choice:  `Captain's Choice · ${ccPct}% Team HDCP${minTees > 0 ? ` · Min ${minTees} tee balls per player` : ''}`,
+    vegas:            `Vegas · Net Two-Digit Numbers · Birdie=${gc.vegasBirdieMultiplier}× Eagle=${gc.vegasEagleMultiplier}× Albatross=${gc.vegasAlbatrossMultiplier}×`,
   }
 
   const allPlayers = teams.flatMap(t => t.players)
@@ -74,6 +75,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   const isScramble        = config.format === 'texas_scramble'
   const isIndividualMatch = config.format === 'individual_match'
   const isCaptainsChoice  = config.format === 'captains_choice'
+  const isVegas           = config.format === 'vegas'
   const mpResult = isMatchPlay        ? computeMatchPlay(match, course.holes, playerHdcps)       : null
   const prResult = isPointsRound      ? computePointsRound(match, course.holes, playerHdcps)     : null
   const srResult = isScramble         ? computeScramble(match, course.holes, playerHdcps)        : null
@@ -81,6 +83,11 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   // For Captain's Choice the shared teamHdcp is the value stored for any player (all same)
   const ccTeamHdcp = isCaptainsChoice ? (playerHdcps[allPlayerIds[0]] ?? 0) : 0
   const ccResult   = isCaptainsChoice ? computeCaptainsChoice(match.teamHoleScores, course.holes, ccTeamHdcp) : null
+  const vegasResult = isVegas ? computeVegas(match, course.holes, playerHdcps, {
+    birdieMultiplier: gc.vegasBirdieMultiplier,
+    eagleMultiplier: gc.vegasEagleMultiplier,
+    albatrossMultiplier: gc.vegasAlbatrossMultiplier,
+  }) : null
 
   function teamLabel(twosome: typeof match.twosome1) {
     const team = teams.find(t => t.id === twosome.teamId)
@@ -109,6 +116,11 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           {!isScramble && !isCaptainsChoice && (
             <div className="text-gray-500 text-[10px]">
               {teamLabel(match.twosome1)} vs {teamLabel(match.twosome2)}
+            </div>
+          )}
+          {isVegas && vegasResult && (
+            <div className="text-[10px] font-semibold text-masters-gold">
+              {vegasResult.total1} – {vegasResult.total2} pts
             </div>
           )}
           {isCaptainsChoice && (
@@ -219,6 +231,18 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
                 </>
               )}
             </>
+          ) : isVegas && vegasResult ? (
+            <>
+              {/* Twosome 1 players */}
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <VegasResultRow perspective="twosome1" result={vegasResult} course={course} twosome={match.twosome1} teams={teams} />
+
+              {/* Twosome 2 players */}
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <VegasResultRow perspective="twosome2" result={vegasResult} course={course} twosome={match.twosome2} teams={teams} />
+            </>
           ) : (
             <>
               {/* Twosome 1 players */}
@@ -274,6 +298,9 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
             <MatchWinnerBanner result={imResult.match2v2} match={match} teams={teams} />
           )}
         </>
+      )}
+      {isVegas && vegasResult?.winner && (
+        <VegasWinnerBanner result={vegasResult} match={match} teams={teams} />
       )}
 
       {/* Rules note */}
@@ -604,6 +631,112 @@ function IndividualMatch1v1WinnerBanner({ result, p1Id, p2Id, teams }: {
     <div className="mt-1 py-1 px-2 rounded text-[10px] text-center font-bold bg-masters-light border border-masters-green/30">
       <span style={{ color: winTeam?.color ?? '#006747' }}>{winnerFirst}</span>
       <span className="text-masters-dark"> wins {result.winLabel} over {loserFirst}</span>
+    </div>
+  )
+}
+
+// ─── Vegas Result Row ────────────────────────────────────────────────────────
+
+interface VegasResultRowProps {
+  perspective: 'twosome1' | 'twosome2'
+  result: VegasResult
+  course: Course
+  twosome: Match['twosome1']
+  teams: Team[]
+}
+
+function VegasResultRow({ perspective, result, course, twosome, teams }: VegasResultRowProps) {
+  const team = teams.find(t => t.id === twosome.teamId)
+  const color = team?.color ?? '#9ca3af'
+
+  // Running pts from this team's perspective
+  const myRunning = (i: number) =>
+    perspective === 'twosome1' ? result.running[i] : -result.running[i]
+
+  const frontRunning = result.holeResults[8]?.finalPts !== null ? myRunning(8) : undefined
+  const myTotal = perspective === 'twosome1' ? result.total1 : result.total2
+
+  return (
+    <tr className="row-result">
+      <td className="player-name">
+        <div className="text-[9px] font-semibold" style={{ color }}>{team?.name ?? ''}</div>
+        <div className="text-[8px] text-gray-400">Vegas pts</div>
+      </td>
+      {course.holes.map((h, i) => {
+        const hr = result.holeResults[i]
+        if (!hr || hr.t1Vegas === null) return <td key={h.number} />
+
+        const myVegas = perspective === 'twosome1' ? hr.t1Vegas : hr.t2Vegas
+        const signedPts = perspective === 'twosome1' ? (hr.finalPts ?? 0) : -(hr.finalPts ?? 0)
+        const iWin = signedPts > 0
+        const iLose = signedPts < 0
+        const tied = signedPts === 0
+        const cum = myRunning(i)
+
+        return (
+          <td key={h.number}>
+            <div className="flex flex-col items-center gap-[1px]">
+              {/* Vegas number */}
+              <span className={`text-[8px] font-bold leading-none ${iWin ? '' : iLose ? 'text-gray-400' : 'text-gray-500'}`}
+                style={iWin ? { color } : undefined}>
+                {myVegas}
+              </span>
+              {/* Hole pts with multiplier badge */}
+              {!tied && (
+                <span className={`text-[7px] font-semibold leading-none ${iWin ? 'text-masters-green' : 'text-red-400'}`}>
+                  {iWin ? `+${Math.abs(signedPts)}` : `-${Math.abs(signedPts)}`}
+                  {hr.multiplier > 1 && <span className="text-masters-gold">{hr.multiplier}×</span>}
+                </span>
+              )}
+              {/* Running cumulative */}
+              <span className={`text-[6px] leading-none ${cum > 0 ? 'text-masters-green' : cum < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                {cum > 0 ? `+${cum}` : cum}
+              </span>
+            </div>
+          </td>
+        )
+      })}
+      <td className="hole-out">
+        {frontRunning !== undefined && (
+          <span className={`text-[8px] font-bold leading-none ${frontRunning > 0 ? 'text-masters-green' : frontRunning < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+            {frontRunning > 0 ? `+${frontRunning}` : frontRunning}
+          </span>
+        )}
+      </td>
+      <td className="hole-in" />
+      <td className="hole-total">
+        {myTotal > 0 && (
+          <span className="text-[8px] font-bold leading-none" style={{ color }}>{myTotal}</span>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function VegasWinnerBanner({ result, match, teams }: { result: VegasResult; match: Match; teams: Team[] }) {
+  if (result.winner === 'all_square') {
+    return (
+      <div className="mt-1.5 py-1 px-2 rounded text-[10px] text-center font-bold bg-gray-50 border border-gray-200 text-gray-600">
+        All Square — {result.total1} pts each
+      </div>
+    )
+  }
+  const winTwosome = result.winner === 'twosome1' ? match.twosome1 : match.twosome2
+  const loseTwosome = result.winner === 'twosome1' ? match.twosome2 : match.twosome1
+  const winPts = result.winner === 'twosome1' ? result.total1 : result.total2
+  const losePts = result.winner === 'twosome1' ? result.total2 : result.total1
+  const winTeam = teams.find(t => t.id === winTwosome.teamId)
+  const loseTeam = teams.find(t => t.id === loseTwosome.teamId)
+
+  return (
+    <div className="mt-1.5 py-1 px-2 rounded text-[10px] text-center bg-masters-light border border-masters-green/30 space-y-0.5">
+      <div className="font-bold">
+        <span style={{ color: winTeam?.color ?? '#006747' }}>{winTeam?.name ?? 'Team'}</span>
+        <span className="text-masters-dark"> wins </span>
+        <span className="text-masters-green">{winPts} pts</span>
+        <span className="text-gray-500"> vs {losePts}</span>
+        {loseTeam && <span style={{ color: loseTeam.color }}> ({loseTeam.name})</span>}
+      </div>
     </div>
   )
 }

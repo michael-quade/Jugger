@@ -52,6 +52,7 @@ export type RoundFormat =
   | 'texas_scramble'
   | 'individual_match'
   | 'captains_choice'
+  | 'vegas'
 
 export interface RoundConfig {
   round: 1 | 2 | 3 | 4 | 5
@@ -160,6 +161,12 @@ export interface GameConfig {
   teamFinish1stPts: number          // default 4
   teamFinish2ndPts: number          // default 2
   teamFinish3rdPts: number          // default 1
+  vegasBirdieMultiplier: number     // default 2
+  vegasEagleMultiplier: number      // default 3
+  vegasAlbatrossMultiplier: number  // default 4
+  vegasRegularMatchPts: number      // default 2
+  vegasBlindMatchPts: number        // default 1
+  vegasEnableBlinds: boolean        // default true
 }
 
 export interface TournamentState {
