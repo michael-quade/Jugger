@@ -496,41 +496,41 @@ export default function RoundGames() {
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <div className="text-sm font-medium text-gray-700">Blind Matches</div>
-                        <div className="text-xs text-gray-500">Applies to new pairing generation</div>
+                        <div className="text-xs text-gray-500">Default: Yes · Applies to new pairing generation</div>
                       </div>
                       <Toggle
-                        checked={cfg.vegasEnableBlinds}
+                        checked={cfg.vegasEnableBlinds ?? true}
                         onChange={v => update('vegasEnableBlinds', v)}
-                        label={cfg.vegasEnableBlinds ? 'Yes' : 'No'}
+                        label={(cfg.vegasEnableBlinds ?? true) ? 'Yes' : 'No'}
                       />
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <div className="text-sm font-medium text-gray-700">Regular Match Points</div>
-                        <div className="text-xs text-gray-500">Awarded to match winner</div>
+                        <div className="text-xs text-gray-500">Default: 2 · Awarded to match winner</div>
                       </div>
-                      <NumberInput value={cfg.vegasRegularMatchPts} onChange={v => update('vegasRegularMatchPts', v)} min={1} />
+                      <NumberInput value={cfg.vegasRegularMatchPts ?? 2} onChange={v => update('vegasRegularMatchPts', v)} min={1} />
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <div className="text-sm font-medium text-gray-700">Blind Match Points</div>
-                        <div className="text-xs text-gray-500">Awarded to blind match winner</div>
+                        <div className="text-xs text-gray-500">Default: 1 · Awarded to blind match winner</div>
                       </div>
-                      <NumberInput value={cfg.vegasBlindMatchPts} onChange={v => update('vegasBlindMatchPts', v)} min={0} step={0.5} />
+                      <NumberInput value={cfg.vegasBlindMatchPts ?? 1} onChange={v => update('vegasBlindMatchPts', v)} min={0} step={0.5} />
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-gray-700 mb-2">Score Multipliers</div>
-                      <div className="text-xs text-gray-500 mb-2">Applied when winning team has the specified shot on a hole</div>
+                      <div className="text-sm font-medium text-gray-700 mb-1">Score Multipliers</div>
+                      <div className="text-xs text-gray-500 mb-2">Applied to hole points when the winning team makes the shot</div>
                       <div className="space-y-1.5">
                         {([
-                          ['Birdie (−1)', 'vegasBirdieMultiplier'],
-                          ['Eagle (−2)', 'vegasEagleMultiplier'],
-                          ['Albatross (−3 or better)', 'vegasAlbatrossMultiplier'],
-                        ] as [string, keyof GameConfig][]).map(([label, key]) => (
+                          ['Birdie (−1)', 'vegasBirdieMultiplier', 2],
+                          ['Eagle (−2)', 'vegasEagleMultiplier', 3],
+                          ['Albatross (−3 or better)', 'vegasAlbatrossMultiplier', 4],
+                        ] as [string, keyof GameConfig, number][]).map(([label, key, def]) => (
                           <div key={key} className="flex items-center justify-between gap-4">
-                            <span className="text-xs text-gray-600">{label}</span>
+                            <span className="text-xs text-gray-600">{label} <span className="text-gray-400">(default: {def}×)</span></span>
                             <NumberInput
-                              value={cfg[key] as number}
+                              value={(cfg[key] as number) ?? def}
                               onChange={v => update(key, v)}
                               min={1} max={10} suffix="×"
                             />
@@ -539,7 +539,7 @@ export default function RoundGames() {
                       </div>
                     </div>
                     <div className="text-xs text-gray-400 italic">
-                      Current: {cfg.vegasRegularMatchPts}/{cfg.vegasBlindMatchPts} pts · Birdie {cfg.vegasBirdieMultiplier}× · Eagle {cfg.vegasEagleMultiplier}× · Albatross {cfg.vegasAlbatrossMultiplier}×
+                      Current: {cfg.vegasRegularMatchPts ?? 2}/{cfg.vegasBlindMatchPts ?? 1} pts · Birdie {cfg.vegasBirdieMultiplier ?? 2}× · Eagle {cfg.vegasEagleMultiplier ?? 3}× · Albatross {cfg.vegasAlbatrossMultiplier ?? 4}×
                     </div>
                   </div>
                 )}
