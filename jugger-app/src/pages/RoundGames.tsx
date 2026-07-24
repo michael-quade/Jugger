@@ -48,7 +48,7 @@ const FORMAT_META: Record<RoundFormat, {
   texas_scramble: {
     name: 'Texas Scramble',
     nickname: undefined,
-    description: 'All four players tee off. The team selects the best drive. Everyone plays from that spot. Repeat for each subsequent shot. Ball count rules escalate as the round progresses, forcing the team to use more players\' shots.',
+    description: 'All four players tee off. The team selects the best drive. Everyone plays their own ball from that spot to complete the hole. Repeat the process for each hole. The number of scores to count for a hole escalate as the round progresses, forcing the team to use more players\' shots.',
     mechanics: [
       'Holes 1–6: Best 1 ball (any player\'s shot may be used)',
       'Holes 7–12: Best 2 balls (at least 2 different players\' shots must be used)',
