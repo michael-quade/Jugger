@@ -665,7 +665,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 21,
+      version: 22,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -799,6 +799,35 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           if (b.gameConfig.vegasRegularMatchPts === undefined) b.gameConfig.vegasRegularMatchPts = 2
           if (b.gameConfig.vegasBlindMatchPts === undefined) b.gameConfig.vegasBlindMatchPts = 1
           if (b.gameConfig.vegasEnableBlinds === undefined) b.gameConfig.vegasEnableBlinds = true
+        }
+        if (fromVersion < 22) {
+          // Remove duplicate HIO and CTP donation records created by pre-fix Sync/Add-player behavior
+          const b = base as any
+          const players: any[] = (b.teams ?? []).flatMap((t: any) => t.players ?? [])
+          function dedupDonations(donations: any[]): any[] {
+            // For same-id records, prefer the one with playerId
+            const bestById = new Map<string, any>()
+            for (const d of donations) {
+              const existing = bestById.get(d.id)
+              if (!existing || (!existing.playerId && d.playerId)) bestById.set(d.id, d)
+            }
+            const unique = [...bestById.values()]
+            const coveredByPlayerId = new Set(unique.filter(d => d.playerId).map(d => d.playerId))
+            const coveredByCurrentName = new Set(
+              unique.filter(d => !d.playerId && players.some((p: any) => p.name === d.playerName)).map(d => d.playerName)
+            )
+            return unique.filter(d => {
+              if (d.playerId) return true
+              const subPlayer = players.find((p: any) => p.isSubstitute && p.originalName === d.playerName)
+              if (subPlayer) {
+                if (coveredByPlayerId.has(subPlayer.id)) return false
+                if (coveredByCurrentName.has(subPlayer.name)) return false
+              }
+              return true
+            })
+          }
+          if (b.hioDonations) b.hioDonations = dedupDonations(b.hioDonations)
+          if (b.ctpDonations) b.ctpDonations = dedupDonations(b.ctpDonations)
         }
         return base as TournamentState
       },
