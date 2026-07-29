@@ -1,7 +1,15 @@
 import { useState, useRef } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import type { HoleInOneEntry, HioDonation } from '../types'
+import type { HoleInOneEntry, HioDonation, Player } from '../types'
+
+function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: { id: string; name: string }[]): string {
+  if (donation.playerId) {
+    const p = allPlayers.find(p => p.id === donation.playerId)
+    if (p) return p.name
+  }
+  return donation.playerName
+}
 import {
   Trophy, DollarSign, Check, X, Edit2, Trash2,
   Upload, Plus, ChevronDown, ChevronRight, Camera,
@@ -95,18 +103,34 @@ function PotHero({
 // ── Year Payment Tracker ──────────────────────────────────────────────────────
 
 function YearTracker({
-  donations, year, isAdmin, onToggle, onAddPlayer,
+  donations, year, isAdmin, onToggle, onAddPlayer, allPlayers,
 }: {
   donations: HioDonation[]
   year: number
   isAdmin: boolean
   onToggle: (id: string, paid: boolean) => void
-  onAddPlayer: (name: string) => void
+  onAddPlayer: (name: string, playerId?: string) => void
+  allPlayers: Player[]
 }) {
-  const [newName, setNewName] = useState('')
+  const [selectedId, setSelectedId] = useState('')
+  const [customName, setCustomName] = useState('')
   const paidCount = donations.filter(d => d.paid).length
   const total = donations.length * DONATION_AMOUNT
   const collected = donations.filter(d => d.paid).length * DONATION_AMOUNT
+
+  // Roster players not yet in this year's donation list
+  const rosterNotAdded = allPlayers.filter(p =>
+    !donations.some(d => d.playerId === p.id || (!d.playerId && d.playerName === p.name))
+  )
+
+  function handleAdd() {
+    if (selectedId === '__other__') {
+      if (customName.trim()) { onAddPlayer(customName.trim()); setCustomName(''); setSelectedId('') }
+    } else if (selectedId) {
+      const p = allPlayers.find(p => p.id === selectedId)
+      if (p) { onAddPlayer(p.name, p.id); setSelectedId('') }
+    }
+  }
 
   return (
     <div className="card">
@@ -128,46 +152,58 @@ function YearTracker({
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {donations.map(d => (
-          <button
-            key={d.id}
-            disabled={!isAdmin}
-            onClick={() => isAdmin && onToggle(d.id, !d.paid)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left
-              ${d.paid
-                ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
-                : 'bg-gray-50 border-gray-200 text-gray-500'
-              }
-              ${isAdmin ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}
-            `}
-          >
-            <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.paid ? 'bg-masters-green' : 'bg-gray-200'}`}>
-              {d.paid && <Check size={11} className="text-white" />}
-            </span>
-            <span className="truncate text-xs">{d.playerName.split(' ').slice(-1)[0]}</span>
-            {d.paid && <span className="ml-auto text-[10px] text-masters-green font-bold">${d.amount}</span>}
-          </button>
-        ))}
+        {donations.map(d => {
+          const displayName = resolveName(d, allPlayers)
+          return (
+            <button
+              key={d.id}
+              disabled={!isAdmin}
+              onClick={() => isAdmin && onToggle(d.id, !d.paid)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left
+                ${d.paid
+                  ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
+                  : 'bg-gray-50 border-gray-200 text-gray-500'
+                }
+                ${isAdmin ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}
+              `}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.paid ? 'bg-masters-green' : 'bg-gray-200'}`}>
+                {d.paid && <Check size={11} className="text-white" />}
+              </span>
+              <span className="truncate text-xs">{displayName.split(' ').slice(-1)[0]}</span>
+              {d.paid && <span className="ml-auto text-[10px] text-masters-green font-bold">${d.amount}</span>}
+            </button>
+          )
+        })}
       </div>
 
       {isAdmin && (
         <div className="mt-4 flex gap-2 border-t pt-4">
-          <input
+          <select
             className="input flex-1 text-sm"
-            placeholder="Add player for this year…"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && newName.trim()) {
-                onAddPlayer(newName.trim())
-                setNewName('')
-              }
-            }}
-          />
+            value={selectedId}
+            onChange={e => { setSelectedId(e.target.value); setCustomName('') }}
+          >
+            <option value="">— Add player —</option>
+            {rosterNotAdded.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+            <option value="__other__">Other (free text)…</option>
+          </select>
+          {selectedId === '__other__' && (
+            <input
+              className="input flex-1 text-sm"
+              placeholder="Name"
+              value={customName}
+              autoFocus
+              onChange={e => setCustomName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+            />
+          )}
           <button
             className="btn-ghost flex items-center gap-1 text-sm"
-            disabled={!newName.trim()}
-            onClick={() => { if (newName.trim()) { onAddPlayer(newName.trim()); setNewName('') } }}
+            disabled={!selectedId || (selectedId === '__other__' && !customName.trim())}
+            onClick={handleAdd}
           >
             <Plus size={14} /> Add
           </button>
@@ -524,22 +560,30 @@ function DonationHistoryTable({
   donations: HioDonation[]
   hioEntries: HoleInOneEntry[]
   years: number[]
-  teams: { id: string; name: string; color: string; players: { name: string }[] }[]
+  teams: { id: string; name: string; color: string; players: { id: string; name: string }[] }[]
 }) {
-  // Build ordered player list from team roster
+  // Build ordered player list from team roster (with IDs)
   const orderedPlayers = teams.flatMap(t =>
-    t.players.map(p => ({ name: p.name, teamName: t.name, teamColor: t.color }))
+    t.players.map(p => ({ id: p.id, name: p.name, teamName: t.name, teamColor: t.color }))
   )
-  // Include any donation players not in current roster
-  const donationNames = [...new Set(donations.map(d => d.playerName))]
-  const extraNames = donationNames.filter(n => !orderedPlayers.find(p => p.name === n))
-  const allRows = [
+  // Include any donation players not matched to a current roster player (by ID or name)
+  const extraDonations = donations.filter(d =>
+    !orderedPlayers.find(p =>
+      (d.playerId && d.playerId === p.id) || (!d.playerId && d.playerName === p.name)
+    )
+  )
+  const extraNames = [...new Set(extraDonations.map(d => d.playerName))]
+  const allRows: { id?: string; name: string; teamName: string; teamColor: string }[] = [
     ...orderedPlayers,
     ...extraNames.map(n => ({ name: n, teamName: '', teamColor: '#999' })),
   ]
 
-  function getDonation(playerName: string, year: number) {
-    return donations.find(d => d.playerName === playerName && d.year === year)
+  function getDonation(row: { id?: string; name: string }, year: number) {
+    return donations.find(d =>
+      d.year === year &&
+      ((row.id && d.playerId && d.playerId === row.id) ||
+       (!row.id || !d.playerId) && d.playerName === row.name)
+    )
   }
 
   function getClaimLabel(claimedByHioId: string) {
@@ -571,17 +615,19 @@ function DonationHistoryTable({
           </tr>
         </thead>
         <tbody>
-          {allRows.map(({ name, teamName, teamColor }) => {
-            const playerDons = years.map(yr => getDonation(name, yr))
+          {allRows.map((row) => {
+            const allPlayers = teams.flatMap(t => t.players)
+            const displayName = row.id ? (resolveName({ playerId: row.id, playerName: row.name }, allPlayers)) : row.name
+            const playerDons = years.map(yr => getDonation(row, yr))
             const playerTotal = playerDons.reduce((s, d) => s + (d?.paid ? d.amount : 0), 0)
             return (
-              <tr key={name} className="hover:bg-gray-50">
+              <tr key={row.id ?? row.name} className="hover:bg-gray-50">
                 <td className="border border-gray-200 p-2 sticky left-0 bg-white">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: teamColor }} />
-                    <span className="font-medium text-masters-dark">{name.split(' ').slice(-1)[0]}</span>
-                    {teamName && (
-                      <span className="text-gray-400 text-[10px]">{name.split(' ')[0][0]}.</span>
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: row.teamColor }} />
+                    <span className="font-medium text-masters-dark">{displayName.split(' ').slice(-1)[0]}</span>
+                    {row.teamName && (
+                      <span className="text-gray-400 text-[10px]">{displayName.split(' ')[0][0]}.</span>
                     )}
                   </div>
                 </td>
@@ -683,13 +729,19 @@ export default function HoleInOne() {
 
   const donationYears = [...new Set(hioDonations.map(d => d.year))].sort()
 
-  function handleAddPlayer(name: string) {
-    const existing = hioDonations.find(d => d.year === year && d.playerName === name)
+  const allPlayers = teams.flatMap(t => t.players)
+
+  function handleAddPlayer(name: string, playerId?: string) {
+    const existing = hioDonations.find(d =>
+      d.year === year &&
+      ((playerId && d.playerId === playerId) || (!playerId && d.playerName === name))
+    )
     if (existing) return
     addHioDonation({
-      id: `hio-don-${year}-custom-${Date.now()}`,
+      id: `hio-don-${year}-${playerId ?? `custom-${Date.now()}`}`,
       year,
       playerName: name,
+      playerId,
       paid: false,
       amount: DONATION_AMOUNT,
     })
@@ -721,6 +773,7 @@ export default function HoleInOne() {
           isAdmin={isAdmin}
           onToggle={setDonationPaid}
           onAddPlayer={handleAddPlayer}
+          allPlayers={allPlayers}
         />
       )}
 

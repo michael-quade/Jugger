@@ -2,6 +2,14 @@ import { useState, useMemo } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { CtpEntry, CtpDonation, Course, RoundConfig } from '../types'
+
+function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: { id: string; name: string }[]): string {
+  if (donation.playerId) {
+    const p = allPlayers.find(p => p.id === donation.playerId)
+    if (p) return p.name
+  }
+  return donation.playerName
+}
 import {
   Flag, Check, X, ChevronDown, ChevronRight, DollarSign,
   Trophy, Heart, User,
@@ -110,12 +118,13 @@ function CtpPotBanner({
 // ── Player payment grid ───────────────────────────────────────────────────────
 
 function PaymentGrid({
-  donations, isAdmin, par3Count, onToggle,
+  donations, isAdmin, par3Count, onToggle, allPlayers,
 }: {
   donations: CtpDonation[]
   isAdmin: boolean
   par3Count: number
   onToggle: (id: string, paid: boolean) => void
+  allPlayers: { id: string; name: string }[]
 }) {
   const paidCount = donations.filter(d => d.paid).length
   const collected = donations.filter(d => d.paid).reduce((s, d) => s + d.amount, 0)
@@ -138,24 +147,27 @@ function PaymentGrid({
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {donations.map(d => (
-          <button
-            key={d.id}
-            disabled={!isAdmin}
-            onClick={() => isAdmin && onToggle(d.id, !d.paid)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left
-              ${d.paid
-                ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
-                : 'bg-gray-50 border-gray-200 text-gray-500'}
-              ${isAdmin ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}`}
-          >
-            <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.paid ? 'bg-masters-green' : 'bg-gray-200'}`}>
-              {d.paid && <Check size={11} className="text-white" />}
-            </span>
-            <span className="truncate text-xs">{d.playerName.split(' ').slice(-1)[0]}</span>
-            {d.paid && <span className="ml-auto text-[10px] text-masters-green font-bold">{fmtDollars(d.amount)}</span>}
-          </button>
-        ))}
+        {donations.map(d => {
+          const displayName = resolveName(d, allPlayers)
+          return (
+            <button
+              key={d.id}
+              disabled={!isAdmin}
+              onClick={() => isAdmin && onToggle(d.id, !d.paid)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left
+                ${d.paid
+                  ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
+                  : 'bg-gray-50 border-gray-200 text-gray-500'}
+                ${isAdmin ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}`}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.paid ? 'bg-masters-green' : 'bg-gray-200'}`}>
+                {d.paid && <Check size={11} className="text-white" />}
+              </span>
+              <span className="truncate text-xs">{displayName.split(' ').slice(-1)[0]}</span>
+              {d.paid && <span className="ml-auto text-[10px] text-masters-green font-bold">{fmtDollars(d.amount)}</span>}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -610,14 +622,16 @@ export default function CtpPage() {
     }
 
     // Create donation records for each player
-    const existingDonors = new Set(thisYearDonations.map(d => d.playerName))
+    const existingPlayerIds = new Set(thisYearDonations.map(d => d.playerId).filter(Boolean))
+    const existingDonors = new Set(thisYearDonations.filter(d => !d.playerId).map(d => d.playerName))
     allPlayers
-      .filter(p => !existingDonors.has(p.name))
+      .filter(p => !existingPlayerIds.has(p.id) && !existingDonors.has(p.name))
       .forEach(p => {
         addCtpDonation({
           id: `ctpdon-${year}-${p.id}`,
           year,
           playerName: p.name,
+          playerId: p.id,
           amount: par3Count,
           paid: false,
         })
@@ -722,6 +736,7 @@ export default function CtpPage() {
                   isAdmin={isAdmin}
                   par3Count={par3Count}
                   onToggle={setCtpDonationPaid}
+                  allPlayers={allPlayers}
                 />
               </div>
             </div>

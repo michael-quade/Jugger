@@ -108,6 +108,7 @@ export interface HioDonation {
   id: string
   year: number
   playerName: string
+  playerId?: string     // player.id from roster; enables name resolution when sub is active
   paid: boolean
   amount: number        // default $20
   claimedByHioId?: string  // set when this donation was part of a claimed pot
@@ -130,7 +131,8 @@ export interface CtpDonation {
   id: string
   year: number
   playerName: string
-  amount: number   // par3Count × $1
+  playerId?: string   // player.id from roster; enables name resolution when sub is active
+  amount: number      // par3Count × $1
   paid: boolean
 }
 
