@@ -3,11 +3,14 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { HoleInOneEntry, HioDonation, Player } from '../types'
 
-function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: { id: string; name: string }[]): string {
+function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: Player[]): string {
   if (donation.playerId) {
     const p = allPlayers.find(p => p.id === donation.playerId)
     if (p) return p.name
   }
+  // Legacy records without playerId: if this player has been subbed, show the sub's name
+  const subPlayer = allPlayers.find(p => p.isSubstitute && p.originalName === donation.playerName)
+  if (subPlayer) return subPlayer.name
   return donation.playerName
 }
 import {
@@ -120,7 +123,12 @@ function YearTracker({
 
   // Roster players not yet in this year's donation list
   const rosterNotAdded = allPlayers.filter(p =>
-    !donations.some(d => d.playerId === p.id || (!d.playerId && d.playerName === p.name))
+    !donations.some(d =>
+      d.playerId === p.id ||
+      (!d.playerId && d.playerName === p.name) ||
+      // don't show a sub when the original player's name is already in the list
+      (!d.playerId && p.originalName && d.playerName === p.originalName)
+    )
   )
 
   function handleAdd() {
@@ -560,29 +568,35 @@ function DonationHistoryTable({
   donations: HioDonation[]
   hioEntries: HoleInOneEntry[]
   years: number[]
-  teams: { id: string; name: string; color: string; players: { id: string; name: string }[] }[]
+  teams: { id: string; name: string; color: string; players: Player[] }[]
 }) {
   // Build ordered player list from team roster (with IDs)
   const orderedPlayers = teams.flatMap(t =>
-    t.players.map(p => ({ id: p.id, name: p.name, teamName: t.name, teamColor: t.color }))
+    t.players.map(p => ({ id: p.id, name: p.name, originalName: p.originalName, teamName: t.name, teamColor: t.color }))
   )
-  // Include any donation players not matched to a current roster player (by ID or name)
+  // Include any donation players not matched to a current roster player (by ID, name, or originalName)
   const extraDonations = donations.filter(d =>
     !orderedPlayers.find(p =>
-      (d.playerId && d.playerId === p.id) || (!d.playerId && d.playerName === p.name)
+      (d.playerId && d.playerId === p.id) ||
+      (!d.playerId && d.playerName === p.name) ||
+      (!d.playerId && p.originalName && d.playerName === p.originalName)
     )
   )
   const extraNames = [...new Set(extraDonations.map(d => d.playerName))]
-  const allRows: { id?: string; name: string; teamName: string; teamColor: string }[] = [
-    ...orderedPlayers,
+  const allRows: { id?: string; name: string; originalName?: string; teamName: string; teamColor: string }[] = [
+    ...orderedPlayers.map(p => ({ id: p.id, name: p.name, originalName: p.originalName, teamName: p.teamName, teamColor: p.teamColor })),
     ...extraNames.map(n => ({ name: n, teamName: '', teamColor: '#999' })),
   ]
 
-  function getDonation(row: { id?: string; name: string }, year: number) {
+  function getDonation(row: { id?: string; name: string; originalName?: string }, year: number) {
     return donations.find(d =>
       d.year === year &&
-      ((row.id && d.playerId && d.playerId === row.id) ||
-       (!row.id || !d.playerId) && d.playerName === row.name)
+      (
+        (row.id && d.playerId === row.id) ||
+        (!d.playerId && d.playerName === row.name) ||
+        // legacy record stored under original player name (sub scenario)
+        (!d.playerId && row.originalName && d.playerName === row.originalName)
+      )
     )
   }
 

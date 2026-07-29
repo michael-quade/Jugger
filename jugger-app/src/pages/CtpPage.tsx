@@ -1,13 +1,16 @@
 import { useState, useMemo } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import type { CtpEntry, CtpDonation, Course, RoundConfig } from '../types'
+import type { CtpEntry, CtpDonation, Course, RoundConfig, Player } from '../types'
 
-function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: { id: string; name: string }[]): string {
+function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: Player[]): string {
   if (donation.playerId) {
     const p = allPlayers.find(p => p.id === donation.playerId)
     if (p) return p.name
   }
+  // Legacy records without playerId: if this player has been subbed, show the sub's name
+  const subPlayer = allPlayers.find(p => p.isSubstitute && p.originalName === donation.playerName)
+  if (subPlayer) return subPlayer.name
   return donation.playerName
 }
 import {
@@ -124,7 +127,7 @@ function PaymentGrid({
   isAdmin: boolean
   par3Count: number
   onToggle: (id: string, paid: boolean) => void
-  allPlayers: { id: string; name: string }[]
+  allPlayers: Player[]
 }) {
   const paidCount = donations.filter(d => d.paid).length
   const collected = donations.filter(d => d.paid).reduce((s, d) => s + d.amount, 0)
@@ -625,7 +628,12 @@ export default function CtpPage() {
     const existingPlayerIds = new Set(thisYearDonations.map(d => d.playerId).filter(Boolean))
     const existingDonors = new Set(thisYearDonations.filter(d => !d.playerId).map(d => d.playerName))
     allPlayers
-      .filter(p => !existingPlayerIds.has(p.id) && !existingDonors.has(p.name))
+      .filter(p =>
+        !existingPlayerIds.has(p.id) &&
+        !existingDonors.has(p.name) &&
+        // don't add a sub when the original player's name is already in the list
+        !(p.originalName && existingDonors.has(p.originalName))
+      )
       .forEach(p => {
         addCtpDonation({
           id: `ctpdon-${year}-${p.id}`,
