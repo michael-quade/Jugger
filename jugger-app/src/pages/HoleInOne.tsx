@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { HoleInOneEntry, HioDonation, Player } from '../types'
@@ -763,7 +763,7 @@ export default function HoleInOne() {
   const {
     holeInOnes, hioDonations, ctpEntries, ctpHioHistory, year, teams,
     addHoleInOne, updateHoleInOne, deleteHoleInOne,
-    setDonationPaid, claimPot, claimPotForYear, addHioDonation,
+    setDonationPaid, claimPot, claimPotForYear, addHioDonation, setHioDonations,
   } = useTournamentStore()
   const isAdmin = useIsAdmin()
 
@@ -784,14 +784,25 @@ export default function HoleInOne() {
   const currentYearPot =
     hioDonations.filter(d => d.paid && !d.claimedByHioId && d.year === year).reduce((sum, d) => sum + d.amount, 0)
 
-  const currentYearDonations = hioDonations.filter(d => d.year === year)
+  const allPlayers = teams.flatMap(t => t.players)
+
+  const rawCurrentYearDonations = hioDonations.filter(d => d.year === year)
+  const currentYearDonations = dedupeDisplayDonations(rawCurrentYearDonations, allPlayers)
   const paidThisYear = currentYearDonations.filter(d => d.paid).length
+
+  // Permanently remove duplicates from the store (and Supabase) whenever they exist
+  useEffect(() => {
+    if (!isAdmin) return
+    const raw = hioDonations.filter(d => d.year === year)
+    const deduped = dedupeDisplayDonations(raw, allPlayers)
+    if (deduped.length < raw.length) {
+      setHioDonations([...hioDonations.filter(d => d.year !== year), ...deduped])
+    }
+  }, [hioDonations.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const champions = [...holeInOnes].sort((a, b) => b.year - a.year || b.hole - a.hole)
 
   const donationYears = [...new Set(hioDonations.map(d => d.year))].sort()
-
-  const allPlayers = teams.flatMap(t => t.players)
 
   function handleAddPlayer(name: string, playerId?: string) {
     const existing = hioDonations.find(d =>

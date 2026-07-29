@@ -56,6 +56,8 @@ interface Actions {
   unlockRound: (round: number) => void
 
   addHioDonation: (donation: HioDonation) => void
+  setHioDonations: (donations: HioDonation[]) => void
+  setCtpDonations: (donations: CtpDonation[]) => void
   setDonationPaid: (id: string, paid: boolean) => void
   claimPot: (hioId: string) => void
   claimPotForYear: (hioId: string, year: number) => void
@@ -416,6 +418,10 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       addHioDonation: (donation) =>
         set(state => ({ hioDonations: [...state.hioDonations, donation] })),
+
+      setHioDonations: (donations) => set(() => ({ hioDonations: donations })),
+
+      setCtpDonations: (donations) => set(() => ({ ctpDonations: donations })),
 
       setDonationPaid: (id, paid) =>
         set(state => ({
