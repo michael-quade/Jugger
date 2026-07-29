@@ -58,6 +58,7 @@ interface Actions {
   addHioDonation: (donation: HioDonation) => void
   setDonationPaid: (id: string, paid: boolean) => void
   claimPot: (hioId: string) => void
+  claimPotForYear: (hioId: string, year: number) => void
 
   addSkidmoreScore: (score: Omit<SkidmoreScore, 'id'>) => void
   updateSkidmoreScore: (id: string, updates: Partial<Omit<SkidmoreScore, 'id'>>) => void
@@ -429,6 +430,21 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           return {
             hioDonations: state.hioDonations.map(d =>
               d.paid && !d.claimedByHioId ? { ...d, claimedByHioId: hioId } : d
+            ),
+            holeInOnes: state.holeInOnes.map(h =>
+              h.id !== hioId ? h : { ...h, potClaimed: potAmount }
+            ),
+          }
+        }),
+
+      claimPotForYear: (hioId, year) =>
+        set(state => {
+          const eligible = state.hioDonations.filter(d => d.paid && !d.claimedByHioId && d.year === year)
+          const potAmount = eligible.reduce((sum, d) => sum + d.amount, 0)
+          const eligibleIds = new Set(eligible.map(d => d.id))
+          return {
+            hioDonations: state.hioDonations.map(d =>
+              eligibleIds.has(d.id) ? { ...d, claimedByHioId: hioId } : d
             ),
             holeInOnes: state.holeInOnes.map(h =>
               h.id !== hioId ? h : { ...h, potClaimed: potAmount }

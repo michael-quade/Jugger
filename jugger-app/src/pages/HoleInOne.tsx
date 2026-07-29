@@ -374,15 +374,16 @@ function ChampionCard({
 // ── Record HIO Modal ──────────────────────────────────────────────────────────
 
 function RecordHioModal({
-  year, currentPot, onClose, onSave,
+  year, currentPot, currentYearPot, allPlayers, onClose, onSave,
 }: {
   year: number
   currentPot: number
+  currentYearPot: number
+  allPlayers: Player[]
   onClose: () => void
-  onSave: (entry: HoleInOneEntry, claimPot: boolean) => void
+  onSave: (entry: HoleInOneEntry, claimPot: boolean, yearOnly: boolean) => void
 }) {
-  const { teams, courses } = useTournamentStore()
-  const allPlayers = teams.flatMap(t => t.players)
+  const { courses } = useTournamentStore()
   const photoRef = useRef<HTMLInputElement>(null)
 
   const [draft, setDraft] = useState<HoleInOneEntry>({
@@ -398,6 +399,10 @@ function RecordHioModal({
     potClaimed: undefined,
   })
   const [claimPotChecked, setClaimPotChecked] = useState(currentPot > 0)
+
+  const selectedPlayer = allPlayers.find(p => p.name === draft.playerName)
+  const isSub = selectedPlayer?.isSubstitute ?? false
+  const eligiblePot = isSub ? currentYearPot : currentPot
 
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -522,8 +527,17 @@ function RecordHioModal({
           </div>
 
           {/* Pot claim */}
-          {currentPot > 0 && (
+          {eligiblePot > 0 && (
             <div className={`rounded-lg p-4 border-2 ${claimPotChecked ? 'bg-masters-gold/10 border-masters-gold' : 'bg-gray-50 border-gray-200'}`}>
+              {isSub && (
+                <div className="flex items-start gap-2 mb-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                  <span className="shrink-0 mt-0.5">⚠️</span>
+                  <span>
+                    <strong>{draft.playerName}</strong> is a substitute and is only eligible for the current year's contributions ({year}).
+                    The remaining {fmtDollars(currentPot - currentYearPot)} from prior years stays in the pot.
+                  </span>
+                </div>
+              )}
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -532,13 +546,14 @@ function RecordHioModal({
                   className="w-4 h-4 accent-masters-green"
                 />
                 <div>
-                  <span className="font-semibold text-sm text-masters-dark">Claim the pot</span>
+                  <span className="font-semibold text-sm text-masters-dark">Claim the {isSub ? `${year} ` : ''}pot</span>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Awards {fmtDollars(currentPot)} to {draft.playerName || 'this champion'} and resets the pot to $0.
+                    Awards {fmtDollars(eligiblePot)} to {draft.playerName || 'this champion'}.
+                    {isSub ? ' Prior year contributions remain in the pot.' : ' Resets the pot to $0.'}
                   </p>
                 </div>
                 {claimPotChecked && (
-                  <span className="ml-auto text-masters-gold font-bold text-lg">{fmtDollars(currentPot)}</span>
+                  <span className="ml-auto text-masters-gold font-bold text-lg">{fmtDollars(eligiblePot)}</span>
                 )}
               </label>
             </div>
@@ -548,7 +563,7 @@ function RecordHioModal({
             <button
               className="btn-primary flex items-center gap-1 flex-1 justify-center"
               disabled={!draft.playerName || draft.playerName === '__other__'}
-              onClick={() => onSave(draft, claimPotChecked)}
+              onClick={() => onSave(draft, claimPotChecked, isSub)}
             >
               <Trophy size={14} /> Save Champion
             </button>
@@ -719,7 +734,7 @@ export default function HoleInOne() {
   const {
     holeInOnes, hioDonations, ctpEntries, ctpHioHistory, year, teams,
     addHoleInOne, updateHoleInOne, deleteHoleInOne,
-    setDonationPaid, claimPot, addHioDonation,
+    setDonationPaid, claimPot, claimPotForYear, addHioDonation,
   } = useTournamentStore()
   const isAdmin = useIsAdmin()
 
@@ -735,6 +750,10 @@ export default function HoleInOne() {
   const currentPot =
     hioDonations.filter(d => d.paid && !d.claimedByHioId).reduce((sum, d) => sum + d.amount, 0) +
     ctpHioTotal
+
+  // Current-year-only pot (for substitute player payouts)
+  const currentYearPot =
+    hioDonations.filter(d => d.paid && !d.claimedByHioId && d.year === year).reduce((sum, d) => sum + d.amount, 0)
 
   const currentYearDonations = hioDonations.filter(d => d.year === year)
   const paidThisYear = currentYearDonations.filter(d => d.paid).length
@@ -761,9 +780,12 @@ export default function HoleInOne() {
     })
   }
 
-  function handleSaveHio(entry: HoleInOneEntry, shouldClaim: boolean) {
+  function handleSaveHio(entry: HoleInOneEntry, shouldClaim: boolean, yearOnly: boolean) {
     addHoleInOne(entry)
-    if (shouldClaim) claimPot(entry.id)
+    if (shouldClaim) {
+      if (yearOnly) claimPotForYear(entry.id, year)
+      else claimPot(entry.id)
+    }
     setShowRecordModal(false)
   }
 
@@ -849,6 +871,8 @@ export default function HoleInOne() {
         <RecordHioModal
           year={year}
           currentPot={currentPot}
+          currentYearPot={currentYearPot}
+          allPlayers={allPlayers}
           onClose={() => setShowRecordModal(false)}
           onSave={handleSaveHio}
         />
