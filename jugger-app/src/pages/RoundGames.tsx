@@ -269,6 +269,28 @@ export default function RoundGames() {
                 <div className="text-xs text-gray-500 bg-masters-light rounded px-3 py-2">
                   <span className="font-semibold text-masters-dark">HDCP:</span> {meta.hdcpNote}
                 </div>
+
+                {format === 'points_round' && (
+                  <div>
+                    <h3 className="label mb-2">Stableford Point Values</h3>
+                    <div className="rounded border border-gray-200 overflow-hidden">
+                      {([
+                        ['Albatross (−3 or better)', cfg.stablefordAlbatross],
+                        ['Eagle (−2)', cfg.stablefordEagle],
+                        ['Birdie (−1)', cfg.stablefordBirdie],
+                        ['Par (E)', cfg.stablefordPar],
+                        ['Bogey (+1)', cfg.stablefordBogey],
+                        ['Double Bogey (+2)', cfg.stablefordDouble],
+                        ['Triple Bogey or worse', 0],
+                      ] as [string, number][]).map(([label, pts], i) => (
+                        <div key={label} className={`flex items-center justify-between px-3 py-1.5 text-xs ${i % 2 === 0 ? 'bg-white' : 'bg-masters-light/50'}`}>
+                          <span className="text-gray-600">{label}</span>
+                          <span className="font-semibold text-masters-dark">{pts} pt{pts !== 1 ? 's' : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Right: Configurable Parameters — admin only */}
