@@ -267,7 +267,12 @@ export default function RoundGames() {
                   </ul>
                 </div>
                 <div className="text-xs text-gray-500 bg-masters-light rounded px-3 py-2">
-                  <span className="font-semibold text-masters-dark">HDCP:</span> {meta.hdcpNote}
+                  <span className="font-semibold text-masters-dark">HDCP:</span>{' '}
+                  {format === 'texas_scramble'
+                    ? `${Math.round((cfg.texasScrambleHdcpPct ?? 0.6) * 100)}% of each player's course HDCP`
+                    : format === 'captains_choice'
+                    ? `${Math.round((cfg.captainsChoiceHdcpPct ?? 0.15) * 100)}% of the sum of each player's course HDCP`
+                    : meta.hdcpNote}
                 </div>
 
                 {format === 'points_round' && (
