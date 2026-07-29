@@ -13,6 +13,34 @@ function resolveName(donation: { playerId?: string; playerName: string }, allPla
   if (subPlayer) return subPlayer.name
   return donation.playerName
 }
+
+function dedupeDisplayDonations<T extends { id: string; playerId?: string; playerName: string }>(
+  donations: T[],
+  allPlayers: Player[]
+): T[] {
+  // For same-id records, prefer the one with playerId
+  const bestById = new Map<string, T>()
+  for (const d of donations) {
+    const existing = bestById.get(d.id)
+    if (!existing || (!existing.playerId && d.playerId)) bestById.set(d.id, d)
+  }
+  const unique = [...bestById.values()]
+
+  const coveredByPlayerId = new Set(unique.filter(d => d.playerId).map(d => d.playerId!))
+  const coveredByCurrentName = new Set(
+    unique.filter(d => !d.playerId && allPlayers.some(p => p.name === d.playerName)).map(d => d.playerName)
+  )
+
+  return unique.filter(d => {
+    if (d.playerId) return true
+    const subPlayer = allPlayers.find(p => p.isSubstitute && p.originalName === d.playerName)
+    if (subPlayer) {
+      if (coveredByPlayerId.has(subPlayer.id)) return false
+      if (coveredByCurrentName.has(subPlayer.name)) return false
+    }
+    return true
+  })
+}
 import {
   Trophy, DollarSign, Check, X, Edit2, Trash2,
   Upload, Plus, ChevronDown, ChevronRight, Camera,
@@ -117,9 +145,10 @@ function YearTracker({
 }) {
   const [selectedId, setSelectedId] = useState('')
   const [customName, setCustomName] = useState('')
-  const paidCount = donations.filter(d => d.paid).length
-  const total = donations.length * DONATION_AMOUNT
-  const collected = donations.filter(d => d.paid).length * DONATION_AMOUNT
+  const display = dedupeDisplayDonations(donations, allPlayers)
+  const paidCount = display.filter(d => d.paid).length
+  const total = display.length * DONATION_AMOUNT
+  const collected = display.filter(d => d.paid).length * DONATION_AMOUNT
 
   // Roster players not yet in this year's donation list
   const rosterNotAdded = allPlayers.filter(p =>
@@ -160,7 +189,7 @@ function YearTracker({
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {donations.map(d => {
+        {display.map(d => {
           const displayName = resolveName(d, allPlayers)
           return (
             <button

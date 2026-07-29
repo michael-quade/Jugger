@@ -13,6 +13,36 @@ function resolveName(donation: { playerId?: string; playerName: string }, allPla
   if (subPlayer) return subPlayer.name
   return donation.playerName
 }
+
+function dedupeDisplayDonations<T extends { id: string; playerId?: string; playerName: string }>(
+  donations: T[],
+  allPlayers: Player[]
+): T[] {
+  // For same-id records, prefer the one with playerId
+  const bestById = new Map<string, T>()
+  for (const d of donations) {
+    const existing = bestById.get(d.id)
+    if (!existing || (!existing.playerId && d.playerId)) bestById.set(d.id, d)
+  }
+  const unique = [...bestById.values()]
+
+  const coveredByPlayerId = new Set(unique.filter(d => d.playerId).map(d => d.playerId!))
+  // Names that appear as a direct playerName match (the sub was manually added by name)
+  const coveredByCurrentName = new Set(
+    unique.filter(d => !d.playerId && allPlayers.some(p => p.name === d.playerName)).map(d => d.playerName)
+  )
+
+  return unique.filter(d => {
+    if (d.playerId) return true
+    // Hide legacy record if this player has been subbed and a better record already covers them
+    const subPlayer = allPlayers.find(p => p.isSubstitute && p.originalName === d.playerName)
+    if (subPlayer) {
+      if (coveredByPlayerId.has(subPlayer.id)) return false
+      if (coveredByCurrentName.has(subPlayer.name)) return false
+    }
+    return true
+  })
+}
 import {
   Flag, Check, X, ChevronDown, ChevronRight, DollarSign,
   Trophy, Heart, User,
@@ -129,15 +159,16 @@ function PaymentGrid({
   onToggle: (id: string, paid: boolean) => void
   allPlayers: Player[]
 }) {
-  const paidCount = donations.filter(d => d.paid).length
-  const collected = donations.filter(d => d.paid).reduce((s, d) => s + d.amount, 0)
+  const display = dedupeDisplayDonations(donations, allPlayers)
+  const paidCount = display.filter(d => d.paid).length
+  const collected = display.filter(d => d.paid).reduce((s, d) => s + d.amount, 0)
   return (
     <div className="card">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
         <div>
           <h2 className="section-header mb-0">Player Contributions</h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            {paidCount} of {donations.length} paid · {fmtDollars(collected)} of {fmtDollars(donations.length * par3Count)} collected
+            {paidCount} of {display.length} paid · {fmtDollars(collected)} of {fmtDollars(display.length * par3Count)} collected
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-gray-500">
@@ -150,7 +181,7 @@ function PaymentGrid({
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-        {donations.map(d => {
+        {display.map(d => {
           const displayName = resolveName(d, allPlayers)
           return (
             <button
