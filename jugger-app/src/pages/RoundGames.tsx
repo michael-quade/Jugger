@@ -1,4 +1,3 @@
-import { Navigate } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
@@ -165,7 +164,6 @@ function Toggle({ checked, onChange, label }: ToggleProps) {
 
 export default function RoundGames() {
   const isAdmin = useIsAdmin()
-  if (!isAdmin) return <Navigate to="/" replace />
 
   const { gameConfig, setGameConfig, roundConfigs } = useTournamentStore(s => ({
     gameConfig: s.gameConfig,
@@ -192,12 +190,14 @@ export default function RoundGames() {
         <div>
           <h1 className="section-header">Round Games</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Game format rules and configurable house parameters. Changes take effect immediately for all scoring.
+            Game format rules and house parameters.{isAdmin ? ' Changes take effect immediately for all scoring.' : ''}
           </p>
         </div>
-        <button onClick={reset} className="btn-ghost text-xs shrink-0 mt-1">
-          Reset to Defaults
-        </button>
+        {isAdmin && (
+          <button onClick={reset} className="btn-ghost text-xs shrink-0 mt-1">
+            Reset to Defaults
+          </button>
+        )}
       </div>
 
       {/* Quick-jump pill bar */}
@@ -271,8 +271,8 @@ export default function RoundGames() {
                 </div>
               </div>
 
-              {/* Right: Configurable Parameters */}
-              <div className="space-y-4">
+              {/* Right: Configurable Parameters — admin only */}
+              {isAdmin && <div className="space-y-4">
                 <h3 className="label">House Rules & Parameters</h3>
 
                 {format === 'texas_scramble' && (
@@ -543,7 +543,7 @@ export default function RoundGames() {
                     </div>
                   </div>
                 )}
-              </div>
+              </div>}
             </div>
           </div>
         )
