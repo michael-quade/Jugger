@@ -44,8 +44,8 @@ const AMENITIES = [
 ]
 
 // BLDG #6 position in original 2237×1653 image coordinates
-// Cluster spans ~x420-465, y155-210 in an 840px-wide display (50-55%, 26-35%)
-const BLDG6 = { x: 1015, y: 415, w: 255, h: 175 }
+// Green cluster is above the map's "BLDG #6" text; label placed below box
+const BLDG6 = { x: 1015, y: 145, w: 255, h: 200 }
 
 export default function Lodging() {
   const base = import.meta.env.BASE_URL
@@ -218,10 +218,10 @@ export default function Lodging() {
                 stroke="#D97706"
                 strokeWidth="3"
               />
-              {/* Label banner — placed above the building cluster */}
+              {/* Label banner — placed below the building cluster */}
               <rect
                 x={BLDG6.x - 2}
-                y={BLDG6.y - 68}
+                y={BLDG6.y + BLDG6.h + 8}
                 width={BLDG6.w + 4}
                 height={58}
                 rx="8"
@@ -230,7 +230,7 @@ export default function Lodging() {
               />
               <text
                 x={BLDG6.x + BLDG6.w / 2}
-                y={BLDG6.y - 46}
+                y={BLDG6.y + BLDG6.h + 32}
                 textAnchor="middle"
                 fill="#C9A84C"
                 fontSize="20"
@@ -241,7 +241,7 @@ export default function Lodging() {
               </text>
               <text
                 x={BLDG6.x + BLDG6.w / 2}
-                y={BLDG6.y - 22}
+                y={BLDG6.y + BLDG6.h + 56}
                 textAnchor="middle"
                 fill="#ffffff"
                 fontSize="15"
