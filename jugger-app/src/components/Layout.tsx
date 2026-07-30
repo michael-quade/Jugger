@@ -13,10 +13,10 @@ import { useIsAdmin } from '../store/useAuthStore'
 const NAV = [
   { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
   { to: '/teams',      label: 'Teams',        icon: Users },
-  { to: '/lodging',    label: 'Lodging',      icon: Hotel },
   { to: '/schedule',   label: 'Schedule',     icon: Calendar },
   { to: '/pairings',   label: 'Pairings',     icon: Shuffle,       adminOnly: true },
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
+  { to: '/lodging',    label: 'Lodging',      icon: Hotel },
   { to: '/courses',      label: 'Courses',      icon: MapPin },
   { to: '/round-games',  label: 'Round Games',  icon: Gamepad2 },
   { to: '/results',      label: 'Team Results', icon: Trophy,  adminOnly: true },
