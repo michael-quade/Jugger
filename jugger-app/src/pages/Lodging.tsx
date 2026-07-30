@@ -198,62 +198,65 @@ export default function Lodging() {
               xmlns="http://www.w3.org/2000/svg"
               style={{ pointerEvents: 'none' }}
             >
-              {/* Pulsing highlight ring around BLDG #6 */}
-              <rect
-                x={BLDG6.x - 14}
-                y={BLDG6.y - 14}
-                width={BLDG6.w + 28}
-                height={BLDG6.h + 28}
-                rx="14"
-                fill="none"
-                stroke="#F59E0B"
-                strokeWidth="5"
-                strokeDasharray="18 8"
-                opacity="0.9"
-              />
-              {/* Semi-transparent gold fill over the building */}
-              <rect
-                x={BLDG6.x}
-                y={BLDG6.y}
-                width={BLDG6.w}
-                height={BLDG6.h}
-                rx="8"
-                fill="#F59E0B"
-                fillOpacity="0.25"
-                stroke="#D97706"
-                strokeWidth="3"
-              />
-              {/* Label banner — placed below the building cluster */}
-              <rect
-                x={BLDG6.x - 2}
-                y={BLDG6.y + BLDG6.h + 8}
-                width={BLDG6.w + 4}
-                height={58}
-                rx="8"
-                fill="#1a3a2f"
-                fillOpacity="0.88"
-              />
-              <text
-                x={BLDG6.x + BLDG6.w / 2}
-                y={BLDG6.y + BLDG6.h + 32}
-                textAnchor="middle"
-                fill="#C9A84C"
-                fontSize="20"
-                fontWeight="bold"
-                fontFamily="serif"
-              >
-                BLDG #6
-              </text>
-              <text
-                x={BLDG6.x + BLDG6.w / 2}
-                y={BLDG6.y + BLDG6.h + 56}
-                textAnchor="middle"
-                fill="#ffffff"
-                fontSize="15"
-                fontFamily="sans-serif"
-              >
-                Villas 1611 · 1613 · 1615
-              </text>
+              {/* All BLDG #6 overlay elements rotated ~22° CCW to match building/road angle */}
+              <g transform={`rotate(-22, ${BLDG6.x + BLDG6.w / 2}, ${BLDG6.y + BLDG6.h / 2})`}>
+                {/* Dashed highlight ring */}
+                <rect
+                  x={BLDG6.x - 14}
+                  y={BLDG6.y - 14}
+                  width={BLDG6.w + 28}
+                  height={BLDG6.h + 28}
+                  rx="14"
+                  fill="none"
+                  stroke="#F59E0B"
+                  strokeWidth="5"
+                  strokeDasharray="18 8"
+                  opacity="0.9"
+                />
+                {/* Semi-transparent gold fill */}
+                <rect
+                  x={BLDG6.x}
+                  y={BLDG6.y}
+                  width={BLDG6.w}
+                  height={BLDG6.h}
+                  rx="8"
+                  fill="#F59E0B"
+                  fillOpacity="0.25"
+                  stroke="#D97706"
+                  strokeWidth="3"
+                />
+                {/* Label banner below the cluster */}
+                <rect
+                  x={BLDG6.x - 2}
+                  y={BLDG6.y + BLDG6.h + 8}
+                  width={BLDG6.w + 4}
+                  height={58}
+                  rx="8"
+                  fill="#1a3a2f"
+                  fillOpacity="0.88"
+                />
+                <text
+                  x={BLDG6.x + BLDG6.w / 2}
+                  y={BLDG6.y + BLDG6.h + 32}
+                  textAnchor="middle"
+                  fill="#C9A84C"
+                  fontSize="20"
+                  fontWeight="bold"
+                  fontFamily="serif"
+                >
+                  BLDG #6
+                </text>
+                <text
+                  x={BLDG6.x + BLDG6.w / 2}
+                  y={BLDG6.y + BLDG6.h + 56}
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize="15"
+                  fontFamily="sans-serif"
+                >
+                  Villas 1611 · 1613 · 1615
+                </text>
+              </g>
             </svg>
           </div>
           <p className="text-xs text-gray-400 mt-2 text-center">
