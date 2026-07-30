@@ -45,7 +45,7 @@ const AMENITIES = [
 
 // BLDG #6 position in original 2237×1653 image coordinates
 // Green cluster is above the map's "BLDG #6" text; label placed below box
-const BLDG6 = { x: 740, y: 175, w: 285, h: 175 }
+const BLDG6 = { x: 880, y: 225, w: 255, h: 150 }
 
 export default function Lodging() {
   const base = import.meta.env.BASE_URL
@@ -68,10 +68,15 @@ export default function Lodging() {
       <div>
         <h1 className="section-header text-2xl mb-1">Lodging</h1>
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-          <span className="flex items-center gap-1">
+          <a
+            href="https://maps.google.com/?q=Talamore+Golf+Resort,+48+Talamore+Drive,+Southern+Pines,+NC+28387"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-masters-green hover:underline"
+          >
             <MapPin size={14} />
-            Talamore Villas · Southern Pines, NC
-          </span>
+            Talamore Golf Resort · Southern Pines, NC
+          </a>
           <span className="flex items-center gap-1">
             <Calendar size={14} />
             August 26–30, 2026
