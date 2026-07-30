@@ -43,8 +43,9 @@ const AMENITIES = [
   { icon: Star,           label: 'Housekeeping',          desc: 'Linens included; daily housekeeping service (most stays)' },
 ]
 
-// Approximate BLDG #6 position in original 2237×1653 image coordinates
-const BLDG6 = { x: 462, y: 102, w: 290, h: 200 }
+// BLDG #6 position in original 2237×1653 image coordinates
+// Cluster spans ~x500-660, y125-225 in the 2000×1478 displayed image (×1.12 → original)
+const BLDG6 = { x: 530, y: 118, w: 200, h: 125 }
 
 export default function Lodging() {
   const base = import.meta.env.BASE_URL
