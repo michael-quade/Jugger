@@ -18,6 +18,7 @@ import PrintAll from './pages/PrintAll'
 import SkidmoreHdcp from './pages/SkidmoreHdcp'
 import RoundGames from './pages/RoundGames'
 import CtpPage from './pages/CtpPage'
+import Lodging from './pages/Lodging'
 import { useTournamentStore } from './store/useTournamentStore'
 import { hashPassword } from './utils/auth'
 
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="stats" element={<Stats />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="archive" element={<FileArchive />} />
+        <Route path="lodging" element={<Lodging />} />
         <Route path="schedule" element={<Schedule />} />
         <Route path="pairings" element={<Pairings />} />
         <Route path="scorecards" element={<ScorecardView />} />

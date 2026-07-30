@@ -3,7 +3,7 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
-  History, ArrowRight, Calculator, Gamepad2,
+  History, ArrowRight, Calculator, Gamepad2, Hotel,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
@@ -13,6 +13,7 @@ import { useIsAdmin } from '../store/useAuthStore'
 const NAV = [
   { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
   { to: '/teams',      label: 'Teams',        icon: Users },
+  { to: '/lodging',    label: 'Lodging',      icon: Hotel },
   { to: '/schedule',   label: 'Schedule',     icon: Calendar },
   { to: '/pairings',   label: 'Pairings',     icon: Shuffle,       adminOnly: true },
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
