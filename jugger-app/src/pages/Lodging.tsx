@@ -198,9 +198,8 @@ export default function Lodging() {
               xmlns="http://www.w3.org/2000/svg"
               style={{ pointerEvents: 'none' }}
             >
-              {/* All BLDG #6 overlay elements rotated ~22° CCW to match building/road angle */}
+              {/* Rotated highlight — ring + fill only, no label */}
               <g transform={`rotate(-22, ${BLDG6.x + BLDG6.w / 2}, ${BLDG6.y + BLDG6.h / 2})`}>
-                {/* Dashed highlight ring */}
                 <rect
                   x={BLDG6.x - 14}
                   y={BLDG6.y - 14}
@@ -213,7 +212,6 @@ export default function Lodging() {
                   strokeDasharray="18 8"
                   opacity="0.9"
                 />
-                {/* Semi-transparent gold fill */}
                 <rect
                   x={BLDG6.x}
                   y={BLDG6.y}
@@ -225,38 +223,15 @@ export default function Lodging() {
                   stroke="#D97706"
                   strokeWidth="3"
                 />
-                {/* Label banner below the cluster */}
-                <rect
-                  x={BLDG6.x - 2}
-                  y={BLDG6.y + BLDG6.h + 8}
-                  width={BLDG6.w + 4}
-                  height={58}
-                  rx="8"
-                  fill="#1a3a2f"
-                  fillOpacity="0.88"
-                />
-                <text
-                  x={BLDG6.x + BLDG6.w / 2}
-                  y={BLDG6.y + BLDG6.h + 32}
-                  textAnchor="middle"
-                  fill="#C9A84C"
-                  fontSize="20"
-                  fontWeight="bold"
-                  fontFamily="serif"
-                >
-                  BLDG #6
-                </text>
-                <text
-                  x={BLDG6.x + BLDG6.w / 2}
-                  y={BLDG6.y + BLDG6.h + 56}
-                  textAnchor="middle"
-                  fill="#ffffff"
-                  fontSize="15"
-                  fontFamily="sans-serif"
-                >
-                  Villas 1611 · 1613 · 1615
-                </text>
               </g>
+              {/* Label — horizontal (not rotated), above the cluster, 3× larger */}
+              <rect x={727} y={48} width={560} height={158} rx="10" fill="#1a3a2f" fillOpacity="0.9" />
+              <text x={1007} y={120} textAnchor="middle" fill="#C9A84C" fontSize="60" fontWeight="bold" fontFamily="serif">
+                BLDG #6
+              </text>
+              <text x={1007} y={183} textAnchor="middle" fill="#ffffff" fontSize="45" fontFamily="sans-serif">
+                Villas 1611 · 1613 · 1615
+              </text>
             </svg>
           </div>
           <p className="text-xs text-gray-400 mt-2 text-center">
