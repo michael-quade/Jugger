@@ -44,8 +44,8 @@ const AMENITIES = [
 ]
 
 // BLDG #6 position in original 2237×1653 image coordinates
-// Cluster spans ~x500-660, y125-225 in the 2000×1478 displayed image (×1.12 → original)
-const BLDG6 = { x: 530, y: 118, w: 200, h: 125 }
+// Cluster spans ~x420-465, y155-210 in an 840px-wide display (50-55%, 26-35%)
+const BLDG6 = { x: 1015, y: 415, w: 255, h: 175 }
 
 export default function Lodging() {
   const base = import.meta.env.BASE_URL
@@ -218,22 +218,22 @@ export default function Lodging() {
                 stroke="#D97706"
                 strokeWidth="3"
               />
-              {/* Label banner */}
+              {/* Label banner — placed above the building cluster */}
               <rect
                 x={BLDG6.x - 2}
-                y={BLDG6.y + BLDG6.h + 10}
+                y={BLDG6.y - 68}
                 width={BLDG6.w + 4}
-                height={52}
+                height={58}
                 rx="8"
                 fill="#1a3a2f"
                 fillOpacity="0.88"
               />
               <text
                 x={BLDG6.x + BLDG6.w / 2}
-                y={BLDG6.y + BLDG6.h + 28}
+                y={BLDG6.y - 46}
                 textAnchor="middle"
                 fill="#C9A84C"
-                fontSize="18"
+                fontSize="20"
                 fontWeight="bold"
                 fontFamily="serif"
               >
@@ -241,10 +241,10 @@ export default function Lodging() {
               </text>
               <text
                 x={BLDG6.x + BLDG6.w / 2}
-                y={BLDG6.y + BLDG6.h + 50}
+                y={BLDG6.y - 22}
                 textAnchor="middle"
                 fill="#ffffff"
-                fontSize="14"
+                fontSize="15"
                 fontFamily="sans-serif"
               >
                 Villas 1611 · 1613 · 1615
