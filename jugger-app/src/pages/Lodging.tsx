@@ -45,7 +45,7 @@ const AMENITIES = [
 
 // BLDG #6 position in original 2237×1653 image coordinates
 // Green cluster is above the map's "BLDG #6" text; label placed below box
-const BLDG6 = { x: 1015, y: 145, w: 255, h: 200 }
+const BLDG6 = { x: 740, y: 175, w: 285, h: 175 }
 
 export default function Lodging() {
   const base = import.meta.env.BASE_URL
