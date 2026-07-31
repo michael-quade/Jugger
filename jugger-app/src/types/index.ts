@@ -136,6 +136,24 @@ export interface CtpDonation {
   paid: boolean
 }
 
+export interface LodgingUnit {
+  teamId: string
+  label: string          // "Villa 1615", "East Wing", "The House"
+  building?: string      // "Bldg #6" — omit for single-property years
+  checkin: string        // "Thu, Aug 27"
+  checkout: string       // "Sun, Aug 30"
+  nights: number
+  earlyArrival?: boolean
+}
+
+export interface LodgingConfig {
+  propertyName: string   // "Talamore Golf Resort"
+  address: string        // full address for Google Maps link
+  websiteUrl?: string
+  description?: string   // shown in the info card on the Lodging page
+  units: LodgingUnit[]   // one per team; all same label for single-house years
+}
+
 export interface ArchivedYear {
   year: number
   finalizedAt: string
@@ -144,6 +162,7 @@ export interface ArchivedYear {
   matches: Match[]
   teamScores: TeamRoundScore[]
   hdcpLocked: boolean
+  lodgingConfig?: LodgingConfig
 }
 
 export interface GameConfig {
@@ -198,6 +217,7 @@ export interface TournamentState {
   defendingChampionTeamId?: string
   gameConfig: GameConfig
   location?: string
+  lodgingConfig?: LodgingConfig
 }
 
 export interface CourseHistoryRound {

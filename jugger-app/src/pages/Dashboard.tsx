@@ -258,6 +258,9 @@ export default function Dashboard() {
                       <span className="w-5 shrink-0" />
                     )}
                     {p.name}
+                    {p.isSubstitute && (
+                      <span className="text-[9px] px-1 py-px rounded font-bold text-white bg-amber-500">SUB</span>
+                    )}
                   </span>
                   <div className="w-16 text-center text-gray-500">{p.handicapIndex.toFixed(1)}</div>
                 </li>

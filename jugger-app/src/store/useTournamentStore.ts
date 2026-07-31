@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig } from '../types'
+import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig, LodgingConfig } from '../types'
 import { computeChampion } from '../utils/champion'
 import { configureHdcpSettings } from '../utils/handicap'
 import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY, INITIAL_SKIDMORE_SCORES } from '../data/initialData'
@@ -71,6 +71,7 @@ interface Actions {
   setDefendingChampion: (teamId: string | null) => void
   setGameConfig: (config: GameConfig) => void
   setLocation: (location: string) => void
+  setLodgingConfig: (config: LodgingConfig) => void
 
   clearMatchScores: (matchId: string) => void
   clearAllMatchScores: () => void
@@ -110,6 +111,21 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   vegasEnableBlinds: true,
 }
 
+const DEFAULT_LODGING_CONFIG: LodgingConfig = {
+  propertyName: 'Talamore Golf Resort',
+  address: '48 Talamore Drive, Southern Pines, NC 28387',
+  websiteUrl: 'https://talamoregolfresort.com/lodging/talamore-villas/',
+  description:
+    'The 12-building Villa complex at Talamore Resort sits next to the clubhouse — you can easily walk to your round. ' +
+    'Conveniently located about 5 miles from Downtown Southern Pines and 5 miles from the Village of Pinehurst. ' +
+    'All three villas are in Building #6 on Woodbrooke Drive.',
+  units: [
+    { teamId: 'ballgame',    label: 'Villa 1611', building: 'Bldg #6', checkin: 'Wed, Aug 26', checkout: 'Sun, Aug 30', nights: 4, earlyArrival: true },
+    { teamId: 'billy-baroo', label: 'Villa 1615', building: 'Bldg #6', checkin: 'Thu, Aug 27', checkout: 'Sun, Aug 30', nights: 3 },
+    { teamId: 'silverbacks', label: 'Villa 1613', building: 'Bldg #6', checkin: 'Thu, Aug 27', checkout: 'Sun, Aug 30', nights: 3 },
+  ],
+}
+
 const DEFAULT_STATE: TournamentState = {
   year: new Date().getFullYear(),
   liveYear: new Date().getFullYear(),
@@ -136,6 +152,7 @@ const DEFAULT_STATE: TournamentState = {
   toiletAwardPlayerId: 'skidmore',
   gameConfig: DEFAULT_GAME_CONFIG,
   location: 'Pinehurst, NC',
+  lodgingConfig: DEFAULT_LODGING_CONFIG,
 }
 
 export const useTournamentStore = create<TournamentState & Actions>()(
@@ -481,6 +498,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       setDefendingChampion: (teamId) => set({ defendingChampionTeamId: teamId ?? undefined }),
       setGameConfig: (config) => set({ gameConfig: config }),
       setLocation: (location) => set({ location }),
+      setLodgingConfig: (lodgingConfig) => set({ lodgingConfig }),
 
       clearMatchScores: (matchId) =>
         set(state => {
@@ -578,6 +596,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             matches: state.matches,
             teamScores: state.teamScores,
             hdcpLocked: state.hdcpLocked,
+            lodgingConfig: state.lodgingConfig,
           }
           // Restore original players for next year's template
           const restoredTeams = state.teams.map(t => ({
@@ -671,7 +690,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 22,
+      version: 23,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -805,6 +824,10 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           if (b.gameConfig.vegasRegularMatchPts === undefined) b.gameConfig.vegasRegularMatchPts = 2
           if (b.gameConfig.vegasBlindMatchPts === undefined) b.gameConfig.vegasBlindMatchPts = 1
           if (b.gameConfig.vegasEnableBlinds === undefined) b.gameConfig.vegasEnableBlinds = true
+        }
+        if (fromVersion < 23) {
+          const b = base as any
+          if (!b.lodgingConfig) b.lodgingConfig = DEFAULT_LODGING_CONFIG
         }
         if (fromVersion < 22) {
           // Remove duplicate HIO and CTP donation records created by pre-fix Sync/Add-player behavior

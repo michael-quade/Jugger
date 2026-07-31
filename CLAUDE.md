@@ -61,6 +61,12 @@ Each player plays their own ball, NET scoring.
 Team captain picks the shot. HDCP = `floor(team aggregate × 15%)` (configurable). Min **3 tee balls** per player across 18 holes (configurable).
 - Finish: 1st = **4 pts** · 2nd = **2 pts** · 3rd = **1 pt** (configurable)
 
+### Vegas (optional format)
+Two-on-two format where each twosome combines their NET scores into a two-digit number (lower score first) forming the hole score. Lower combined number wins the hole.
+- Birdie multiplier (default ×2), Eagle multiplier (×3), Albatross (×4) — applied when any player makes that score
+- Regular match: **2 pts** · Blind match: **1 pt** (configurable)
+- All parameters configurable via Round Games page
+
 ---
 
 ## Handicap System
@@ -158,7 +164,7 @@ jugger-app/src/
   index.css                     # Tailwind + custom component styles
   types/index.ts                # All TypeScript interfaces
   store/
-    useTournamentStore.ts       # Zustand store v19 (all state + actions)
+    useTournamentStore.ts       # Zustand store v23 (all state + actions)
     useAuthStore.ts             # Auth state (admin/scorer login)
   lib/supabase.ts               # Supabase client init (null if env vars absent)
   hooks/useSupabaseSync.ts      # Real-time sync hook + useSyncStatus
@@ -195,8 +201,11 @@ jugger-app/src/
     ScorecardView.tsx           # Score entry UI, per-round simulate, auto team scores;
                                 #   RoundInfoBanner reads live gameConfig
     Courses.tsx                 # Active-year courses only (from roundConfigs); hole data
-    RoundGames.tsx              # Game format rules + configurable house parameters
-                                #   (admin only); changes apply immediately to scoring
+    RoundGames.tsx              # Game format rules + configurable house parameters;
+                                #   visible to all — admin edits, guests/scorers read-only
+    Lodging.tsx                 # Trip lodging details: property info, team unit assignments,
+                                #   annotated resort map, amenities, PDF documents;
+                                #   admin-configurable via LodgingConfig in store
     Results.tsx                 # Editable team standings table
     CtpPage.tsx                 # Par 3 CTP pot management
     HoleInOne.tsx               # HIO champion tracking + pot management
@@ -212,6 +221,10 @@ jugger-app/src/
 - `sandbagger.jpg` — Sandbagger Award image (shown next to award winner's name)
 - `toilet_award.webp` — Toilet Award image (shown next to award winner's name)
 - `Juggerknocker Invitational logo.png` — Tournament logo (header)
+- `talamore-map.jpg` — Talamore Villas & Drives Layout map (used on Lodging page with SVG overlay)
+- `2026 lodging.pdf` — Booking confirmation PDF
+- `CHECK IN AND RESORT INFORMATION.pdf` — Resort check-in instructions
+- `RULES AND REGULATIONS.pdf` — Resort rules document
 
 ---
 
@@ -241,7 +254,7 @@ CourseTee { name, rating?, slope?, totalYards? }
 Course { id, name, par, website?, tees: CourseTee[], holes: HoleData[] }
 
 RoundFormat = 'team_match_play' | 'points_round' | 'texas_scramble'
-            | 'individual_match' | 'captains_choice'
+            | 'individual_match' | 'captains_choice' | 'vegas'
 
 RoundConfig {
   round: 1|2|3|4|5
@@ -278,13 +291,37 @@ HoleInOneEntry {
   potClaimed?: number             // pot amount at time of claim
 }
 
-HioDonation { id, year, playerName, paid, amount, claimedByHioId? }
+HioDonation {
+  id, year, playerName, paid, amount, claimedByHioId?
+  playerId?: string   // player.id from roster; enables sub name resolution
+}
 
 CtpEntry {
   id, year, round, hole, courseName, yardage?
   winnerName?, winnerPaid?, donatedToHio?, hioDonationAmount?
 }
-CtpDonation { id, year, playerName, amount, paid }
+CtpDonation {
+  id, year, playerName, amount, paid
+  playerId?: string   // player.id from roster; enables sub name resolution
+}
+
+LodgingUnit {
+  teamId: string
+  label: string          // "Villa 1615", "East Wing", "The House"
+  building?: string      // "Bldg #6" — omit for single-property years
+  checkin: string        // "Thu, Aug 27"
+  checkout: string       // "Sun, Aug 30"
+  nights: number
+  earlyArrival?: boolean
+}
+
+LodgingConfig {
+  propertyName: string   // "Talamore Golf Resort"
+  address: string        // full address for Google Maps link
+  websiteUrl?: string
+  description?: string   // shown in the info card on the Lodging page
+  units: LodgingUnit[]   // one per team; all same label for single-house years
+}
 
 SkidmoreScore {
   id: string
@@ -315,11 +352,18 @@ GameConfig {
   teamFinish1stPts: number          // default 4
   teamFinish2ndPts: number          // default 2
   teamFinish3rdPts: number          // default 1
+  vegasBirdieMultiplier: number     // default 2
+  vegasEagleMultiplier: number      // default 3
+  vegasAlbatrossMultiplier: number  // default 4
+  vegasRegularMatchPts: number      // default 2
+  vegasBlindMatchPts: number        // default 1
+  vegasEnableBlinds: boolean        // default true
 }
 
 ArchivedYear {
   year, finalizedAt: string
   teams, roundConfigs, matches, teamScores, hdcpLocked
+  lodgingConfig?: LodgingConfig
 }
 
 TournamentState {
@@ -337,6 +381,7 @@ TournamentState {
   defendingChampionTeamId?: string  // team id of prior year's champion
   gameConfig: GameConfig            // house rules; wired into scoring calculations
   location?: string                 // trip destination (e.g. 'Pinehurst, NC'); shown in header
+  lodgingConfig?: LodgingConfig     // admin-configurable; shown on Lodging page
 }
 
 AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
@@ -346,9 +391,9 @@ AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
 
 ## State Management
 
-### Zustand Store (`useTournamentStore`) — version 20
+### Zustand Store (`useTournamentStore`) — version 23
 
-Persists to `localStorage` key `jugger-tournament-2026`. All 20 versions have migration functions.
+Persists to `localStorage` key `jugger-tournament-2026`. All 23 versions have migration functions.
 
 **Key actions:**
 - `setYear / lockHandicaps / setPairingsLocked / lockRound(round) / unlockRound(round)`
@@ -367,6 +412,7 @@ Persists to `localStorage` key `jugger-tournament-2026`. All 20 versions have mi
 - `setSandbaggerPlayer(id)` / `setToiletAwardPlayer(id)` — assign end-of-year awards
 - `setDefendingChampion(teamId)` — manually assign/override defending champion team
 - `setGameConfig(config)` — update house rules; triggers handicap module singleton update
+- `setLodgingConfig(config)` — update lodging property/unit assignments; synced via Supabase
 - `finalizeYear` — snapshots year → archivedYears, increments year, clears matches/scores;
   single-year subs revert; permanent replacements graduate; **auto-persists Skidmore tournament
   scores** (non-blind, non-team-format rounds with all 18 holes scored, id `sk-tour-{year}-r{round}`);
@@ -408,7 +454,7 @@ Not persisted (session-only).
 | `matches` | `match_id`, `tournament_year` | `match_json` (Match object) |
 | `team_scores` | `tournament_year`, `team_id`, `round` | `points`, `notes` |
 
-**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig, location`
+**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig, location, lodgingConfig`
 
 ### Sync Behavior
 - **On load:** Supabase wins over localStorage if rows exist
@@ -438,7 +484,8 @@ Not persisted (session-only).
 | **Pairings** | **Hidden** | **Hidden** | Full (generate, edit, lock) |
 | Scorecards | Read | Enter scores, Magic Ball, match result | Full + simulate + clear |
 | Courses | Read | Read | Full (edit hole data) |
-| **Round Games** | **Hidden** | **Hidden** | Full (view rules, edit house parameters) |
+| Round Games | Read (rules + values) | Read | Full (edit house parameters) |
+| Lodging | Read | Read | Full (edit property, units, dates) |
 | **Team Results** | **Hidden** | **Hidden** | Edit scores |
 | Par 3 CTP | Read | Read | Full |
 | Hole in One | Read | Read | Full |
@@ -460,7 +507,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ## Navigation Order
 
-1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Courses · 7. Round Games *(admin only)* · 8. Team Results *(admin only)* · 9. Par 3 CTP · 10. Hole in One · 11. Analytics · 12. Archive *(admin only)* · 13. Course History · 14. Print All *(admin only)* · 15. Skidmore HDCP *(admin only)*
+1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Lodging · 7. Courses · 8. Round Games · 9. Team Results *(admin only)* · 10. Par 3 CTP · 11. Hole in One · 12. Analytics · 13. Archive *(admin only)* · 14. Course History · 15. Print All *(admin only)* · 16. Skidmore HDCP *(admin only)*
 
 **Mobile bottom nav** (fixed bar, `lg:hidden`): Home → Scores → Par 3 → Schedule → Results. Nav labels are icon-only on mobile (text hidden via `hidden lg:inline`). Top sub-nav scrolls horizontally on mobile (`overflow-x-auto no-scrollbar`); on desktop it shows a thin white scrollbar (`.nav-scrollable`) when items overflow so admin-only pages remain discoverable.
 
@@ -513,7 +560,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Stat cards** (click to navigate): Players → Teams, Courses → Courses, Matches → Schedule, Rounds → Results
 - **Standings** — sorted by total `teamScores` points
 - **Round Schedule** — list of rounds with date/time, links to Schedule page
-- **Team Rosters** — 3 cards with team name row showing `🏆 Defending Champs` badge (right side, baseline-aligned) for the defending champion team; players with `ghinNumber` can be looked up via GHIN; Sandbagger and Toilet Award thumbnail images (`h-5 w-5`) shown inline next to award holders' names
+- **Team Rosters** — 3 cards with team name row showing `🏆 Defending Champs` badge (right side, baseline-aligned) for the defending champion team; players with `ghinNumber` can be looked up via GHIN; Sandbagger and Toilet Award thumbnail images (`h-5 w-5`) shown inline next to award holders' names; substitute players show an amber `SUB` pill badge next to their name
 - **Admin controls**: dropdown to manually assign defending champion team
 - **Finalize Tournament** — admin only, live year only; Step 1: pick Sandbagger and Toilet Award winners; Step 2: confirm and archive
 
@@ -570,18 +617,34 @@ Both use SHA-256 password hashing via Web Crypto API.
 - F9 and B9 hole tables: Hole | Par | HDCP | [tee yardages], all columns centered
 - Totals footer row in each hole table
 
-### Round Games (`/round-games`) — Admin only
-- Card per format (Team Match Play, Points Round, Texas Scramble, Individual Match Play, Captain's Choice)
+### Round Games (`/round-games`)
+- Visible to **all users**; only admins can edit configurable parameters
+- **Quick-jump pill bar** at top — one pill per format; scrolls to that format's card
+- Card per format (Team Match Play, Points Round, Texas Scramble, Individual Match Play, Captain's Choice, Vegas)
 - Each card: format name + informal nickname, assigned round badge, description, "How It Works" bullet list, HDCP note
+- **Stableford point values** (Points Round card) — visible to guests and scorers; shows all 6 values (Albatross/Eagle/Birdie/Par/Bogey/Double) even in read-only mode
+- **Dynamic HDCP notes** — Texas Scramble gray box reads "HDCP: x% of each player's course HDCP"; Captain's Choice reads "HDCP: x% of the sum of each player's course HDCP"; both x values auto-update when admin changes the configured percentages
 - **Configurable parameters** — admin-editable inputs; changes take effect immediately for all scoring and descriptions:
   - Texas Scramble: HDCP %, finish points (1st/2nd/3rd)
   - Captain's Choice: HDCP %, min tee balls per player, finish points
   - Points Round: Magic Ball on/off, blinds on/off, all 6 Stableford point values, regular/blind match points
   - Team Match Play: blinds on/off, regular/blind match points
   - Individual Match Play: blinds on/off, match/twosome/blind point values
+  - Vegas: birdie/eagle/albatross multipliers, regular/blind match points, blinds on/off
 - **Match Structure** reference card at bottom: twosome matrix (T1A vs T2A etc.) and team format rules
 - **Reset to Defaults** button restores `DEFAULT_GAME_CONFIG`
 - Round badge shows currently-assigned round from `roundConfigs` (updates live when Schedule changes format)
+
+### Lodging (`/lodging`)
+- Reads from `lodgingConfig` in the Zustand store (admin-configurable year-over-year)
+- **Page header** — property name links to Google Maps; clicking launches native maps app on iOS/Android; optional website link
+- **Unit assignment cards** — one card per team, ordered by `lodgingConfig.units` array; shows team color header, unit label (e.g. "Villa 1615"), optional building badge (e.g. "Bldg #6"), early arrival badge, check-in/check-out/nights dates, and live golfer roster (auto-reflects substitutes with amber `SUB` badge)
+- **Annotated map** — `talamore-map.jpg` with SVG overlay; highlight box rotated ~22° CCW to match building angle; non-rotated label banner above cluster shows building name and villa numbers; SVG viewBox matches original image dimensions (2237×1653)
+- **Amenities** — static grid of included villa amenities (bedrooms, kitchen, WiFi, laundry, housekeeping, etc.)
+- **Resort documents** — PDF links for Check-In & Resort Information and Rules & Regulations
+- **Admin edit modal** — "Edit Lodging" button (admin only) opens form to update: property name, address, website URL, description, and per-team unit assignments (label, building, check-in, checkout, nights, early arrival flag); units can be added/removed dynamically
+
+`LodgingConfig` persists in `TournamentState`, is included in the `ArchivedYear` snapshot, and syncs via Supabase via `APP_STATE_KEYS`. `DEFAULT_LODGING_CONFIG` pre-populated with 2026 Talamore data.
 
 ### Results (`/results`) — Admin only
 - Grid: Team × Round with editable point cells (admin)
@@ -594,6 +657,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Auto-counts par-3 holes across all rounds from course data
 - Pot = paid player count × par-3 count × $1/hole
 - Per-hole CTP entry: round, hole, yardage, winner, paid toggle
+- **Substitute name resolution** — donation records store `playerId`; when a sub is active the current player's name (sub's name) is displayed; legacy records without `playerId` fall back to stored `playerName`
 - CTP donation tracker per player
 - Historical CTP→HIO transfer bar chart
 - **Mobile**: Pot Summary and Player Contributions sections collapsed by default (chevron toggle); CTP results visible first
@@ -604,6 +668,8 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Photo upload (base64 stored in Zustand)
 - Claim Pot: sums all paid unclaimed donations → sets `potClaimed` on HIO entry
 - Per-player $20/year donation tracking with paid toggle (admin)
+- **Substitute name resolution** — donation records store `playerId`; when a sub is active the sub's name is shown in place of the original player's name; legacy records fall back to stored `playerName`
+- **Substitute pot eligibility** — substitutes can only receive an HIO pot payout for donations made in the year they are playing (not prior years); only current-year `hioDonations` are summed for a sub's claim
 
 ### Analytics (`/analytics`)
 8-tab historical data explorer powered by `utils/analytics.ts`. Data sourced from all `archivedYears` + live year bundled as `YearBundle[]`. Handles subs and permanent replacements via dynamic roster resolution across all bundles.
@@ -702,6 +768,7 @@ Admin-only action on the Dashboard (live year only). Two-step flow:
 - `matches` — all match data with every hole score
 - `teamScores` — final point totals per round
 - `hdcpLocked` state
+- `lodgingConfig` — property and unit assignments as configured for that year
 
 **Skidmore score eligibility:** non-blind matches only; excludes `texas_scramble` and `captains_choice` formats; all 18 holes must be entered. Score not added if an entry with that id already exists.
 
@@ -744,6 +811,7 @@ Reads `gameConfig` from store directly (via `useTournamentStore`) so description
 | texas_scramble | Per-player gross | Net (configurable % HDCP) | Best-ball running total |
 | individual_match | Per-player gross | Net per hole | Two 1v1 + 2v2 rows |
 | captains_choice | Team hole score (admin) + tee shot selector | Net (configurable % team HDCP) | Running team total |
+| vegas | Per-player gross | Net per hole | Two-digit combined score; running hole wins |
 
 Stroke dots (`.` / `..`) calculated from `getStrokeDots(courseHdcp, holeHdcpRank)`.
 
