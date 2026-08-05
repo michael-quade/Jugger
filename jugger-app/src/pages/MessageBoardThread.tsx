@@ -115,6 +115,16 @@ export default function MessageBoardThread() {
   // Lightbox
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
+  // Sticky reply button (mobile)
+  const replyFormRef = useRef<HTMLDivElement>(null)
+  const [showJumpReply, setShowJumpReply] = useState(false)
+  useEffect(() => {
+    if (!replyFormRef.current) return
+    const obs = new IntersectionObserver(([entry]) => setShowJumpReply(!entry.isIntersecting), { threshold: 0 })
+    obs.observe(replyFormRef.current)
+    return () => obs.disconnect()
+  }, [loading])
+
   // ── Initial data fetch ─────────────────────────────────────
   useEffect(() => {
     if (!supabase || !threadId) return
@@ -132,6 +142,27 @@ export default function MessageBoardThread() {
       // Mark as read
       if (currentAdmin && threadId) markThreadRead(currentAdmin, threadId)
     })()
+  }, [threadId, currentAdmin])
+
+  // ── Realtime: new posts ───────────────────────────────────
+  useEffect(() => {
+    if (!supabase || !threadId) return
+    const channel = supabase.channel(`mb_posts_${threadId}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'mb_posts',
+        filter: `thread_id=eq.${threadId}`,
+      }, payload => {
+        const incoming = payload.new as MbPost
+        if (incoming.is_deleted) return
+        setPosts(ps => {
+          if (ps.some(p => p.id === incoming.id)) return ps
+          return [...ps, incoming]
+        })
+        setThread(t => t ? { ...t, reply_count: t.reply_count + 1, last_reply_at: incoming.created_at } : t)
+        if (currentAdmin && threadId) markThreadRead(currentAdmin, threadId)
+      })
+      .subscribe()
+    return () => { supabase!.removeChannel(channel) }
   }, [threadId, currentAdmin])
 
   // ── Realtime: reactions ────────────────────────────────────
@@ -385,9 +416,19 @@ export default function MessageBoardThread() {
         })}
       </div>
 
+      {/* Sticky jump-to-reply button (mobile only, shown when reply form is off-screen) */}
+      {canAccess && currentAdmin && !thread.is_locked && showJumpReply && (
+        <button
+          className="fixed bottom-20 right-4 z-40 lg:hidden flex items-center gap-1.5 btn-primary shadow-lg text-sm"
+          onClick={() => replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          <Send size={13} /> Reply
+        </button>
+      )}
+
       {/* Reply form */}
       {canAccess && currentAdmin && !thread.is_locked && (
-        <div className="card border border-masters-green/20">
+        <div ref={replyFormRef} className="card border border-masters-green/20">
           <div className="flex items-center gap-2 mb-3">
             <MessageSquare size={15} className="text-masters-green" />
             <h3 className="font-semibold text-sm text-masters-dark">Reply</h3>

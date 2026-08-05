@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { verifyPassword } from '../utils/auth'
 import { useTournamentStore } from './useTournamentStore'
 
+const SESSION_TIMEOUT_MS = 12 * 60 * 60 * 1000 // 12 hours
+
 interface AuthState {
   currentAdmin: string | null
   currentRole: 'admin' | 'scorer' | 'player' | null
@@ -9,19 +11,24 @@ interface AuthState {
   mustChangePassword: boolean
   loginError: string | null
   loggingIn: boolean
+  loginAt: number | null
   login: (username: string, password: string) => Promise<boolean>
   logout: () => void
   clearError: () => void
   clearMustChangePassword: () => void
+  checkSessionTimeout: () => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export { SESSION_TIMEOUT_MS }
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   currentAdmin: null,
   currentRole: null,
   canScore: false,
   mustChangePassword: false,
   loginError: null,
   loggingIn: false,
+  loginAt: null,
 
   login: async (username, password) => {
     set({ loggingIn: true, loginError: null })
@@ -45,6 +52,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         mustChangePassword: cred.mustChangePassword === true,
         loggingIn: false,
         loginError: null,
+        loginAt: Date.now(),
       })
     } else {
       set({ loggingIn: false, loginError: 'Invalid username or password.' })
@@ -58,10 +66,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     canScore: false,
     mustChangePassword: false,
     loginError: null,
+    loginAt: null,
   }),
 
   clearError: () => set({ loginError: null }),
   clearMustChangePassword: () => set({ mustChangePassword: false }),
+
+  checkSessionTimeout: () => {
+    const { loginAt, currentAdmin, logout } = get()
+    if (currentAdmin && loginAt && Date.now() - loginAt > SESSION_TIMEOUT_MS) {
+      logout()
+    }
+  },
 }))
 
 export const useIsAdmin        = () => useAuthStore(s => s.currentRole === 'admin')

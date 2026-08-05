@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageSquare, Plus, Pin, Lock, RefreshCw, X, Camera, Image } from 'lucide-react'
+import { MessageSquare, Plus, Pin, Lock, RefreshCw, X, Camera, Image, Search } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../lib/supabase'
 import { useAuthStore, useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
 import { useTournamentStore } from '../store/useTournamentStore'
@@ -41,6 +41,7 @@ export default function MessageBoard() {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState<string | null>(null)
   const [tab,        setTab]        = useState<string>(ALL_TAB)
+  const [search,     setSearch]     = useState('')
   const [showNew,    setShowNew]    = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -160,7 +161,14 @@ export default function MessageBoard() {
     setThreads(ts => ts.map(t => t.id === thread.id ? { ...t, is_locked: !t.is_locked } : t))
   }
 
-  const visible = tab === ALL_TAB ? threads : threads.filter(t => t.category === tab)
+  const visible = useMemo(() => {
+    let list = tab === ALL_TAB ? threads : threads.filter(t => t.category === tab)
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter(t => t.title.toLowerCase().includes(q))
+    }
+    return list
+  }, [threads, tab, search])
 
   if (!isSupabaseEnabled) {
     return (
@@ -189,6 +197,22 @@ export default function MessageBoard() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="relative mb-4">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          className="input w-full pl-8 text-sm"
+          placeholder="Search threads…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <X size={13} />
+          </button>
+        )}
       </div>
 
       {/* New thread form */}
@@ -266,7 +290,7 @@ export default function MessageBoard() {
       ) : visible.length === 0 ? (
         <div className="text-center py-12">
           <MessageSquare size={32} className="mx-auto text-gray-200 mb-2" />
-          <p className="text-gray-400 text-sm">{tab === ALL_TAB ? 'No threads yet. Start a conversation!' : `No threads in ${tab} yet.`}</p>
+          <p className="text-gray-400 text-sm">{search ? `No threads match "${search}".` : tab === ALL_TAB ? 'No threads yet. Start a conversation!' : `No threads in ${tab} yet.`}</p>
         </div>
       ) : (
         <div className="space-y-2">

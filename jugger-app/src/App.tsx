@@ -22,11 +22,19 @@ import Lodging from './pages/Lodging'
 import MessageBoard from './pages/MessageBoard'
 import MessageBoardThread from './pages/MessageBoardThread'
 import { useTournamentStore } from './store/useTournamentStore'
+import { useAuthStore } from './store/useAuthStore'
 import { hashPassword, DEFAULT_PASSWORD, generateUsername } from './utils/auth'
 
 export default function App() {
   const { admins, addAdmin, teams } = useTournamentStore()
+  const checkSessionTimeout = useAuthStore(s => s.checkSessionTimeout)
   useSupabaseSync()
+
+  // Hard 12-hour session timeout — checked every minute
+  useEffect(() => {
+    const id = setInterval(checkSessionTimeout, 60_000)
+    return () => clearInterval(id)
+  }, [checkSessionTimeout])
 
   // Bootstrap default quade admin on first load
   useEffect(() => {
