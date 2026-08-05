@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Lock, Pin, Pencil, Trash2, MessageSquare, Send, Camera, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
+import { ArrowLeft, Lock, Pin, Pencil, Trash2, MessageSquare, Send, Camera, ChevronLeft, ChevronRight, CornerDownLeft, Smile } from 'lucide-react'
+import { EmojiPickerPopover } from '../components/EmojiPickerPopover'
 import { supabase } from '../lib/supabase'
 import { useAuthStore, useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
 import { useTournamentStore } from '../store/useTournamentStore'
@@ -133,6 +134,9 @@ export default function MessageBoardThread() {
   // @mention autocomplete
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionStart, setMentionStart] = useState<number | null>(null)
+
+  // Emoji picker
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
   // Edit
   const [editingId,  setEditingId]  = useState<string | null>(null)
@@ -274,6 +278,19 @@ export default function MessageBoardThread() {
     setTimeout(() => {
       replyTextareaRef.current?.focus()
       replyTextareaRef.current?.setSelectionRange(pos, pos)
+    }, 0)
+  }
+
+  function insertEmoji(emoji: string) {
+    const ta = replyTextareaRef.current
+    const start = ta?.selectionStart ?? reply.length
+    const end   = ta?.selectionEnd   ?? reply.length
+    const newVal = reply.slice(0, start) + emoji + reply.slice(end)
+    setReply(newVal)
+    setShowEmojiPicker(false)
+    setTimeout(() => {
+      ta?.focus()
+      ta?.setSelectionRange(start + emoji.length, start + emoji.length)
     }, 0)
   }
 
@@ -579,7 +596,7 @@ export default function MessageBoardThread() {
 
             {postErr && <p className="text-red-500 text-sm">{postErr}</p>}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button type="submit" className="btn-primary flex items-center gap-1.5"
                 disabled={posting || (!reply.trim() && pendingImgs.length === 0)}>
                 <Send size={14} />
@@ -592,6 +609,15 @@ export default function MessageBoardThread() {
                   Photo {pendingImgs.length > 0 ? `(${pendingImgs.length}/4)` : ''}
                 </button>
               )}
+              <div className="relative">
+                <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
+                  className="btn-ghost flex items-center gap-1.5 text-sm" title="Insert emoji">
+                  <Smile size={14} />
+                </button>
+                {showEmojiPicker && (
+                  <EmojiPickerPopover onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} />
+                )}
+              </div>
             </div>
             <input ref={fileInputRef} type="file" multiple accept="image/*" hidden onChange={handleFileSelect} />
           </form>

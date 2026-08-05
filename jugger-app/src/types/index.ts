@@ -287,7 +287,7 @@ export interface MbPost {
   image_urls: string[] | null
 }
 
-export const MB_REACTION_EMOJIS = ['👍', '🏌️', '🏆', '😂', '🔥'] as const
+export const MB_REACTION_EMOJIS = ['👍', '👎', '🏌️', '⛳', '🏆', '😂', '🔥', '🎉', '😎', '🤦', '💪', '🍺'] as const
 
 export interface MbReaction {
   id: string

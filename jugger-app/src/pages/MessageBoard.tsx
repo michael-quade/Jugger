@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageSquare, Plus, Pin, Lock, RefreshCw, X, Camera, Image, Search } from 'lucide-react'
+import { MessageSquare, Plus, Pin, Lock, RefreshCw, X, Camera, Image, Search, Smile } from 'lucide-react'
+import { EmojiPickerPopover } from '../components/EmojiPickerPopover'
 import { supabase, isSupabaseEnabled } from '../lib/supabase'
 import { useAuthStore, useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
 import { useTournamentStore } from '../store/useTournamentStore'
@@ -51,10 +52,12 @@ export default function MessageBoard() {
   const [newBody,     setNewBody]     = useState('')
   const [posting,     setPosting]     = useState(false)
   const [postError,   setPostError]   = useState<string | null>(null)
-  const [newFiles,    setNewFiles]    = useState<File[]>([])
-  const [newPreviews, setNewPreviews] = useState<string[]>([])
-  const [uploading,   setUploading]   = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [newFiles,       setNewFiles]       = useState<File[]>([])
+  const [newPreviews,    setNewPreviews]    = useState<string[]>([])
+  const [uploading,      setUploading]      = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const fileInputRef    = useRef<HTMLInputElement>(null)
+  const newBodyRef      = useRef<HTMLTextAreaElement>(null)
 
   const fetchThreads = useCallback(async () => {
     if (!supabase) return
@@ -101,6 +104,18 @@ export default function MessageBoard() {
       urls.push(data.publicUrl)
     }
     return urls
+  }
+
+  function insertEmoji(emoji: string) {
+    const ta = newBodyRef.current
+    const start = ta?.selectionStart ?? newBody.length
+    const end   = ta?.selectionEnd   ?? newBody.length
+    setNewBody(newBody.slice(0, start) + emoji + newBody.slice(end))
+    setShowEmojiPicker(false)
+    setTimeout(() => {
+      ta?.focus()
+      ta?.setSelectionRange(start + emoji.length, start + emoji.length)
+    }, 0)
   }
 
   async function handleCreateThread(e: React.FormEvent) {
@@ -249,7 +264,7 @@ export default function MessageBoard() {
             </div>
             <div>
               <label className="label">Post</label>
-              <textarea className="input w-full resize-y" rows={4} placeholder={`What's on your mind? **bold**, _italic_, \`code\`, @mention`} value={newBody} onChange={e => setNewBody(e.target.value)} />
+              <textarea ref={newBodyRef} className="input w-full resize-y" rows={4} placeholder={`What's on your mind? **bold**, _italic_, \`code\`, @mention`} value={newBody} onChange={e => setNewBody(e.target.value)} />
             </div>
             {/* Photo picker */}
             {newPreviews.length > 0 && (
@@ -263,7 +278,7 @@ export default function MessageBoard() {
               </div>
             )}
             {postError && <p className="text-red-500 text-sm">{postError}</p>}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button type="submit" className="btn-primary" disabled={posting || !newTitle.trim() || (!newBody.trim() && newFiles.length === 0)}>
                 {uploading ? 'Uploading…' : posting ? 'Posting…' : 'Post Thread'}
               </button>
@@ -272,7 +287,16 @@ export default function MessageBoard() {
                   <Camera size={14} /> Photo {newFiles.length > 0 ? `(${newFiles.length}/4)` : ''}
                 </button>
               )}
-              <button type="button" className="btn-ghost text-sm" onClick={() => { setShowNew(false); newPreviews.forEach(u => URL.revokeObjectURL(u)); setNewFiles([]); setNewPreviews([]) }}>
+              <div className="relative">
+                <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
+                  className="btn-ghost flex items-center gap-1.5 text-sm" title="Insert emoji">
+                  <Smile size={14} />
+                </button>
+                {showEmojiPicker && (
+                  <EmojiPickerPopover onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} />
+                )}
+              </div>
+              <button type="button" className="btn-ghost text-sm" onClick={() => { setShowNew(false); setShowEmojiPicker(false); newPreviews.forEach(u => URL.revokeObjectURL(u)); setNewFiles([]); setNewPreviews([]) }}>
                 Cancel
               </button>
             </div>
