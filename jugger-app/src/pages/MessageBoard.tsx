@@ -249,7 +249,7 @@ export default function MessageBoard() {
             </div>
             <div>
               <label className="label">Post</label>
-              <textarea className="input w-full resize-y" rows={4} placeholder="What's on your mind?" value={newBody} onChange={e => setNewBody(e.target.value)} />
+              <textarea className="input w-full resize-y" rows={4} placeholder={`What's on your mind? **bold**, _italic_, \`code\`, @mention`} value={newBody} onChange={e => setNewBody(e.target.value)} />
             </div>
             {/* Photo picker */}
             {newPreviews.length > 0 && (

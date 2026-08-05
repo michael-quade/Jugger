@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
   History, ArrowRight, Calculator, Gamepad2, Hotel, MessageSquare,
+  type LucideIcon,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
@@ -11,7 +12,7 @@ import { isSupabaseEnabled } from '../lib/supabase'
 import { useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
 import { useBoardStore } from '../store/useBoardStore'
 
-const NAV = [
+const NAV: { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; boardOnly?: boolean }[] = [
   { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
   { to: '/teams',      label: 'Teams',        icon: Users },
   { to: '/schedule',   label: 'Schedule',     icon: Calendar },

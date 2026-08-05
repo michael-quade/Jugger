@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Lock, Pin, Pencil, Trash2, MessageSquare, Send, Camera, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Lock, Pin, Pencil, Trash2, MessageSquare, Send, Camera, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore, useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
 import { useTournamentStore } from '../store/useTournamentStore'
@@ -10,6 +11,7 @@ import type { MbThread, MbPost, MbReaction } from '../types'
 import { MB_REACTION_EMOJIS } from '../types'
 
 const BUCKET = 'jugger-board'
+const PAGE_SIZE = 20
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -23,30 +25,54 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
-function PostBody({ body }: { body: string }) {
-  const parts = body.split(/(https?:\/\/[^\s]+)/g)
-  return (
-    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-      {parts.map((part, i) =>
-        /^https?:\/\//.test(part)
-          ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-masters-green underline break-all">{part}</a>
-          : part
-      )}
-    </p>
-  )
+// ── Markdown renderer (no external lib, XSS-safe via React nodes) ──────────
+function renderInline(text: string): ReactNode[] {
+  const pattern = /(\*\*[^*\n]+?\*\*|_[^_\n]+?_|`[^`\n]+?`|@\w+|https?:\/\/[^\s]+)/g
+  const nodes: ReactNode[] = []
+  let last = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) nodes.push(text.slice(last, match.index))
+    const token = match[0]
+    const key   = match.index
+    if (token.startsWith('**'))
+      nodes.push(<strong key={key} className="font-semibold text-gray-800">{token.slice(2, -2)}</strong>)
+    else if (token.startsWith('_'))
+      nodes.push(<em key={key}>{token.slice(1, -1)}</em>)
+    else if (token.startsWith('`'))
+      nodes.push(<code key={key} className="bg-gray-100 text-[11px] px-1 py-0.5 rounded font-mono text-masters-green">{token.slice(1, -1)}</code>)
+    else if (token.startsWith('@'))
+      nodes.push(<span key={key} className="text-masters-green font-semibold">{token}</span>)
+    else
+      nodes.push(<a key={key} href={token} target="_blank" rel="noopener noreferrer" className="text-masters-green underline break-all">{token}</a>)
+    last = match.index + token.length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return nodes
 }
 
+function MarkdownBody({ body }: { body: string }) {
+  const elements: ReactNode[] = body.split('\n').map((line, i) => {
+    if (line.startsWith('> '))
+      return <blockquote key={i} className="border-l-2 border-gray-300 pl-3 my-1 text-gray-500 italic text-sm">{renderInline(line.slice(2))}</blockquote>
+    if (line === '')
+      return <div key={i} className="h-1" />
+    return <p key={i} className="text-sm text-gray-700 leading-relaxed">{renderInline(line)}</p>
+  })
+  return <div className="space-y-0.5">{elements}</div>
+}
+
+// ── Lightbox ───────────────────────────────────────────────────────────────
 interface LightboxState { urls: string[]; idx: number }
 
 function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => void }) {
   const { urls, idx: initIdx } = state
   const [idx, setIdx] = useState(initIdx)
-
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-      if (e.key === 'ArrowLeft')  setIdx(i => Math.max(0, i - 1))
-      if (e.key === 'ArrowRight') setIdx(i => Math.min(urls.length - 1, i + 1))
+      if (e.key === 'Escape')      onClose()
+      if (e.key === 'ArrowLeft')   setIdx(i => Math.max(0, i - 1))
+      if (e.key === 'ArrowRight')  setIdx(i => Math.min(urls.length - 1, i + 1))
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -61,25 +87,20 @@ function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => voi
           <ChevronLeft size={36} />
         </button>
       )}
-      <img
-        src={urls[idx]}
-        className="max-h-[90vh] max-w-[90vw] object-contain rounded shadow-2xl"
-        onClick={e => e.stopPropagation()}
-        alt=""
-      />
+      <img src={urls[idx]} className="max-h-[90vh] max-w-[90vw] object-contain rounded shadow-2xl"
+        onClick={e => e.stopPropagation()} alt="" />
       {urls.length > 1 && idx < urls.length - 1 && (
         <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
           onClick={e => { e.stopPropagation(); setIdx(i => i + 1) }}>
           <ChevronRight size={36} />
         </button>
       )}
-      {urls.length > 1 && (
-        <p className="absolute bottom-4 text-white/50 text-sm">{idx + 1} / {urls.length}</p>
-      )}
+      {urls.length > 1 && <p className="absolute bottom-4 text-white/50 text-sm">{idx + 1} / {urls.length}</p>}
     </div>
   )
 }
 
+// ── Main component ─────────────────────────────────────────────────────────
 export default function MessageBoardThread() {
   const { threadId } = useParams<{ threadId: string }>()
   const { currentAdmin } = useAuthStore()
@@ -92,11 +113,14 @@ export default function MessageBoardThread() {
     return cred?.displayName ?? username
   }, [admins])
 
-  const [thread,    setThread]    = useState<MbThread | null>(null)
-  const [posts,     setPosts]     = useState<MbPost[]>([])
-  const [reactions, setReactions] = useState<MbReaction[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState<string | null>(null)
+  const [thread,      setThread]      = useState<MbThread | null>(null)
+  const [posts,       setPosts]       = useState<MbPost[]>([])
+  const [reactions,   setReactions]   = useState<MbReaction[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState<string | null>(null)
+  const [hasMore,     setHasMore]     = useState(false)
+  const [loadedUpTo,  setLoadedUpTo]  = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   // Reply form
   const [reply,       setReply]       = useState('')
@@ -105,7 +129,10 @@ export default function MessageBoardThread() {
   const [pendingImgs, setPendingImgs] = useState<File[]>([])
   const [previews,    setPreviews]    = useState<string[]>([])
   const [uploading,   setUploading]   = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // @mention autocomplete
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionStart, setMentionStart] = useState<number | null>(null)
 
   // Edit
   const [editingId,  setEditingId]  = useState<string | null>(null)
@@ -115,36 +142,59 @@ export default function MessageBoardThread() {
   // Lightbox
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
-  // Sticky reply button (mobile)
-  const replyFormRef = useRef<HTMLDivElement>(null)
+  const fileInputRef     = useRef<HTMLInputElement>(null)
+  const replyFormRef     = useRef<HTMLDivElement>(null)
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Sticky reply button on mobile
   const [showJumpReply, setShowJumpReply] = useState(false)
   useEffect(() => {
     if (!replyFormRef.current) return
-    const obs = new IntersectionObserver(([entry]) => setShowJumpReply(!entry.isIntersecting), { threshold: 0 })
+    const obs = new IntersectionObserver(([e]) => setShowJumpReply(!e.isIntersecting), { threshold: 0 })
     obs.observe(replyFormRef.current)
     return () => obs.disconnect()
   }, [loading])
 
-  // ── Initial data fetch ─────────────────────────────────────
+  // ── Paginated post loader ──────────────────────────────────────────────
+  const loadPosts = useCallback(async (from: number) => {
+    if (!supabase || !threadId) return
+    if (from > 0) setLoadingMore(true)
+
+    const { data, count, error: err } = await supabase
+      .from('mb_posts')
+      .select('*', { count: 'exact' })
+      .eq('thread_id', threadId)
+      .eq('is_deleted', false)
+      .order('created_at')
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (err) { setError(err.message); setLoading(false); setLoadingMore(false); return }
+    const page = (data ?? []) as MbPost[]
+    if (from === 0) setPosts(page)
+    else setPosts(ps => [...ps, ...page.filter(p => !ps.some(e => e.id === p.id))])
+    setLoadedUpTo(from + page.length)
+    setHasMore((count ?? 0) > from + PAGE_SIZE)
+    setLoading(false)
+    setLoadingMore(false)
+  }, [threadId])
+
+  // ── Initial fetch ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!supabase || !threadId) return
     ;(async () => {
-      const [threadRes, postsRes, reactionsRes] = await Promise.all([
+      const [threadRes, reactionsRes] = await Promise.all([
         supabase.from('mb_threads').select('*').eq('id', threadId).single(),
-        supabase.from('mb_posts').select('*').eq('thread_id', threadId).eq('is_deleted', false).order('created_at'),
         supabase.from('mb_reactions').select('*').eq('thread_id', threadId),
       ])
       if (threadRes.error) setError(threadRes.error.message)
       else setThread(threadRes.data as MbThread)
-      if (postsRes.data)     setPosts(postsRes.data as MbPost[])
       if (reactionsRes.data) setReactions(reactionsRes.data as MbReaction[])
-      setLoading(false)
-      // Mark as read
       if (currentAdmin && threadId) markThreadRead(currentAdmin, threadId)
     })()
-  }, [threadId, currentAdmin])
+    loadPosts(0)
+  }, [threadId, currentAdmin, loadPosts])
 
-  // ── Realtime: new posts ───────────────────────────────────
+  // ── Realtime: new posts ────────────────────────────────────────────────
   useEffect(() => {
     if (!supabase || !threadId) return
     const channel = supabase.channel(`mb_posts_${threadId}`)
@@ -154,10 +204,7 @@ export default function MessageBoardThread() {
       }, payload => {
         const incoming = payload.new as MbPost
         if (incoming.is_deleted) return
-        setPosts(ps => {
-          if (ps.some(p => p.id === incoming.id)) return ps
-          return [...ps, incoming]
-        })
+        setPosts(ps => ps.some(p => p.id === incoming.id) ? ps : [...ps, incoming])
         setThread(t => t ? { ...t, reply_count: t.reply_count + 1, last_reply_at: incoming.created_at } : t)
         if (currentAdmin && threadId) markThreadRead(currentAdmin, threadId)
       })
@@ -165,7 +212,7 @@ export default function MessageBoardThread() {
     return () => { supabase!.removeChannel(channel) }
   }, [threadId, currentAdmin])
 
-  // ── Realtime: reactions ────────────────────────────────────
+  // ── Realtime: reactions ────────────────────────────────────────────────
   useEffect(() => {
     if (!supabase || !threadId) return
     const channel = supabase.channel(`mb_reactions_${threadId}`)
@@ -173,20 +220,16 @@ export default function MessageBoardThread() {
         event: '*', schema: 'public', table: 'mb_reactions',
         filter: `thread_id=eq.${threadId}`,
       }, payload => {
-        if (payload.eventType === 'INSERT') {
-          setReactions(rs => {
-            if (rs.some(r => r.id === (payload.new as MbReaction).id)) return rs
-            return [...rs, payload.new as MbReaction]
-          })
-        } else if (payload.eventType === 'DELETE') {
+        if (payload.eventType === 'INSERT')
+          setReactions(rs => rs.some(r => r.id === (payload.new as MbReaction).id) ? rs : [...rs, payload.new as MbReaction])
+        else if (payload.eventType === 'DELETE')
           setReactions(rs => rs.filter(r => r.id !== (payload.old as { id: string }).id))
-        }
       })
       .subscribe()
     return () => { supabase!.removeChannel(channel) }
   }, [threadId])
 
-  // ── Reactions computed per post ────────────────────────────
+  // ── Reactions computed per post ────────────────────────────────────────
   const reactionsByPost = useMemo(() => {
     const result: Record<string, Record<string, { count: number; hasReacted: boolean; reactionId: string | null }>> = {}
     for (const r of reactions) {
@@ -201,21 +244,53 @@ export default function MessageBoardThread() {
     return result
   }, [reactions, currentAdmin])
 
-  async function toggleReaction(postId: string, emoji: string) {
-    if (!supabase || !currentAdmin || !threadId) return
-    const existing = reactions.find(r => r.post_id === postId && r.author === currentAdmin && r.emoji === emoji)
-    if (existing) {
-      await supabase.from('mb_reactions').delete().eq('id', existing.id)
-      setReactions(rs => rs.filter(r => r.id !== existing.id))
-    } else {
-      const { data } = await supabase.from('mb_reactions')
-        .insert([{ thread_id: threadId, post_id: postId, author: currentAdmin, emoji }])
-        .select().single()
-      if (data) setReactions(rs => [...rs, data as MbReaction])
-    }
+  // ── @mention autocomplete ──────────────────────────────────────────────
+  const mentionSuggestions = useMemo(() => {
+    if (mentionQuery === null) return []
+    const q = mentionQuery.toLowerCase()
+    return admins
+      .filter(a => a.role === 'player' || a.role === 'admin')
+      .filter(a => a.username.toLowerCase().includes(q) || (a.displayName?.toLowerCase().includes(q) ?? false))
+      .slice(0, 5)
+  }, [admins, mentionQuery])
+
+  function handleReplyChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val    = e.target.value
+    const cursor = e.target.selectionStart ?? val.length
+    setReply(val)
+    const m = val.slice(0, cursor).match(/@(\w*)$/)
+    if (m) { setMentionQuery(m[1].toLowerCase()); setMentionStart(cursor - m[0].length) }
+    else   { setMentionQuery(null); setMentionStart(null) }
   }
 
-  // ── Photo helpers ──────────────────────────────────────────
+  function insertMention(username: string) {
+    const cursor  = replyTextareaRef.current?.selectionStart ?? reply.length
+    const before  = reply.slice(0, mentionStart ?? 0)
+    const after   = reply.slice(cursor)
+    setReply(`${before}@${username} ${after}`)
+    setMentionQuery(null)
+    setMentionStart(null)
+    const pos = (mentionStart ?? 0) + username.length + 2
+    setTimeout(() => {
+      replyTextareaRef.current?.focus()
+      replyTextareaRef.current?.setSelectionRange(pos, pos)
+    }, 0)
+  }
+
+  // ── Quote a post ───────────────────────────────────────────────────────
+  function handleQuote(post: MbPost) {
+    const author = displayName(post.author)
+    const lines  = post.body
+      .split('\n')
+      .filter(l => !l.startsWith('> ') && l.trim() !== '')
+      .slice(0, 3)
+      .map(l => `> ${l}`)
+    setReply(prev => `> **${author}:**\n${lines.join('\n')}\n\n${prev}`)
+    replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setTimeout(() => replyTextareaRef.current?.focus(), 300)
+  }
+
+  // ── Photo helpers ──────────────────────────────────────────────────────
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []).slice(0, 4 - pendingImgs.length)
     setPendingImgs(prev => [...prev, ...files].slice(0, 4))
@@ -242,7 +317,7 @@ export default function MessageBoardThread() {
     return urls
   }
 
-  // ── Reply submit ───────────────────────────────────────────
+  // ── Reply submit ───────────────────────────────────────────────────────
   async function handleReply(e: React.FormEvent) {
     e.preventDefault()
     if (!supabase || !currentAdmin || !threadId) return
@@ -256,7 +331,7 @@ export default function MessageBoardThread() {
         .insert([{ thread_id: threadId, year, is_op: false, author: currentAdmin, body: reply.trim(), image_urls: imageUrls.length > 0 ? imageUrls : null }])
         .select().single()
       if (err || !data) throw err ?? new Error('Failed to post')
-      setPosts(ps => [...ps, data as MbPost])
+      setPosts(ps => ps.some(p => p.id === (data as MbPost).id) ? ps : [...ps, data as MbPost])
       const newCount = (thread?.reply_count ?? 0) + 1
       await supabase.from('mb_threads').update({ reply_count: newCount, last_reply_at: now }).eq('id', threadId)
       setThread(t => t ? { ...t, reply_count: newCount, last_reply_at: now } : t)
@@ -268,7 +343,7 @@ export default function MessageBoardThread() {
     } finally { setPosting(false); setUploading(false) }
   }
 
-  // ── Edit / delete post ─────────────────────────────────────
+  // ── Edit / delete post ─────────────────────────────────────────────────
   async function handleDelete(postId: string, isOp: boolean) {
     if (!supabase) return
     await supabase.from('mb_posts').update({ is_deleted: true }).eq('id', postId)
@@ -289,7 +364,21 @@ export default function MessageBoardThread() {
     setEditingId(null); setEditSaving(false)
   }
 
-  // ── Render ─────────────────────────────────────────────────
+  async function toggleReaction(postId: string, emoji: string) {
+    if (!supabase || !currentAdmin || !threadId) return
+    const existing = reactions.find(r => r.post_id === postId && r.author === currentAdmin && r.emoji === emoji)
+    if (existing) {
+      await supabase.from('mb_reactions').delete().eq('id', existing.id)
+      setReactions(rs => rs.filter(r => r.id !== existing.id))
+    } else {
+      const { data } = await supabase.from('mb_reactions')
+        .insert([{ thread_id: threadId, post_id: postId, author: currentAdmin, emoji }])
+        .select().single()
+      if (data) setReactions(rs => [...rs, data as MbReaction])
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────
   if (!canAccess) return (
     <div className="max-w-2xl mx-auto py-16 text-center">
       <MessageSquare size={40} className="mx-auto text-gray-300 mb-3" />
@@ -304,6 +393,16 @@ export default function MessageBoardThread() {
   return (
     <div className="max-w-3xl mx-auto">
       {lightbox && <Lightbox state={lightbox} onClose={() => setLightbox(null)} />}
+
+      {/* Sticky jump-to-reply (mobile) */}
+      {canAccess && currentAdmin && !thread.is_locked && showJumpReply && (
+        <button
+          className="fixed bottom-20 right-4 z-40 lg:hidden flex items-center gap-1.5 btn-primary shadow-lg text-sm"
+          onClick={() => replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          <Send size={13} /> Reply
+        </button>
+      )}
 
       {/* Thread header */}
       <div className="mb-4">
@@ -326,7 +425,7 @@ export default function MessageBoardThread() {
       </div>
 
       {/* Posts */}
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-4">
         {posts.map((post, idx) => {
           const isOwn     = post.author === currentAdmin
           const canEdit   = isOwn && !thread.is_locked
@@ -346,6 +445,13 @@ export default function MessageBoardThread() {
                   <span className="text-xs text-gray-300 ml-2">#{idx + 1}</span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {/* Quote button */}
+                  {canAccess && !thread.is_locked && (
+                    <button onClick={() => handleQuote(post)} title="Quote"
+                      className="p-1 text-gray-300 hover:text-masters-green rounded transition-colors">
+                      <CornerDownLeft size={13} />
+                    </button>
+                  )}
                   {canEdit && (
                     <button onClick={() => editingId === post.id ? setEditingId(null) : (setEditingId(post.id), setEditBody(post.body))}
                       className="p-1 text-gray-300 hover:text-masters-green rounded transition-colors" title="Edit">
@@ -364,7 +470,8 @@ export default function MessageBoardThread() {
               {/* Post body or edit form */}
               {editingId === post.id ? (
                 <div className="space-y-2">
-                  <textarea className="input w-full resize-y text-sm" rows={4} value={editBody} onChange={e => setEditBody(e.target.value)} autoFocus />
+                  <textarea className="input w-full resize-y text-sm" rows={4} value={editBody}
+                    onChange={e => setEditBody(e.target.value)} autoFocus />
                   <div className="flex gap-2">
                     <button className="btn-primary text-sm py-1" disabled={editSaving || !editBody.trim()} onClick={() => saveEdit(post.id)}>
                       {editSaving ? 'Saving…' : 'Save'}
@@ -373,21 +480,17 @@ export default function MessageBoardThread() {
                   </div>
                 </div>
               ) : (
-                <PostBody body={post.body} />
+                <MarkdownBody body={post.body} />
               )}
 
               {/* Images */}
               {post.image_urls && post.image_urls.length > 0 && (
                 <div className={`mt-3 grid gap-2 ${post.image_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   {post.image_urls.map((url, i) => (
-                    <img
-                      key={i}
-                      src={url}
+                    <img key={i} src={url} loading="lazy" alt=""
                       className="rounded-lg object-cover w-full cursor-zoom-in"
                       style={{ maxHeight: post.image_urls!.length === 1 ? '480px' : '200px' }}
                       onClick={() => setLightbox({ urls: post.image_urls!, idx: i })}
-                      alt=""
-                      loading="lazy"
                     />
                   ))}
                 </div>
@@ -401,9 +504,7 @@ export default function MessageBoardThread() {
                     const hasReacted = data?.hasReacted ?? false
                     const count      = data?.count ?? 0
                     return (
-                      <button
-                        key={emoji}
-                        onClick={() => toggleReaction(post.id, emoji)}
+                      <button key={emoji} onClick={() => toggleReaction(post.id, emoji)}
                         title={hasReacted ? 'Remove reaction' : 'React'}
                         className={`flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border transition-colors ${
                           hasReacted
@@ -423,14 +524,13 @@ export default function MessageBoardThread() {
         })}
       </div>
 
-      {/* Sticky jump-to-reply button (mobile only, shown when reply form is off-screen) */}
-      {canAccess && currentAdmin && !thread.is_locked && showJumpReply && (
-        <button
-          className="fixed bottom-20 right-4 z-40 lg:hidden flex items-center gap-1.5 btn-primary shadow-lg text-sm"
-          onClick={() => replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-        >
-          <Send size={13} /> Reply
-        </button>
+      {/* Load More */}
+      {hasMore && (
+        <div className="text-center mb-6">
+          <button className="btn-ghost text-sm" disabled={loadingMore} onClick={() => loadPosts(loadedUpTo)}>
+            {loadingMore ? 'Loading…' : `Load more posts`}
+          </button>
+        </div>
       )}
 
       {/* Reply form */}
@@ -441,25 +541,44 @@ export default function MessageBoardThread() {
             <h3 className="font-semibold text-sm text-masters-dark">Reply</h3>
           </div>
           <form onSubmit={handleReply} className="space-y-3">
-            <textarea
-              className="input w-full resize-y"
-              rows={4}
-              placeholder="Write a reply…"
-              value={reply}
-              onChange={e => setReply(e.target.value)}
-            />
+            <div className="relative">
+              <textarea
+                ref={replyTextareaRef}
+                className="input w-full resize-y"
+                rows={4}
+                placeholder={`Write a reply… Use **bold**, _italic_, \`code\`, or @mention`}
+                value={reply}
+                onChange={handleReplyChange}
+              />
+              {/* @mention autocomplete dropdown */}
+              {mentionSuggestions.length > 0 && (
+                <div className="absolute z-10 left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                  {mentionSuggestions.map(a => (
+                    <button key={a.username} type="button" onClick={() => insertMention(a.username)}
+                      className="w-full text-left px-3 py-2 hover:bg-masters-light text-sm flex items-center gap-2 transition-colors">
+                      <span className="font-semibold text-masters-dark">{a.displayName ?? a.username}</span>
+                      <span className="text-gray-400 text-xs">@{a.username}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Image previews */}
             {previews.length > 0 && (
               <div className="flex gap-2 flex-wrap">
                 {previews.map((src, i) => (
                   <div key={i} className="relative">
                     <img src={src} className="h-16 w-16 object-cover rounded border border-gray-200" alt="" />
-                    <button type="button" onClick={() => removeImage(i)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] leading-none">×</button>
+                    <button type="button" onClick={() => removeImage(i)}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] leading-none">×</button>
                   </div>
                 ))}
               </div>
             )}
+
             {postErr && <p className="text-red-500 text-sm">{postErr}</p>}
+
             <div className="flex items-center gap-2">
               <button type="submit" className="btn-primary flex items-center gap-1.5"
                 disabled={posting || (!reply.trim() && pendingImgs.length === 0)}>
