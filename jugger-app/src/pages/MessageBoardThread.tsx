@@ -290,6 +290,13 @@ export default function MessageBoardThread() {
   }
 
   // ── Render ─────────────────────────────────────────────────
+  if (!canAccess) return (
+    <div className="max-w-2xl mx-auto py-16 text-center">
+      <MessageSquare size={40} className="mx-auto text-gray-300 mb-3" />
+      <h2 className="font-serif text-xl font-bold text-masters-dark mb-2">Players Only</h2>
+      <p className="text-gray-500 text-sm">Sign in with your player account to access the board.</p>
+    </div>
+  )
   if (loading) return <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>
   if (error)   return <div className="text-center py-12 text-red-500 text-sm">{error}</div>
   if (!thread) return <div className="text-center py-12 text-gray-400 text-sm">Thread not found.</div>
@@ -475,11 +482,6 @@ export default function MessageBoardThread() {
       {thread.is_locked && (
         <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg text-gray-400 text-sm">
           <Lock size={14} /> This thread is locked. No new replies.
-        </div>
-      )}
-      {!canAccess && (
-        <div className="text-center py-4">
-          <p className="text-gray-400 text-sm">Sign in with your player account to reply.</p>
         </div>
       )}
     </div>

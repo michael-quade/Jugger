@@ -170,6 +170,16 @@ export default function MessageBoard() {
     return list
   }, [threads, tab, search])
 
+  if (!canAccess) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 text-center">
+        <MessageSquare size={40} className="mx-auto text-gray-300 mb-3" />
+        <h2 className="font-serif text-xl font-bold text-masters-dark mb-2">Players Only</h2>
+        <p className="text-gray-500 text-sm">Sign in with your player account to access the board.</p>
+      </div>
+    )
+  }
+
   if (!isSupabaseEnabled) {
     return (
       <div className="max-w-2xl mx-auto py-12 text-center">
@@ -345,12 +355,6 @@ export default function MessageBoard() {
         </div>
       )}
 
-      {!canAccess && (
-        <div className="text-center py-8">
-          <Image size={28} className="mx-auto text-gray-200 mb-2" />
-          <p className="text-gray-500 text-sm">Sign in with your player account to access the board.</p>
-        </div>
-      )}
     </div>
   )
 }
