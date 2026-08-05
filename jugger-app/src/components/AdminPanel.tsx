@@ -202,7 +202,7 @@ export default function AdminPanel({ onClose }: Props) {
               <h3 className="text-sm font-bold text-masters-dark uppercase tracking-wide">Players</h3>
             </div>
             <p className="text-xs text-gray-400 mb-2">
-              Auto-created from roster. Subs labeled <span className="font-bold text-amber-700">SUB</span> — they default to scorer-on and board access. Default password shown until changed.
+              Auto-created from roster. Subs labeled <span className="font-bold text-amber-700">SUB</span> — grant scorer rights individually. Default password shown until changed.
             </p>
             <div className="space-y-0">
               {playerAccounts.length === 0 && (

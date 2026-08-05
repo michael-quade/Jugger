@@ -58,13 +58,34 @@ export default function App() {
                 username,
                 passwordHash: defaultHash,
                 role: 'player',
-                canScore: true,        // subs always get scorer rights
+                canScore: false,
                 isDefaultPassword: true,
                 mustChangePassword: true,
                 subForPlayerId: player.id,
                 isSubAccount: true,
                 displayName: player.name,
               })
+            }
+            // Also ensure the benched original player has a permanent account
+            const originalName = player.originalName
+            if (originalName) {
+              const hasOriginalAccount = useTournamentStore.getState().admins.some(
+                a => a.playerId === player.id && !a.isSubAccount
+              )
+              if (!hasOriginalAccount) {
+                const existing = useTournamentStore.getState().admins.map(a => a.username)
+                const username = generateUsername(originalName, existing)
+                doAddAdmin({
+                  username,
+                  passwordHash: defaultHash,
+                  role: 'player',
+                  canScore: false,
+                  isDefaultPassword: true,
+                  mustChangePassword: true,
+                  playerId: player.id,
+                  displayName: originalName,
+                })
+              }
             }
           } else {
             // Regular or permanent-replacement slot: create account if none exists
