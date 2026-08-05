@@ -9,6 +9,7 @@ import HeaderAdminWidget from './HeaderAdminWidget'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
 import { isSupabaseEnabled } from '../lib/supabase'
 import { useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
+import { useBoardStore } from '../store/useBoardStore'
 
 const NAV = [
   { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
@@ -58,6 +59,7 @@ export default function Layout() {
   const dateRange   = formatDateRange(roundConfigs, year)
   const isAdmin     = useIsAdmin()
   const canBoard    = useCanAccessBoard()
+  const unreadCount = useBoardStore(s => s.unreadCount)
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -128,7 +130,14 @@ export default function Layout() {
                       }`
                     }
                   >
-                    <Icon size={13} />
+                    <span className="relative">
+                      <Icon size={13} />
+                      {to === '/board' && canBoard && unreadCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[9px] text-white flex items-center justify-center font-bold px-0.5 leading-none pointer-events-none">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </span>
                     <span className="hidden lg:inline">{label}</span>
                   </NavLink>
                 </li>

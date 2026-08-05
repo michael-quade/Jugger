@@ -284,6 +284,18 @@ export interface MbPost {
   created_at: string
   edited_at: string | null
   is_deleted: boolean
+  image_urls: string[] | null
+}
+
+export const MB_REACTION_EMOJIS = ['👍', '🏌️', '🏆', '😂', '🔥'] as const
+
+export interface MbReaction {
+  id: string
+  thread_id: string
+  post_id: string
+  author: string
+  emoji: string
+  created_at: string
 }
 
 export interface SkidmoreScore {

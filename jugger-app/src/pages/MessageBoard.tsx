@@ -1,13 +1,17 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageSquare, Plus, Pin, Lock, RefreshCw, X } from 'lucide-react'
+import { MessageSquare, Plus, Pin, Lock, RefreshCw, X, Camera, Image } from 'lucide-react'
 import { supabase, isSupabaseEnabled } from '../lib/supabase'
 import { useAuthStore, useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
 import { useTournamentStore } from '../store/useTournamentStore'
+import { useBoardStore } from '../store/useBoardStore'
+import { compressImage } from '../utils/imageCompress'
+import { isThreadUnread, markThreadRead, countUnreadThreads } from '../utils/boardUtils'
 import type { MbThread } from '../types'
 import { MB_CATEGORIES } from '../types'
 
 const ALL_TAB = 'All'
+const BUCKET  = 'jugger-board'
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -23,20 +27,21 @@ function timeAgo(iso: string): string {
 
 export default function MessageBoard() {
   const { currentAdmin } = useAuthStore()
-  const isAdmin    = useIsAdmin()
-  const canAccess  = useCanAccessBoard()
+  const isAdmin   = useIsAdmin()
+  const canAccess = useCanAccessBoard()
   const { admins, year } = useTournamentStore()
+  const { setUnreadCount } = useBoardStore()
 
   const displayName = useCallback((username: string) => {
     const cred = admins.find(a => a.username === username)
     return cred?.displayName ?? username
   }, [admins])
 
-  const [threads, setThreads]     = useState<MbThread[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [error,   setError]       = useState<string | null>(null)
-  const [tab,     setTab]         = useState<string>(ALL_TAB)
-  const [showNew, setShowNew]     = useState(false)
+  const [threads,    setThreads]    = useState<MbThread[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState<string | null>(null)
+  const [tab,        setTab]        = useState<string>(ALL_TAB)
+  const [showNew,    setShowNew]    = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   // New thread form
@@ -45,6 +50,10 @@ export default function MessageBoard() {
   const [newBody,     setNewBody]     = useState('')
   const [posting,     setPosting]     = useState(false)
   const [postError,   setPostError]   = useState<string | null>(null)
+  const [newFiles,    setNewFiles]    = useState<File[]>([])
+  const [newPreviews, setNewPreviews] = useState<string[]>([])
+  const [uploading,   setUploading]   = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchThreads = useCallback(async () => {
     if (!supabase) return
@@ -56,12 +65,81 @@ export default function MessageBoard() {
       .order('is_pinned', { ascending: false })
       .order('last_reply_at', { ascending: false })
     if (err) setError(err.message)
-    else setThreads(data as MbThread[])
+    else {
+      const list = data as MbThread[]
+      setThreads(list)
+      setUnreadCount(countUnreadThreads(list, currentAdmin))
+    }
     setLoading(false)
     setRefreshing(false)
-  }, [year])
+  }, [year, currentAdmin, setUnreadCount])
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).slice(0, 4 - newFiles.length)
+    setNewFiles(prev => [...prev, ...files].slice(0, 4))
+    files.forEach(f => setNewPreviews(prev => [...prev, URL.createObjectURL(f)]))
+    e.target.value = ''
+  }
+
+  function removeImage(idx: number) {
+    URL.revokeObjectURL(newPreviews[idx])
+    setNewFiles(prev => prev.filter((_, i) => i !== idx))
+    setNewPreviews(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  async function uploadImages(files: File[]): Promise<string[]> {
+    const urls: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const blob = await compressImage(files[i])
+      const path = `board/${year}/${Date.now()}-${i}.jpg`
+      const { error: upErr } = await supabase!.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg' })
+      if (upErr) throw upErr
+      const { data } = supabase!.storage.from(BUCKET).getPublicUrl(path)
+      urls.push(data.publicUrl)
+    }
+    return urls
+  }
+
+  async function handleCreateThread(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase || !currentAdmin || !newTitle.trim()) return
+    if (!newBody.trim() && newFiles.length === 0) return
+    setPosting(true)
+    setPostError(null)
+    try {
+      let imageUrls: string[] = []
+      if (newFiles.length > 0) {
+        setUploading(true)
+        imageUrls = await uploadImages(newFiles)
+        setUploading(false)
+      }
+      const now = new Date().toISOString()
+      const { data: threadData, error: threadErr } = await supabase
+        .from('mb_threads')
+        .insert([{ year, category: newCategory, title: newTitle.trim(), author: currentAdmin, last_reply_at: now, reply_count: 0, is_pinned: false, is_locked: false }])
+        .select().single()
+      if (threadErr || !threadData) throw threadErr ?? new Error('Failed to create thread.')
+      await supabase.from('mb_posts').insert([{
+        thread_id: threadData.id, year, is_op: true, author: currentAdmin,
+        body: newBody.trim(),
+        image_urls: imageUrls.length > 0 ? imageUrls : null,
+      }])
+      newPreviews.forEach(url => URL.revokeObjectURL(url))
+      setThreads(ts => [threadData as MbThread, ...ts])
+      setNewTitle(''); setNewBody(''); setNewCategory(MB_CATEGORIES[0])
+      setNewFiles([]); setNewPreviews([])
+      setShowNew(false)
+      // mark as read immediately since we just created it
+      markThreadRead(currentAdmin, threadData.id)
+    } catch (err) {
+      setPostError(err instanceof Error ? err.message : 'Failed to post.')
+    } finally {
+      setPosting(false)
+      setUploading(false)
+    }
+  }
 
   async function handleDeleteThread(threadId: string) {
     if (!supabase || !isAdmin) return
@@ -82,50 +160,7 @@ export default function MessageBoard() {
     setThreads(ts => ts.map(t => t.id === thread.id ? { ...t, is_locked: !t.is_locked } : t))
   }
 
-  async function handleCreateThread(e: React.FormEvent) {
-    e.preventDefault()
-    if (!supabase || !currentAdmin || !newTitle.trim() || !newBody.trim()) return
-    setPosting(true)
-    setPostError(null)
-    const now = new Date().toISOString()
-    const { data: threadData, error: threadErr } = await supabase
-      .from('mb_threads')
-      .insert([{
-        year,
-        category: newCategory,
-        title: newTitle.trim(),
-        author: currentAdmin,
-        last_reply_at: now,
-        reply_count: 0,
-        is_pinned: false,
-        is_locked: false,
-      }])
-      .select()
-      .single()
-    if (threadErr || !threadData) {
-      setPostError(threadErr?.message ?? 'Failed to create thread.')
-      setPosting(false)
-      return
-    }
-    // Insert OP post
-    await supabase.from('mb_posts').insert([{
-      thread_id: threadData.id,
-      year,
-      is_op: true,
-      author: currentAdmin,
-      body: newBody.trim(),
-    }])
-    setThreads(ts => [threadData as MbThread, ...ts])
-    setNewTitle('')
-    setNewBody('')
-    setNewCategory(MB_CATEGORIES[0])
-    setShowNew(false)
-    setPosting(false)
-  }
-
-  const visible = tab === ALL_TAB
-    ? threads
-    : threads.filter(t => t.category === tab)
+  const visible = tab === ALL_TAB ? threads : threads.filter(t => t.category === tab)
 
   if (!isSupabaseEnabled) {
     return (
@@ -145,21 +180,12 @@ export default function MessageBoard() {
           <h1 className="font-serif text-2xl font-bold text-masters-dark">Board</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchThreads}
-            disabled={refreshing}
-            className="btn-ghost p-1.5"
-            title="Refresh"
-          >
+          <button onClick={fetchThreads} disabled={refreshing} className="btn-ghost p-1.5" title="Refresh">
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
           </button>
           {canAccess && currentAdmin && (
-            <button
-              onClick={() => setShowNew(v => !v)}
-              className="btn-primary flex items-center gap-1.5 text-sm"
-            >
-              <Plus size={14} />
-              New Thread
+            <button onClick={() => setShowNew(v => !v)} className="btn-primary flex items-center gap-1.5 text-sm">
+              <Plus size={14} /> New Thread
             </button>
           )}
         </div>
@@ -170,7 +196,7 @@ export default function MessageBoard() {
         <div className="card mb-5 border border-masters-green/20">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-masters-dark">New Thread</h3>
-            <button onClick={() => setShowNew(false)} className="text-gray-400 hover:text-gray-600">
+            <button onClick={() => { setShowNew(false); newPreviews.forEach(u => URL.revokeObjectURL(u)); setNewFiles([]); setNewPreviews([]) }} className="text-gray-400 hover:text-gray-600">
               <X size={16} />
             </button>
           </div>
@@ -178,50 +204,45 @@ export default function MessageBoard() {
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="label">Title</label>
-                <input
-                  className="input w-full"
-                  placeholder="Thread title…"
-                  value={newTitle}
-                  onChange={e => setNewTitle(e.target.value)}
-                  maxLength={120}
-                  required
-                />
+                <input className="input w-full" placeholder="Thread title…" value={newTitle} onChange={e => setNewTitle(e.target.value)} maxLength={120} required />
               </div>
               <div>
                 <label className="label">Category</label>
-                <select
-                  className="input"
-                  value={newCategory}
-                  onChange={e => setNewCategory(e.target.value)}
-                >
+                <select className="input" value={newCategory} onChange={e => setNewCategory(e.target.value)}>
                   {MB_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             </div>
             <div>
               <label className="label">Post</label>
-              <textarea
-                className="input w-full resize-y"
-                rows={4}
-                placeholder="What's on your mind?"
-                value={newBody}
-                onChange={e => setNewBody(e.target.value)}
-                required
-              />
+              <textarea className="input w-full resize-y" rows={4} placeholder="What's on your mind?" value={newBody} onChange={e => setNewBody(e.target.value)} />
             </div>
+            {/* Photo picker */}
+            {newPreviews.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {newPreviews.map((src, i) => (
+                  <div key={i} className="relative">
+                    <img src={src} className="h-16 w-16 object-cover rounded border border-gray-200" alt="" />
+                    <button type="button" onClick={() => removeImage(i)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] leading-none">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
             {postError && <p className="text-red-500 text-sm">{postError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={posting || !newTitle.trim() || !newBody.trim()}
-              >
-                {posting ? 'Posting…' : 'Post Thread'}
+            <div className="flex items-center gap-2">
+              <button type="submit" className="btn-primary" disabled={posting || !newTitle.trim() || (!newBody.trim() && newFiles.length === 0)}>
+                {uploading ? 'Uploading…' : posting ? 'Posting…' : 'Post Thread'}
               </button>
-              <button type="button" className="btn-ghost" onClick={() => setShowNew(false)}>
+              {newFiles.length < 4 && (
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="btn-ghost flex items-center gap-1.5 text-sm">
+                  <Camera size={14} /> Photo {newFiles.length > 0 ? `(${newFiles.length}/4)` : ''}
+                </button>
+              )}
+              <button type="button" className="btn-ghost text-sm" onClick={() => { setShowNew(false); newPreviews.forEach(u => URL.revokeObjectURL(u)); setNewFiles([]); setNewPreviews([]) }}>
                 Cancel
               </button>
             </div>
+            <input ref={fileInputRef} type="file" multiple accept="image/*" hidden onChange={handleFileSelect} />
           </form>
         </div>
       )}
@@ -229,17 +250,11 @@ export default function MessageBoard() {
       {/* Category tabs */}
       <div className="flex gap-1 overflow-x-auto no-scrollbar mb-4">
         {[ALL_TAB, ...MB_CATEGORIES].map(c => (
-          <button
-            key={c}
-            onClick={() => setTab(c)}
+          <button key={c} onClick={() => setTab(c)}
             className={`shrink-0 px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
-              tab === c
-                ? 'bg-masters-green text-white'
-                : 'bg-masters-light text-masters-dark hover:bg-masters-green/10'
+              tab === c ? 'bg-masters-green text-white' : 'bg-masters-light text-masters-dark hover:bg-masters-green/10'
             }`}
-          >
-            {c}
-          </button>
+          >{c}</button>
         ))}
       </div>
 
@@ -251,69 +266,64 @@ export default function MessageBoard() {
       ) : visible.length === 0 ? (
         <div className="text-center py-12">
           <MessageSquare size={32} className="mx-auto text-gray-200 mb-2" />
-          <p className="text-gray-400 text-sm">
-            {tab === ALL_TAB ? 'No threads yet. Start a conversation!' : `No threads in ${tab} yet.`}
-          </p>
+          <p className="text-gray-400 text-sm">{tab === ALL_TAB ? 'No threads yet. Start a conversation!' : `No threads in ${tab} yet.`}</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {visible.map(t => (
-            <div
-              key={t.id}
-              className={`card flex gap-3 items-start ${t.is_pinned ? 'border border-masters-gold/40 bg-amber-50/30' : ''}`}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  {t.is_pinned && <Pin size={11} className="text-masters-gold shrink-0" />}
-                  {t.is_locked && <Lock size={11} className="text-gray-400 shrink-0" />}
-                  <Link
-                    to={`/board/${t.id}`}
-                    className="font-semibold text-masters-dark hover:text-masters-green transition-colors leading-snug"
-                  >
-                    {t.title}
-                  </Link>
-                  <span className="text-[10px] font-semibold bg-masters-light text-masters-dark px-2 py-0.5 rounded shrink-0">
-                    {t.category}
-                  </span>
+          {visible.map(t => {
+            const unread = isThreadUnread(t, currentAdmin)
+            return (
+              <div key={t.id} className={`card flex gap-3 items-start ${t.is_pinned ? 'border border-masters-gold/40 bg-amber-50/30' : ''}`}>
+                {/* Unread dot */}
+                <div className="pt-1 shrink-0">
+                  <div className={`w-2 h-2 rounded-full mt-0.5 ${unread ? 'bg-masters-green' : 'bg-transparent'}`} title={unread ? 'New activity' : ''} />
                 </div>
-                <p className="text-xs text-gray-400">
-                  by {displayName(t.author)} · {timeAgo(t.created_at)}
-                  {t.reply_count > 0 && ` · ${t.reply_count} ${t.reply_count === 1 ? 'reply' : 'replies'}`}
-                  {t.reply_count > 0 && ` · last ${timeAgo(t.last_reply_at)}`}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    {t.is_pinned && <Pin size={11} className="text-masters-gold shrink-0" />}
+                    {t.is_locked && <Lock size={11} className="text-gray-400 shrink-0" />}
+                    <Link
+                      to={`/board/${t.id}`}
+                      className="font-semibold text-masters-dark hover:text-masters-green transition-colors leading-snug"
+                      onClick={() => currentAdmin && markThreadRead(currentAdmin, t.id)}
+                    >
+                      {t.title}
+                    </Link>
+                    <span className="text-[10px] font-semibold bg-masters-light text-masters-dark px-2 py-0.5 rounded shrink-0">
+                      {t.category}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    by {displayName(t.author)} · {timeAgo(t.created_at)}
+                    {t.reply_count > 0 && ` · ${t.reply_count} ${t.reply_count === 1 ? 'reply' : 'replies'}`}
+                    {t.reply_count > 0 && ` · last ${timeAgo(t.last_reply_at)}`}
+                  </p>
+                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => handlePinThread(t)} title={t.is_pinned ? 'Unpin' : 'Pin'}
+                      className={`p-1 rounded hover:bg-masters-light transition-colors ${t.is_pinned ? 'text-masters-gold' : 'text-gray-300 hover:text-masters-gold'}`}>
+                      <Pin size={13} />
+                    </button>
+                    <button onClick={() => handleLockThread(t)} title={t.is_locked ? 'Unlock' : 'Lock'}
+                      className={`p-1 rounded hover:bg-masters-light transition-colors ${t.is_locked ? 'text-gray-500' : 'text-gray-300 hover:text-gray-500'}`}>
+                      <Lock size={13} />
+                    </button>
+                    <button onClick={() => handleDeleteThread(t.id)}
+                      className="p-1 rounded text-gray-300 hover:text-red-500 transition-colors" title="Delete thread">
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
-              {isAdmin && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => handlePinThread(t)}
-                    title={t.is_pinned ? 'Unpin' : 'Pin'}
-                    className={`p-1 rounded hover:bg-masters-light transition-colors ${t.is_pinned ? 'text-masters-gold' : 'text-gray-300 hover:text-masters-gold'}`}
-                  >
-                    <Pin size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleLockThread(t)}
-                    title={t.is_locked ? 'Unlock' : 'Lock'}
-                    className={`p-1 rounded hover:bg-masters-light transition-colors ${t.is_locked ? 'text-gray-500' : 'text-gray-300 hover:text-gray-500'}`}
-                  >
-                    <Lock size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteThread(t.id)}
-                    className="p-1 rounded text-gray-300 hover:text-red-500 transition-colors"
-                    title="Delete thread"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
-      {!canAccess && !currentAdmin && (
+      {!canAccess && (
         <div className="text-center py-8">
+          <Image size={28} className="mx-auto text-gray-200 mb-2" />
           <p className="text-gray-500 text-sm">Sign in with your player account to access the board.</p>
         </div>
       )}
