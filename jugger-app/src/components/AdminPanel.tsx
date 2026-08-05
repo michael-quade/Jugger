@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useAuthStore } from '../store/useAuthStore'
-import { hashPassword } from '../utils/auth'
-import { X, Plus, Trash2, KeyRound, Eye, EyeOff, Shield, ClipboardList } from 'lucide-react'
+import { hashPassword, DEFAULT_PASSWORD } from '../utils/auth'
+import {
+  X, Plus, Trash2, KeyRound, Eye, EyeOff, Shield, ClipboardList,
+  Users, RotateCcw, ClipboardCheck, ClipboardX,
+} from 'lucide-react'
 import type { AdminCredential } from '../types'
 
 interface Props {
@@ -10,11 +13,12 @@ interface Props {
 }
 
 export default function AdminPanel({ onClose }: Props) {
-  const { admins, addAdmin, removeAdmin, updateAdmin } = useTournamentStore()
+  const { admins, addAdmin, removeAdmin, updateAdmin, promotePlayerToScorer, demotePlayerFromScorer, resetPlayerPassword } = useTournamentStore()
   const { currentAdmin } = useAuthStore()
 
   const adminAccounts  = admins.filter(a => !a.role || a.role === 'admin')
   const scorerAccounts = admins.filter(a => a.role === 'scorer')
+  const playerAccounts = admins.filter(a => a.role === 'player')
 
   // Shared change-password state (only one row open at a time)
   const [changePwFor, setChangePwFor] = useState<string | null>(null)
@@ -33,6 +37,8 @@ export default function AdminPanel({ onClose }: Props) {
   const [newScorerPw,   setNewScorerPw]   = useState('')
   const [showScorerPw,  setShowScorerPw]  = useState(false)
   const [addingScorer,  setAddingScorer]  = useState(false)
+
+  const [resettingPw, setResettingPw] = useState<string | null>(null)
 
   async function handleAdd(username: string, password: string, role: AdminCredential['role'],
     setAdding: (v: boolean) => void, resetForm: () => void) {
@@ -53,6 +59,13 @@ export default function AdminPanel({ onClose }: Props) {
     setChangePwFor(null)
     setChangePwVal('')
     setSaving(false)
+  }
+
+  async function handleResetPlayerPassword(username: string) {
+    setResettingPw(username)
+    const hash = await hashPassword(DEFAULT_PASSWORD)
+    resetPlayerPassword(username, hash)
+    setResettingPw(null)
   }
 
   function openChangePw(username: string) {
@@ -118,6 +131,54 @@ export default function AdminPanel({ onClose }: Props) {
     )
   }
 
+  function PlayerRow({ cred }: { cred: AdminCredential }) {
+    return (
+      <div className="flex items-center gap-2 py-2 border-b last:border-0">
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium text-masters-dark">
+            {cred.displayName ?? cred.username}
+          </span>
+          <span className="text-xs text-gray-400 ml-1.5">({cred.username})</span>
+          {cred.isDefaultPassword && (
+            <span className="ml-1.5 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5">
+              Default PW: {DEFAULT_PASSWORD}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {cred.canScore ? (
+            <button
+              className="flex items-center gap-1 text-xs text-masters-green hover:text-red-500 transition-colors"
+              title="Revoke scorer rights"
+              onClick={() => demotePlayerFromScorer(cred.username)}
+            >
+              <ClipboardX size={13} />
+              <span className="hidden sm:inline">Revoke Scorer</span>
+            </button>
+          ) : (
+            <button
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-masters-green transition-colors"
+              title="Grant scorer rights"
+              onClick={() => promotePlayerToScorer(cred.username)}
+            >
+              <ClipboardCheck size={13} />
+              <span className="hidden sm:inline">Grant Scorer</span>
+            </button>
+          )}
+          <button
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-masters-dark transition-colors ml-1"
+            title="Reset to default password"
+            disabled={resettingPw === cred.username}
+            onClick={() => handleResetPlayerPassword(cred.username)}
+          >
+            <RotateCcw size={12} />
+            <span className="hidden sm:inline">Reset PW</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -129,6 +190,23 @@ export default function AdminPanel({ onClose }: Props) {
         </div>
 
         <div className="p-5 space-y-6">
+          {/* Players section */}
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Users size={14} className="text-blue-500" />
+              <h3 className="text-sm font-bold text-masters-dark uppercase tracking-wide">Players</h3>
+            </div>
+            <p className="text-xs text-gray-400 mb-2">
+              Auto-created from roster. Default password shown until changed. Grant Scorer to allow score entry.
+            </p>
+            <div className="space-y-0">
+              {playerAccounts.length === 0 && (
+                <p className="text-sm text-gray-400 py-2">No player accounts yet.</p>
+              )}
+              {playerAccounts.map(a => <PlayerRow key={a.username} cred={a} />)}
+            </div>
+          </div>
+
           {/* Admins section */}
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -188,7 +266,7 @@ export default function AdminPanel({ onClose }: Props) {
               <ClipboardList size={14} className="text-masters-gold" />
               <h3 className="text-sm font-bold text-masters-dark uppercase tracking-wide">Scorers</h3>
             </div>
-            <p className="text-xs text-gray-400 mb-2">Scorers can enter match scores but have no admin access.</p>
+            <p className="text-xs text-gray-400 mb-2">Standalone scorer accounts (non-player volunteers).</p>
             <div className="space-y-0">
               {scorerAccounts.length === 0 && (
                 <p className="text-sm text-gray-400 py-2">No scorer accounts yet.</p>

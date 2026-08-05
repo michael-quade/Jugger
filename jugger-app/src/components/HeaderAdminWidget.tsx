@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { Shield, LogOut, Eye, EyeOff, Settings, ClipboardList } from 'lucide-react'
+import { Shield, LogOut, Eye, EyeOff, Settings, ClipboardList, User } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
 import AdminPanel from './AdminPanel'
+import ForcePasswordChange from './ForcePasswordChange'
 
 export default function HeaderAdminWidget() {
-  const { currentAdmin, currentRole, loggingIn, loginError, login, logout, clearError } = useAuthStore()
+  const { currentAdmin, currentRole, mustChangePassword, loggingIn, loginError, login, logout, clearError } = useAuthStore()
   const [open,      setOpen]      = useState(false)
   const [username,  setUsername]  = useState('')
   const [password,  setPassword]  = useState('')
@@ -27,17 +28,24 @@ export default function HeaderAdminWidget() {
   }
 
   if (currentAdmin) {
+    const isAdmin  = currentRole === 'admin'
     const isScorer = currentRole === 'scorer'
+    const isPlayer = currentRole === 'player'
+
+    const roleIcon = isAdmin
+      ? <Shield size={14} className="text-masters-gold shrink-0" />
+      : isScorer
+        ? <ClipboardList size={14} className="text-masters-gold shrink-0" />
+        : <User size={14} className="text-masters-gold shrink-0" />
+
     return (
       <>
-        {showPanel && <AdminPanel onClose={() => setShowPanel(false)} />}
+        {mustChangePassword && <ForcePasswordChange />}
+        {showPanel && !mustChangePassword && <AdminPanel onClose={() => setShowPanel(false)} />}
         <div className="ml-auto flex items-center gap-3">
-          {isScorer
-            ? <ClipboardList size={14} className="text-masters-gold shrink-0" />
-            : <Shield size={14} className="text-masters-gold shrink-0" />
-          }
+          {roleIcon}
           <span className="text-white text-sm font-semibold hidden sm:inline">{currentAdmin}</span>
-          {!isScorer && (
+          {isAdmin && !mustChangePassword && (
             <button
               className="hidden sm:flex items-center gap-1 text-xs text-white/70 hover:text-masters-gold transition-colors"
               onClick={() => setShowPanel(true)}
@@ -45,6 +53,9 @@ export default function HeaderAdminWidget() {
               <Settings size={12} />
               Manage
             </button>
+          )}
+          {isPlayer && !mustChangePassword && (
+            <span className="hidden sm:inline text-xs text-white/50">Player</span>
           )}
           <button
             className="flex items-center gap-1 text-xs text-white/70 hover:text-red-400 transition-colors"

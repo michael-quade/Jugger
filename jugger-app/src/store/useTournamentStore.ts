@@ -51,6 +51,9 @@ interface Actions {
   addAdmin: (cred: AdminCredential) => void
   updateAdmin: (username: string, updates: Partial<AdminCredential>) => void
   removeAdmin: (username: string) => void
+  promotePlayerToScorer: (username: string) => void
+  demotePlayerFromScorer: (username: string) => void
+  resetPlayerPassword: (username: string, defaultHash: string) => void
   setPairingsLocked: (locked: boolean) => void
   lockRound: (round: number) => void
   unlockRound: (round: number) => void
@@ -229,6 +232,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
               ),
             }
           ),
+          admins: state.admins.filter(a => !(a.subForPlayerId === playerId && a.isSubAccount)),
         })),
 
       permanentlyReplacePlayer: (teamId, playerId, newName, newHdcp, newGhin) =>
@@ -271,6 +275,14 @@ export const useTournamentStore = create<TournamentState & Actions>()(
               ),
             }
           ),
+          // Convert sub account → regular player account; orphan original player's account
+          admins: state.admins.map(a => {
+            if (a.subForPlayerId === playerId && a.isSubAccount)
+              return { ...a, playerId, subForPlayerId: undefined, isSubAccount: undefined }
+            if (a.playerId === playerId && !a.isSubAccount)
+              return { ...a, playerId: undefined }
+            return a
+          }),
         })),
 
       updateTeamName: (teamId, name) =>
@@ -425,6 +437,28 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       removeAdmin: (username) =>
         set(state => ({ admins: state.admins.filter(a => a.username !== username) })),
+
+      promotePlayerToScorer: (username) =>
+        set(state => ({
+          admins: state.admins.map(a => a.username !== username ? a : { ...a, canScore: true }),
+        })),
+
+      demotePlayerFromScorer: (username) =>
+        set(state => ({
+          admins: state.admins.map(a => a.username !== username ? a : { ...a, canScore: false }),
+        })),
+
+      resetPlayerPassword: (username, defaultHash) =>
+        set(state => ({
+          admins: state.admins.map(a =>
+            a.username !== username ? a : {
+              ...a,
+              passwordHash: defaultHash,
+              isDefaultPassword: true,
+              mustChangePassword: true,
+            }
+          ),
+        })),
 
       setPairingsLocked: (pairingsLocked) => set({ pairingsLocked }),
 
@@ -619,6 +653,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           return {
             archivedYears: [...state.archivedYears.filter(a => a.year !== state.year), snapshot],
             teams: restoredTeams,
+            admins: state.admins.filter(a => !a.isSubAccount),
             liveYear: newYear,
             year: newYear,
             matches: [],

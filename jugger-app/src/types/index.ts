@@ -248,7 +248,42 @@ export interface CourseHistoryEntry {
 export interface AdminCredential {
   username: string
   passwordHash: string
-  role?: 'admin' | 'scorer'
+  role?: 'admin' | 'scorer' | 'player'
+  canScore?: boolean              // player with scorer rights
+  isDefaultPassword?: boolean     // true until player changes their password
+  mustChangePassword?: boolean    // forced change on next login
+  playerId?: string               // roster Player.id this account is linked to
+  subForPlayerId?: string         // if isSubAccount: the slot player.id being subbed
+  isSubAccount?: boolean          // true for temporary sub accounts
+  displayName?: string            // friendly name (player's full name)
+}
+
+export const MB_CATEGORIES = ['General', 'Golf Talk', 'Trip Planning', 'Photos', 'Off-Season'] as const
+export type MbCategory = typeof MB_CATEGORIES[number]
+
+export interface MbThread {
+  id: string
+  year: number
+  category: string
+  title: string
+  author: string
+  created_at: string
+  last_reply_at: string
+  reply_count: number
+  is_pinned: boolean
+  is_locked: boolean
+}
+
+export interface MbPost {
+  id: string
+  thread_id: string
+  year: number
+  is_op: boolean
+  author: string
+  body: string
+  created_at: string
+  edited_at: string | null
+  is_deleted: boolean
 }
 
 export interface SkidmoreScore {

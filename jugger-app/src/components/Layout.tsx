@@ -3,12 +3,12 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
-  History, ArrowRight, Calculator, Gamepad2, Hotel,
+  History, ArrowRight, Calculator, Gamepad2, Hotel, MessageSquare,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
 import { isSupabaseEnabled } from '../lib/supabase'
-import { useIsAdmin } from '../store/useAuthStore'
+import { useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
 
 const NAV = [
   { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
@@ -17,6 +17,7 @@ const NAV = [
   { to: '/pairings',   label: 'Pairings',     icon: Shuffle,       adminOnly: true },
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
   { to: '/lodging',    label: 'Lodging',      icon: Hotel },
+  { to: '/board',      label: 'Board',        icon: MessageSquare, boardOnly: true },
   { to: '/courses',      label: 'Courses',      icon: MapPin },
   { to: '/round-games',  label: 'Round Games',  icon: Gamepad2 },
   { to: '/results',      label: 'Team Results', icon: Trophy,  adminOnly: true },
@@ -54,8 +55,9 @@ function formatDateRange(configs: { date?: string }[], year: number): string {
 export default function Layout() {
   const { year, liveYear, archivedYears, isViewingHistory, switchToYear, returnToLive, roundConfigs, location } = useTournamentStore()
   const { connected } = useSyncStatus()
-  const dateRange = formatDateRange(roundConfigs, year)
-  const isAdmin = useIsAdmin()
+  const dateRange   = formatDateRange(roundConfigs, year)
+  const isAdmin     = useIsAdmin()
+  const canBoard    = useCanAccessBoard()
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -111,7 +113,9 @@ export default function Layout() {
         <nav className="bg-masters-green text-white shadow">
           <div className="max-w-7xl mx-auto px-4">
             <ul className="flex gap-0.5 py-1 overflow-x-auto nav-scrollable">
-              {NAV.filter(({ adminOnly }) => !adminOnly || isAdmin).map(({ to, label, icon: Icon }) => (
+              {NAV.filter(({ adminOnly, boardOnly }) =>
+                (!adminOnly || isAdmin) && (!boardOnly || canBoard)
+              ).map(({ to, label, icon: Icon }) => (
                 <li key={to} className="shrink-0">
                   <NavLink
                     to={to}

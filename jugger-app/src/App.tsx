@@ -19,13 +19,16 @@ import SkidmoreHdcp from './pages/SkidmoreHdcp'
 import RoundGames from './pages/RoundGames'
 import CtpPage from './pages/CtpPage'
 import Lodging from './pages/Lodging'
+import MessageBoard from './pages/MessageBoard'
+import MessageBoardThread from './pages/MessageBoardThread'
 import { useTournamentStore } from './store/useTournamentStore'
-import { hashPassword } from './utils/auth'
+import { hashPassword, DEFAULT_PASSWORD, generateUsername } from './utils/auth'
 
 export default function App() {
-  const { admins, addAdmin } = useTournamentStore()
+  const { admins, addAdmin, teams } = useTournamentStore()
   useSupabaseSync()
 
+  // Bootstrap default quade admin on first load
   useEffect(() => {
     if (admins.length === 0) {
       hashPassword('8675309#').then(hash => {
@@ -34,6 +37,61 @@ export default function App() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Auto-create player accounts for all roster members and active subs
+  useEffect(() => {
+    async function ensurePlayerAccounts() {
+      const { admins: currentAdmins, addAdmin: doAddAdmin } = useTournamentStore.getState()
+      const defaultHash = await hashPassword(DEFAULT_PASSWORD)
+
+      for (const team of teams) {
+        for (const player of team.players) {
+          if (player.isSubstitute) {
+            // Sub slot: create a temporary sub account if one doesn't exist
+            const hasSubAccount = currentAdmins.some(
+              a => a.subForPlayerId === player.id && a.isSubAccount
+            )
+            if (!hasSubAccount) {
+              const existing = useTournamentStore.getState().admins.map(a => a.username)
+              const username = generateUsername(player.name, existing)
+              doAddAdmin({
+                username,
+                passwordHash: defaultHash,
+                role: 'player',
+                canScore: true,        // subs always get scorer rights
+                isDefaultPassword: true,
+                mustChangePassword: true,
+                subForPlayerId: player.id,
+                isSubAccount: true,
+                displayName: player.name,
+              })
+            }
+          } else {
+            // Regular or permanent-replacement slot: create account if none exists
+            const hasAccount = currentAdmins.some(
+              a => a.playerId === player.id && !a.isSubAccount
+            )
+            if (!hasAccount) {
+              const existing = useTournamentStore.getState().admins.map(a => a.username)
+              const username = generateUsername(player.name, existing)
+              doAddAdmin({
+                username,
+                passwordHash: defaultHash,
+                role: 'player',
+                canScore: false,
+                isDefaultPassword: true,
+                mustChangePassword: true,
+                playerId: player.id,
+                displayName: player.name,
+              })
+            }
+          }
+        }
+      }
+    }
+    ensurePlayerAccounts()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teams])
 
   return (
     <Routes>
@@ -55,6 +113,8 @@ export default function App() {
         <Route path="ctp" element={<CtpPage />} />
         <Route path="print" element={<PrintAll />} />
         <Route path="skidmore-hdcp" element={<SkidmoreHdcp />} />
+        <Route path="board" element={<MessageBoard />} />
+        <Route path="board/:threadId" element={<MessageBoardThread />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
