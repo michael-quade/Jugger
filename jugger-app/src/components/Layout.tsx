@@ -18,7 +18,7 @@ const NAV = [
   { to: '/pairings',   label: 'Pairings',     icon: Shuffle,       adminOnly: true },
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
   { to: '/lodging',    label: 'Lodging',      icon: Hotel },
-  { to: '/board',      label: 'Board',        icon: MessageSquare, boardOnly: true },
+  { to: '/board',      label: 'Board',        icon: MessageSquare },
   { to: '/courses',      label: 'Courses',      icon: MapPin },
   { to: '/round-games',  label: 'Round Games',  icon: Gamepad2 },
   { to: '/results',      label: 'Team Results', icon: Trophy,  adminOnly: true },
