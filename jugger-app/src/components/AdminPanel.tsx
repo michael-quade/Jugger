@@ -138,9 +138,14 @@ export default function AdminPanel({ onClose }: Props) {
           <span className="text-sm font-medium text-masters-dark">
             {cred.displayName ?? cred.username}
           </span>
+          {cred.isSubAccount && (
+            <span className="ml-1.5 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5">
+              SUB
+            </span>
+          )}
           <span className="text-xs text-gray-400 ml-1.5">({cred.username})</span>
           {cred.isDefaultPassword && (
-            <span className="ml-1.5 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5">
+            <span className="ml-1.5 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5 py-0.5">
               Default PW: {DEFAULT_PASSWORD}
             </span>
           )}
@@ -197,7 +202,7 @@ export default function AdminPanel({ onClose }: Props) {
               <h3 className="text-sm font-bold text-masters-dark uppercase tracking-wide">Players</h3>
             </div>
             <p className="text-xs text-gray-400 mb-2">
-              Auto-created from roster. Default password shown until changed. Grant Scorer to allow score entry.
+              Auto-created from roster. Subs labeled <span className="font-bold text-amber-700">SUB</span> — they default to scorer-on and board access. Default password shown until changed.
             </p>
             <div className="space-y-0">
               {playerAccounts.length === 0 && (
