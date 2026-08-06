@@ -235,11 +235,12 @@ export default function MessageBoardThread() {
 
   // ── Reactions computed per post ────────────────────────────────────────
   const reactionsByPost = useMemo(() => {
-    const result: Record<string, Record<string, { count: number; hasReacted: boolean; reactionId: string | null }>> = {}
+    const result: Record<string, Record<string, { count: number; hasReacted: boolean; reactionId: string | null; authors: string[] }>> = {}
     for (const r of reactions) {
       if (!result[r.post_id]) result[r.post_id] = {}
-      if (!result[r.post_id][r.emoji]) result[r.post_id][r.emoji] = { count: 0, hasReacted: false, reactionId: null }
+      if (!result[r.post_id][r.emoji]) result[r.post_id][r.emoji] = { count: 0, hasReacted: false, reactionId: null, authors: [] }
       result[r.post_id][r.emoji].count++
+      result[r.post_id][r.emoji].authors.push(r.author)
       if (r.author === currentAdmin) {
         result[r.post_id][r.emoji].hasReacted = true
         result[r.post_id][r.emoji].reactionId = r.id
@@ -517,21 +518,33 @@ export default function MessageBoardThread() {
               {canAccess && (
                 <div className="flex items-center gap-1 mt-3 pt-2 border-t border-gray-50 flex-wrap">
                   {MB_REACTION_EMOJIS.map(emoji => {
-                    const data = postReactions[emoji]
+                    const data       = postReactions[emoji]
                     const hasReacted = data?.hasReacted ?? false
                     const count      = data?.count ?? 0
+                    const authors    = data?.authors ?? []
                     return (
-                      <button key={emoji} onClick={() => toggleReaction(post.id, emoji)}
-                        title={hasReacted ? 'Remove reaction' : 'React'}
-                        className={`flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border transition-colors ${
-                          hasReacted
-                            ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
-                            : 'border-transparent hover:bg-gray-100 text-gray-400 hover:text-gray-600'
-                        }`}
-                      >
-                        <span>{emoji}</span>
-                        {count > 0 && <span className="text-xs font-semibold leading-none">{count}</span>}
-                      </button>
+                      <div key={emoji} className="relative group">
+                        <button onClick={() => toggleReaction(post.id, emoji)}
+                          className={`flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border transition-colors ${
+                            hasReacted
+                              ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
+                              : count > 0
+                                ? 'border-gray-200 hover:bg-gray-100 text-gray-500 hover:text-gray-700'
+                                : 'border-transparent hover:bg-gray-100 text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                          <span>{emoji}</span>
+                          {count > 0 && <span className="text-xs font-semibold leading-none">{count}</span>}
+                        </button>
+                        {count > 0 && (
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 pointer-events-none
+                            opacity-0 group-hover:opacity-100 transition-opacity duration-150
+                            bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
+                            {authors.map(a => admins.find(c => c.username === a)?.displayName ?? a).join(', ')}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
