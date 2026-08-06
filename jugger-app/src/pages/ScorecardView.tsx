@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useReactToPrint } from 'react-to-print'
 import { useTournamentStore } from '../store/useTournamentStore'
-import { useIsAdmin, useCanEnterScores } from '../store/useAuthStore'
+import { useIsAdmin, useIsPlayer, useCanEnterScores, useAuthStore } from '../store/useAuthStore'
 import ScorecardCard from '../components/ScorecardCard'
 import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
@@ -28,12 +28,44 @@ function getRoundName(round: number, configs: RoundConfig[]): string {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, setMatchScore, setMatchScoresBatch, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, admins, setMatchScore, setMatchScoresBatch, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound } = useTournamentStore()
   const isAdmin = useIsAdmin()
+  const isPlayer = useIsPlayer()
   const canEnterScores = useCanEnterScores()
+  const currentAdmin = useAuthStore(s => s.currentAdmin)
   const isRoundLocked = (round: number) => lockedRounds.includes(round)
   // Scorers cannot edit a locked round; admins always can
   const canEdit = (round: number) => canEnterScores && (!isRoundLocked(round) || isAdmin)
+
+  // Player-linked roster ID (covers regular player accounts and sub accounts)
+  const playerRosterId = useMemo(() => {
+    if (!isPlayer || !currentAdmin) return null
+    const cred = admins.find(a => a.username === currentAdmin)
+    return cred?.playerId ?? cred?.subForPlayerId ?? null
+  }, [isPlayer, currentAdmin, admins])
+
+  // Is this player one of the four players in the given match?
+  function isPlayerInMatch(m: Match): boolean {
+    if (!playerRosterId) return false
+    return m.twosome1.playerIds.includes(playerRosterId) || m.twosome2.playerIds.includes(playerRosterId)
+  }
+
+  // Does today (local time) match the scheduled date for this round?
+  function isMatchDate(round: number): boolean {
+    const rc = roundConfigs.find(r => r.round === round)
+    if (!rc?.date) return false
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return rc.date === today
+  }
+
+  // Full edit permission: base canEdit + player-scorer match/date restriction.
+  // Admins and pure scorers (role !== 'player') pass through canEdit unchanged.
+  const canEditMatch = (round: number, m: Match): boolean => {
+    if (!canEdit(round)) return false
+    if (!isPlayer) return true
+    return isMatchDate(round) && isPlayerInMatch(m)
+  }
   const [searchParams] = useSearchParams()
   const [activeRound, setActiveRound] = useState(() => Number(searchParams.get('round')) || 1)
   const [activeMatch, setActiveMatch] = useState<string | null>(() => searchParams.get('match'))
@@ -791,6 +823,13 @@ export default function ScorecardView() {
         </div>
       )}
 
+      {isPlayer && canEnterScores && match && !canEditMatch(activeRound, match) && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-800">
+          <Lock size={14} className="shrink-0 text-blue-400" />
+          <span>Score entry is limited to your own matches on the day they are scheduled.</span>
+        </div>
+      )}
+
       {matches.length === 0 ? (
         <div className="card text-center py-12 text-gray-400">
           Generate pairings first to view scorecards.
@@ -936,7 +975,7 @@ export default function ScorecardView() {
                     teams={teams}
                     course={course}
                     config={config}
-                    interactive={canEdit(activeRound) && !match.isBlind}
+                    interactive={canEditMatch(activeRound, match) && !match.isBlind}
                     onScoreChange={(pid, hole, val) => {
                       setMatchScore(match.id, pid, hole, val)
                       if (config.format === 'texas_scramble') {
@@ -964,7 +1003,7 @@ export default function ScorecardView() {
                 {showCtpPanel && (
                   <CtpPanel
                     round={activeRound}
-                    canEdit={canEdit(activeRound)}
+                    canEdit={canEditMatch(activeRound, match)}
                     canMarkPaid={isAdmin}
                   />
                 )}
@@ -988,7 +1027,7 @@ export default function ScorecardView() {
                             <span className="text-xs font-semibold" style={{ color: team?.color ?? '#666' }}>
                               {team?.name ?? 'Team'}
                             </span>
-                            {canEdit(activeRound) ? (
+                            {canEditMatch(activeRound, match) ? (
                               <button
                                 onClick={() => handleMBToggle(field, !val)}
                                 className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded border font-semibold transition-colors ${
@@ -1013,7 +1052,7 @@ export default function ScorecardView() {
 
                 <ScoreSummary match={match} teams={teams} course={course} config={config} />
 
-                {canEdit(activeRound) ? (
+                {canEditMatch(activeRound, match) ? (
                   <div className="card">
                     <label className="label">
                       Match Result
