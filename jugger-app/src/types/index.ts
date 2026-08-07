@@ -335,13 +335,21 @@ export interface NassauConfig {
   front9: number
   back9: number
   overall: number
-  press: boolean
+  autoPress: boolean       // auto-triggers at 2-down
+  allowManualPress: boolean // either side can declare a press at any time
   pressAmount?: number
+}
+
+export interface ManualPress {
+  startHole: number        // first hole of the press bet
+  declaredAt: string       // ISO timestamp
+  declaredBy: string       // username
 }
 
 export interface SkinsConfig {
   amountPerSkin: number
   carryover: boolean
+  individualMode?: boolean   // all 4 players compete individually (vs 2-side team mode)
 }
 
 export interface MatchMoneyConfig {
@@ -421,4 +429,5 @@ export interface SideBet {
   status: 'pending' | 'active' | 'complete' | 'cancelled'
   settledAt?: string
   notes?: string
+  manualPresses?: ManualPress[]
 }

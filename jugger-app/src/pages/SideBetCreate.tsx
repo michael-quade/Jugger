@@ -28,7 +28,7 @@ const FORMAT_ROUND_FORMATS = {
 
 function defaultConfig(format: SideBetFormat): SideBetConfig {
   switch (format) {
-    case 'nassau':       return { front9: 5, back9: 5, overall: 5, press: false } as NassauConfig
+    case 'nassau':       return { front9: 5, back9: 5, overall: 5, autoPress: false, allowManualPress: false } as NassauConfig
     case 'skins':        return { amountPerSkin: 2, carryover: true } as SkinsConfig
     case 'match_money':  return { amountPerHole: 1 } as MatchMoneyConfig
     case 'stroke_play':  return { front9: 5, back9: 5, overall: 10, useNet: true } as StrokePlayConfig
@@ -99,10 +99,20 @@ function ConfigStep({ format, config, onChange }: { format: SideBetFormat; confi
           <NumberInput label="Back 9 ($)" value={cfg.back9} onChange={v => upd('back9', v)} min={0} step={1} />
           <NumberInput label="Overall ($)" value={cfg.overall} onChange={v => upd('overall', v)} min={0} step={1} />
           <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 accent-masters-green" checked={cfg.press} onChange={e => upd('press', e.target.checked)} />
-            <span className="text-sm font-medium">Enable Auto-Press (when 2 down)</span>
+            <input type="checkbox" className="w-4 h-4 accent-masters-green" checked={cfg.autoPress} onChange={e => upd('autoPress', e.target.checked)} />
+            <div>
+              <span className="text-sm font-medium">Auto-Press</span>
+              <p className="text-xs text-gray-500">Automatically triggers when a side goes 2 down</p>
+            </div>
           </label>
-          {cfg.press && (
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 accent-masters-green" checked={cfg.allowManualPress} onChange={e => upd('allowManualPress', e.target.checked)} />
+            <div>
+              <span className="text-sm font-medium">Allow Manual Press</span>
+              <p className="text-xs text-gray-500">Either side can declare a press at any time during the round</p>
+            </div>
+          </label>
+          {(cfg.autoPress || cfg.allowManualPress) && (
             <NumberInput label="Press Amount ($)" value={cfg.pressAmount ?? cfg.front9} onChange={v => upd('pressAmount', v)} min={0} step={1} />
           )}
         </div>
@@ -195,7 +205,7 @@ export default function SideBetCreate() {
   const [step, setStep] = useState(0)
   const [format, setFormat] = useState<SideBetFormat | null>(null)
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
-  const [mode, setMode] = useState<'1v1' | '2v2'>('2v2')
+  const [mode, setMode] = useState<'1v1' | '2v2' | 'individual'>('2v2')
   const [participants, setParticipants] = useState<SideBetParticipant[]>([])
   const [config, setConfig] = useState<SideBetConfig | null>(null)
 
@@ -208,16 +218,22 @@ export default function SideBetCreate() {
 
   const canAccess = isAdmin || isPlayer
 
-  // All non-blind matches across all rounds
+  // All non-blind, non-complete matches across all rounds
   const eligibleMatches = useMemo(() => {
     const allMatches: Match[] = []
     for (let r = 1; r <= 5; r++) {
       const roundMatches = getMatchesForRound(matches, r).filter(m => !m.isBlind)
       allMatches.push(...roundMatches)
     }
-    if (isAdmin) return allMatches
+    // Exclude matches where all 18 holes are scored for every player
+    const holeNums = Array.from({ length: 18 }, (_, i) => i + 1)
+    const incomplete = allMatches.filter(m => {
+      const pids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+      return !pids.every(pid => holeNums.every(n => m.scores[pid]?.[n] != null))
+    })
+    if (isAdmin) return incomplete
     // Player only sees their own matches
-    return allMatches.filter(m =>
+    return incomplete.filter(m =>
       playerRosterId &&
       (m.twosome1.playerIds.includes(playerRosterId) || m.twosome2.playerIds.includes(playerRosterId))
     )
@@ -242,15 +258,9 @@ export default function SideBetCreate() {
     setParticipants(prev => {
       const existing = prev.find(p => p.playerId === pid)
       if (existing) {
-        if (existing.side === side) {
-          // Remove
-          return prev.filter(p => p.playerId !== pid)
-        } else {
-          // Switch side
-          return prev.map(p => p.playerId === pid ? { ...p, side } : p)
-        }
+        if (existing.side === side) return prev.filter(p => p.playerId !== pid)
+        return prev.map(p => p.playerId === pid ? { ...p, side } : p)
       }
-      // Add (enforce mode limits)
       const sideCount = prev.filter(p => p.side === side).length
       const maxPerSide = mode === '1v1' ? 1 : 2
       if (sideCount >= maxPerSide) return prev
@@ -258,11 +268,28 @@ export default function SideBetCreate() {
     })
   }
 
+  function toggleIndividualParticipant(pid: string, name: string, teamId: string) {
+    setParticipants(prev => {
+      if (prev.some(p => p.playerId === pid)) return prev.filter(p => p.playerId !== pid)
+      if (prev.length >= 4) return prev
+      return [...prev, { playerId: pid, playerName: name, teamId, side: 'A' }]
+    })
+  }
+
+  function changeMode(m: '1v1' | '2v2' | 'individual') {
+    setMode(m)
+    setParticipants([])
+    if (format === 'skins' && config) {
+      setConfig({ ...config, individualMode: m === 'individual' } as SkinsConfig)
+    }
+  }
+
   function canProceed(): boolean {
     switch (step) {
       case 0: return format !== null
       case 1: return selectedMatchId !== null
       case 2: {
+        if (mode === 'individual') return participants.length >= 2
         const aCount = participants.filter(p => p.side === 'A').length
         const bCount = participants.filter(p => p.side === 'B').length
         if (mode === '1v1') return aCount === 1 && bCount === 1
@@ -393,7 +420,7 @@ export default function SideBetCreate() {
               {(['1v1', '2v2'] as const).map(m => (
                 <button
                   key={m}
-                  onClick={() => { setMode(m); setParticipants([]) }}
+                  onClick={() => changeMode(m)}
                   className={`flex-1 py-2 rounded font-semibold text-sm border-2 transition-colors ${
                     mode === m ? 'border-masters-green bg-masters-light text-masters-dark' : 'border-gray-200 text-gray-500 hover:border-masters-green/50'
                   }`}
@@ -401,43 +428,83 @@ export default function SideBetCreate() {
                   {m}
                 </button>
               ))}
+              {format === 'skins' && (
+                <button
+                  onClick={() => changeMode('individual')}
+                  className={`flex-1 py-2 rounded font-semibold text-sm border-2 transition-colors ${
+                    mode === 'individual' ? 'border-masters-green bg-masters-light text-masters-dark' : 'border-gray-200 text-gray-500 hover:border-masters-green/50'
+                  }`}
+                >
+                  Individual
+                </button>
+              )}
             </div>
             <p className="text-xs text-gray-500">
-              {mode === '1v1' ? 'Select 1 player for each side.' : 'Select 2 players for each side.'}
+              {mode === '1v1' ? 'Select 1 player for each side.' :
+               mode === 'individual' ? 'All selected players compete individually. Select 2–4 players.' :
+               'Select 2 players for each side.'}
             </p>
-            <div className="space-y-2">
-              {matchPlayers.map(({ pid, name, teamId }) => {
-                const pSide = participants.find(p => p.playerId === pid)?.side
-                return (
-                  <div key={pid} className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg">
-                    <span className="flex-1 text-sm font-medium">{name}</span>
-                    {(['A', 'B'] as const).map(side => (
-                      <button
-                        key={side}
-                        onClick={() => toggleParticipant(pid, name, teamId, side)}
-                        className={`w-8 h-8 rounded font-bold text-sm transition-colors ${
-                          pSide === side
-                            ? side === 'A' ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+
+            {mode === 'individual' ? (
+              <>
+                <div className="space-y-2">
+                  {matchPlayers.map(({ pid, name, teamId }) => {
+                    const selected = participants.some(p => p.playerId === pid)
+                    return (
+                      <div
+                        key={pid}
+                        onClick={() => toggleIndividualParticipant(pid, name, teamId)}
+                        className={`flex items-center gap-3 p-2 border-2 rounded-lg cursor-pointer transition-colors ${
+                          selected ? 'border-masters-green bg-masters-light' : 'border-gray-200 hover:border-masters-green/40'
                         }`}
                       >
-                        {side}
-                      </button>
-                    ))}
-                  </div>
-                )
-              })}
-            </div>
-            <div className="text-xs text-gray-500 flex gap-4">
-              <span>
-                <span className="text-blue-600 font-semibold">Side A:</span>{' '}
-                {participants.filter(p => p.side === 'A').map(p => p.playerName).join(', ') || 'None'}
-              </span>
-              <span>
-                <span className="text-red-600 font-semibold">Side B:</span>{' '}
-                {participants.filter(p => p.side === 'B').map(p => p.playerName).join(', ') || 'None'}
-              </span>
-            </div>
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${selected ? 'bg-masters-green border-masters-green' : 'border-gray-300'}`}>
+                          {selected && <Check size={12} className="text-white" />}
+                        </div>
+                        <span className="text-sm font-medium">{name}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-gray-500">{participants.length} player{participants.length !== 1 ? 's' : ''} selected</p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {matchPlayers.map(({ pid, name, teamId }) => {
+                    const pSide = participants.find(p => p.playerId === pid)?.side
+                    return (
+                      <div key={pid} className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg">
+                        <span className="flex-1 text-sm font-medium">{name}</span>
+                        {(['A', 'B'] as const).map(side => (
+                          <button
+                            key={side}
+                            onClick={() => toggleParticipant(pid, name, teamId, side)}
+                            className={`w-8 h-8 rounded font-bold text-sm transition-colors ${
+                              pSide === side
+                                ? side === 'A' ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
+                          >
+                            {side}
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="text-xs text-gray-500 flex gap-4">
+                  <span>
+                    <span className="text-blue-600 font-semibold">Side A:</span>{' '}
+                    {participants.filter(p => p.side === 'A').map(p => p.playerName).join(', ') || 'None'}
+                  </span>
+                  <span>
+                    <span className="text-red-600 font-semibold">Side B:</span>{' '}
+                    {participants.filter(p => p.side === 'B').map(p => p.playerName).join(', ') || 'None'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         )}
 

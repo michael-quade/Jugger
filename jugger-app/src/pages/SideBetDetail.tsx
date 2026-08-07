@@ -6,11 +6,11 @@ import { useIsAdmin, useIsPlayer, useAuthStore } from '../store/useAuthStore'
 import { getPlayerCourseHdcp } from '../utils/handicap'
 import {
   computeSideBet, holeWinner, sideNetOnHole, FORMAT_DISPLAY_NAMES, fmt,
-  type SettlementResult,
+  type SettlementResult, type PlayerTotal,
 } from '../utils/sideBets'
 import type {
   SideBet, SideBetHoleEntry, SideBetParticipant,
-  DotsConfig, BingoBangoBongoConfig, WolfConfig,
+  DotsConfig, BingoBangoBongoConfig, WolfConfig, NassauConfig,
   Match, HoleData,
 } from '../types'
 
@@ -284,6 +284,7 @@ function AutoHoleTable({ bet, match, holes, hdcps }: {
 
 function LineItemsPanel({ result }: { result: SettlementResult }) {
   const [expanded, setExpanded] = useState(false)
+  const individual = !!result.playerTotals
 
   if (result.lineItems.length === 0) {
     return <p className="text-sm text-gray-400 text-center py-4">No data yet.</p>
@@ -297,23 +298,22 @@ function LineItemsPanel({ result }: { result: SettlementResult }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-masters-light text-xs">
-            <th className="px-3 py-1.5 text-left text-gray-500">Item</th>
-            <th className="px-3 py-1.5 text-gray-500">Result</th>
+            <th className="px-3 py-1.5 text-left text-gray-500">Hole</th>
+            <th className="px-3 py-1.5 text-gray-500">{individual ? 'Winner' : 'Result'}</th>
             <th className="px-3 py-1.5 text-right text-gray-500">Amount</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item, i) => (
             <tr key={i} className="border-b border-gray-100">
-              <td className="px-3 py-1.5">
-                <div className="font-medium text-masters-dark">{item.label}</div>
-                {item.detail && <div className="text-xs text-gray-400">{item.detail}</div>}
-              </td>
+              <td className="px-3 py-1.5 font-medium text-masters-dark">{item.label}</td>
               <td className="px-3 py-1.5 text-center">
                 {item.status === 'pending' ? (
                   <span className="text-gray-300 text-xs">—</span>
                 ) : item.status === 'tied' ? (
                   <span className="text-gray-500 text-xs">Tie</span>
+                ) : individual ? (
+                  <span className="text-xs font-medium text-masters-dark">{item.detail ?? '—'}</span>
                 ) : (
                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${item.status === 'A' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`}>
                     Side {item.status}
@@ -338,6 +338,68 @@ function LineItemsPanel({ result }: { result: SettlementResult }) {
   )
 }
 
+function PlayerTotalsPanel({ totals }: { totals: PlayerTotal[] }) {
+  // Compute transfers: each negative-net player owes positive-net players proportionally
+  const sorted = [...totals].sort((a, b) => b.net - a.net)
+
+  // Build pairwise transfers: debtors pay creditors
+  const creditors = sorted.filter(p => p.net > 0)
+  const debtors   = sorted.filter(p => p.net < 0)
+  const transfers: { from: string; to: string; amount: number }[] = []
+  const credits = creditors.map(p => ({ ...p, remaining: p.net }))
+  const debts   = debtors.map(p => ({ ...p, remaining: -p.net }))
+  let ci = 0, di = 0
+  while (ci < credits.length && di < debts.length) {
+    const settle = Math.min(credits[ci].remaining, debts[di].remaining)
+    transfers.push({ from: debts[di].playerName, to: credits[ci].playerName, amount: settle })
+    credits[ci].remaining -= settle
+    debts[di].remaining  -= settle
+    if (credits[ci].remaining === 0) ci++
+    if (debts[di].remaining === 0) di++
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Per-player skin counts */}
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-masters-light text-xs">
+            <th className="px-3 py-1.5 text-left text-gray-500">Player</th>
+            <th className="px-3 py-1.5 text-center text-gray-500">Skins</th>
+            <th className="px-3 py-1.5 text-right text-gray-500">Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(p => (
+            <tr key={p.playerId} className="border-b border-gray-100">
+              <td className="px-3 py-1.5 font-medium text-masters-dark">{p.playerName}</td>
+              <td className="px-3 py-1.5 text-center text-gray-600">{p.skinsWon}</td>
+              <td className={`px-3 py-1.5 text-right font-semibold ${p.net > 0 ? 'text-green-600' : p.net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                {p.net > 0 ? `+${fmt(p.net)}` : p.net < 0 ? `-${fmt(-p.net)}` : 'Even'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Settlement transfers */}
+      {transfers.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Settlement</p>
+          <div className="space-y-1">
+            {transfers.map((t, i) => (
+              <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                <span><span className="font-medium text-red-600">{t.from}</span> → <span className="font-medium text-green-600">{t.to}</span></span>
+                <span className="font-semibold">{fmt(t.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function SideBetDetail() {
@@ -347,7 +409,7 @@ export default function SideBetDetail() {
   const isPlayer = useIsPlayer()
   const currentAdmin = useAuthStore(s => s.currentAdmin)
 
-  const { sideBets = [], teams, matches, courses, roundConfigs, admins, completeSideBet, cancelSideBet, deleteSideBet, updateSideBetHole } = useTournamentStore()
+  const { sideBets = [], teams, matches, courses, roundConfigs, admins, completeSideBet, cancelSideBet, deleteSideBet, updateSideBetHole, declareSideBetPress } = useTournamentStore()
 
   const bet = sideBets.find(b => b.id === betId)
 
@@ -391,6 +453,8 @@ export default function SideBetDetail() {
   // Manual hole entry state
   const [editHole, setEditHole] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showPressModal, setShowPressModal] = useState(false)
+  const [pressHole, setPressHole] = useState<number>(1)
 
   if (!bet) {
     return (
@@ -417,6 +481,15 @@ export default function SideBetDetail() {
     deleteSideBet(bet!.id)
     navigate('/side-bets')
   }
+
+  function handleDeclarePress() {
+    if (!currentAdmin) return
+    declareSideBetPress(bet!.id, pressHole, currentAdmin)
+    setShowPressModal(false)
+  }
+
+  const nassauConfig = bet?.format === 'nassau' ? bet.config as NassauConfig : null
+  const canManualPress = isActive && nassauConfig?.allowManualPress && (isAdmin || isParticipant)
 
   const sideANames = bet.participants.filter(p => p.side === 'A').map(p => p.playerName).join(' & ')
   const sideBNames = bet.participants.filter(p => p.side === 'B').map(p => p.playerName).join(' & ')
@@ -461,17 +534,26 @@ export default function SideBetDetail() {
         )}
 
         {/* Participants */}
-        <div className="flex items-center justify-center gap-4 text-sm py-2 border-t border-gray-100">
-          <div className="text-center">
-            <div className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-0.5">Side A</div>
-            <div className="font-medium">{sideANames}</div>
+        {settlement?.playerTotals ? (
+          // Individual mode: list all players in a row
+          <div className="flex flex-wrap items-center justify-center gap-3 text-sm py-2 border-t border-gray-100">
+            {bet.participants.map(p => (
+              <span key={p.playerId} className="font-medium text-masters-dark">{p.playerName}</span>
+            ))}
           </div>
-          <div className="text-gray-300 font-bold">vs</div>
-          <div className="text-center">
-            <div className="text-xs text-red-600 font-semibold uppercase tracking-wide mb-0.5">Side B</div>
-            <div className="font-medium">{sideBNames}</div>
+        ) : (
+          <div className="flex items-center justify-center gap-4 text-sm py-2 border-t border-gray-100">
+            <div className="text-center">
+              <div className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-0.5">Side A</div>
+              <div className="font-medium">{sideANames}</div>
+            </div>
+            <div className="text-gray-300 font-bold">vs</div>
+            <div className="text-center">
+              <div className="text-xs text-red-600 font-semibold uppercase tracking-wide mb-0.5">Side B</div>
+              <div className="font-medium">{sideBNames}</div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Hole section */}
@@ -526,7 +608,11 @@ export default function SideBetDetail() {
         <div className="card overflow-hidden">
           <h2 className="section-header mb-3">Settlement Detail</h2>
           <LineItemsPanel result={settlement} />
-          {settlement.complete && (
+          {settlement.playerTotals ? (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <PlayerTotalsPanel totals={settlement.playerTotals} />
+            </div>
+          ) : settlement.complete && (
             <div className="mt-3 pt-3 border-t border-gray-100 text-right font-semibold text-sm">
               Net: <span className={settlement.sideANet >= 0 ? 'text-blue-600' : 'text-red-600'}>
                 {settlement.sideANet === 0 ? 'Even' : settlement.sideANet > 0
@@ -538,8 +624,57 @@ export default function SideBetDetail() {
         </div>
       )}
 
+      {/* Declared presses log */}
+      {bet.format === 'nassau' && (bet.manualPresses ?? []).length > 0 && (
+        <div className="card">
+          <h2 className="section-header mb-3">Declared Presses</h2>
+          <div className="space-y-1">
+            {(bet.manualPresses ?? []).map((p, i) => (
+              <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
+                <span className="font-medium">Press H{p.startHole}–{p.startHole <= 9 ? 9 : 18}</span>
+                <span className="text-gray-400 text-xs">{p.declaredBy} · {new Date(p.declaredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Manual Press Modal */}
+      {showPressModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="font-serif font-bold text-masters-dark text-lg mb-1">Declare Press</h3>
+            <p className="text-sm text-gray-500 mb-5">A new side bet starts from this hole and runs to the end of that 9.</p>
+            <label className="label mb-1 block">Starting Hole</label>
+            <select
+              value={pressHole}
+              onChange={e => setPressHole(Number(e.target.value))}
+              className="input w-full mb-6"
+            >
+              {holes.map(h => (
+                <option key={h.number} value={h.number}>
+                  Hole {h.number} (through {h.number <= 9 ? 9 : 18})
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-3">
+              <button onClick={handleDeclarePress} className="btn-primary flex-1">Press</button>
+              <button onClick={() => setShowPressModal(false)} className="btn-secondary flex-1">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="card flex flex-wrap gap-3">
+        {canManualPress && (
+          <button
+            onClick={() => { setPressHole(1); setShowPressModal(true) }}
+            className="btn-secondary flex items-center gap-2 border-masters-gold text-masters-gold hover:bg-masters-gold hover:text-white"
+          >
+            Press
+          </button>
+        )}
         {isActive && (isAdmin || isParticipant) && (
           <button
             onClick={() => completeSideBet(bet.id)}

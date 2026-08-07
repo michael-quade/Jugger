@@ -12,11 +12,19 @@ export interface SettlementLineItem {
   detail?: string
 }
 
+export interface PlayerTotal {
+  playerId: string
+  playerName: string
+  skinsWon: number
+  net: number               // positive = earned, negative = owed
+}
+
 export interface SettlementResult {
   lineItems: SettlementLineItem[]
   sideANet: number          // positive = side B owes A; negative = side A owes B
   summary: string           // e.g. "Side A leads $14"
   complete: boolean
+  playerTotals?: PlayerTotal[]  // individual-mode skins: per-player breakdown
 }
 
 // ── Net score helpers ──────────────────────────────────────────────
@@ -139,9 +147,10 @@ export function computeNassau(
   addSegment(`Back 9 (${fmt(config.back9)})`,   back,  config.back9)
   addSegment(`Overall (${fmt(config.overall)})`, all,   config.overall)
 
-  // Press detection: when a side goes 2 down within a 9, auto-start a new bet
-  if (config.press) {
-    const pressAmt = config.pressAmount ?? config.front9
+  const pressAmt = config.pressAmount ?? config.front9
+
+  // Auto-press: triggers when a side goes exactly 2 down within a 9
+  if (config.autoPress) {
     function detectAndAddPresses(holeNums: number[], label: string) {
       let margin = 0 // positive = A leads
       for (let i = 0; i < holeNums.length - 1; i++) {
@@ -152,7 +161,7 @@ export function computeNassau(
         if (margin === -2 || margin === 2) {
           const pressHoles = holeNums.slice(i + 1)
           const pressSeg = scoreSegment(pressHoles, bet.participants, match, hdcps, holes)
-          const pressLabel = `${label} Press H${holeNums[i + 1]}–${holeNums[holeNums.length - 1]} (${fmt(pressAmt)})`
+          const pressLabel = `Auto-Press H${holeNums[i + 1]}–${holeNums[holeNums.length - 1]} (${fmt(pressAmt)})`
           addSegment(pressLabel, pressSeg, pressAmt)
           margin = 0
         }
@@ -160,6 +169,20 @@ export function computeNassau(
     }
     detectAndAddPresses(front9Nums, 'Front')
     detectAndAddPresses(back9Nums,  'Back')
+  }
+
+  // Manual presses: each declared press runs from its start hole to end of that 9
+  if (config.allowManualPress && bet.manualPresses?.length) {
+    for (const press of bet.manualPresses) {
+      const endHole = press.startHole <= 9 ? 9 : 18
+      const pressHoleNums = holes
+        .map(h => h.number)
+        .filter(n => n >= press.startHole && n <= endHole)
+      if (pressHoleNums.length === 0) continue
+      const pressSeg = scoreSegment(pressHoleNums, bet.participants, match, hdcps, holes)
+      const pressLabel = `Press H${pressHoleNums[0]}–${endHole} (${fmt(pressAmt)})`
+      addSegment(pressLabel, pressSeg, pressAmt)
+    }
   }
 
   const complete = !front.pending && !back.pending && !all.pending
@@ -185,19 +208,77 @@ export function computeSkins(
   hdcps: Record<string, number>
 ): SettlementResult {
   const lineItems: SettlementLineItem[] = []
+
+  // ── Individual mode: all participants compete, winner = unique lowest net ──
+  if (config.individualMode) {
+    const n = bet.participants.length
+    const skinsByPlayer: Record<string, number> = {}
+    for (const p of bet.participants) skinsByPlayer[p.playerId] = 0
+    let carry = 0
+    let totalSkinsAwarded = 0
+
+    for (const hole of holes) {
+      const nets: { pid: string; name: string; net: number }[] = []
+      let pending = false
+      for (const p of bet.participants) {
+        const net = playerNetOnHole(p.playerId, hole.number, match, hdcps[p.playerId] ?? 0, holes)
+        if (net === null) { pending = true; break }
+        nets.push({ pid: p.playerId, name: p.playerName, net })
+      }
+
+      if (pending) {
+        lineItems.push({ label: `Hole ${hole.number}`, status: 'pending', amount: (carry + 1) * config.amountPerSkin, detail: carry > 0 ? `${carry + 1} skins at stake` : undefined })
+        continue
+      }
+
+      const minNet = Math.min(...nets.map(n => n.net))
+      const winners = nets.filter(n => n.net === minNet)
+
+      if (winners.length === 1) {
+        const { pid, name } = winners[0]
+        const skinCount = carry + 1
+        const amount = skinCount * (n - 1) * config.amountPerSkin
+        skinsByPlayer[pid] += skinCount
+        totalSkinsAwarded += skinCount
+        const detail = carry > 0 ? `${name} (${skinCount} skins, ${carry} carried)` : name
+        lineItems.push({ label: `Hole ${hole.number}`, status: 'A', amount, detail })
+        carry = 0
+      } else if (config.carryover) {
+        carry++
+        lineItems.push({ label: `Hole ${hole.number}`, status: 'tied', amount: config.amountPerSkin * (n - 1), detail: `Tie — carries over` })
+      } else {
+        lineItems.push({ label: `Hole ${hole.number}`, status: 'tied', amount: config.amountPerSkin * (n - 1), detail: 'Halved' })
+      }
+    }
+
+    const playerTotals: PlayerTotal[] = bet.participants.map(p => {
+      const won = skinsByPlayer[p.playerId] ?? 0
+      // net = won × (n−1) × X  −  (totalSkinsAwarded − won) × X
+      //     = (won × n − totalSkinsAwarded) × X
+      const net = (won * n - totalSkinsAwarded) * config.amountPerSkin
+      return { playerId: p.playerId, playerName: p.playerName, skinsWon: won, net }
+    })
+
+    const complete = holes.every(h =>
+      bet.participants.every(p => playerNetOnHole(p.playerId, h.number, match, hdcps[p.playerId] ?? 0, holes) !== null)
+    )
+    const sorted = [...playerTotals].sort((a, b) => b.net - a.net)
+    const leader = sorted[0]
+    const summary = leader.net === 0
+      ? 'All even'
+      : `${leader.playerName} leads: ${leader.skinsWon} skin${leader.skinsWon !== 1 ? 's' : ''} (${leader.net > 0 ? '+' : ''}${fmt(leader.net)})`
+
+    return { lineItems, sideANet: 0, summary, complete, playerTotals }
+  }
+
+  // ── Team mode: best-ball per side ─────────────────────────────────
   let sideANet = 0
   let carry = 0
 
   for (const hole of holes) {
     const w = holeWinner(hole.number, bet.participants, match, hdcps, holes)
     if (w === null) {
-      const atStake = (carry + 1) * config.amountPerSkin
-      lineItems.push({
-        label: `Hole ${hole.number}`,
-        status: 'pending',
-        amount: atStake,
-        detail: carry > 0 ? `${carry + 1} skins at stake` : undefined,
-      })
+      lineItems.push({ label: `Hole ${hole.number}`, status: 'pending', amount: (carry + 1) * config.amountPerSkin, detail: carry > 0 ? `${carry + 1} skins at stake` : undefined })
       continue
     }
     if (w === 'tied') {

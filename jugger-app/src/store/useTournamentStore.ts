@@ -78,6 +78,7 @@ interface Actions {
 
   createSideBet: (bet: Omit<SideBet, 'id' | 'createdAt'>) => void
   updateSideBetHole: (betId: string, entry: SideBetHoleEntry) => void
+  declareSideBetPress: (betId: string, startHole: number, declaredBy: string) => void
   completeSideBet: (betId: string) => void
   cancelSideBet: (betId: string) => void
   deleteSideBet: (betId: string) => void
@@ -551,6 +552,16 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           holes: b.holes.some(h => h.hole === entry.hole)
             ? b.holes.map(h => h.hole === entry.hole ? entry : h)
             : [...b.holes, entry].sort((a, bh) => a.hole - bh.hole),
+        }),
+      })),
+
+      declareSideBetPress: (betId, startHole, declaredBy) => set(state => ({
+        sideBets: (state.sideBets ?? []).map(b => b.id !== betId ? b : {
+          ...b,
+          manualPresses: [
+            ...(b.manualPresses ?? []),
+            { startHole, declaredAt: new Date().toISOString(), declaredBy },
+          ],
         }),
       })),
 
