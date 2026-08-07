@@ -21,6 +21,9 @@ import CtpPage from './pages/CtpPage'
 import Lodging from './pages/Lodging'
 import MessageBoard from './pages/MessageBoard'
 import MessageBoardThread from './pages/MessageBoardThread'
+import SideBets from './pages/SideBets'
+import SideBetCreate from './pages/SideBetCreate'
+import SideBetDetail from './pages/SideBetDetail'
 import { useTournamentStore } from './store/useTournamentStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hashPassword, DEFAULT_PASSWORD, generateUsername } from './utils/auth'
@@ -144,6 +147,9 @@ export default function App() {
         <Route path="skidmore-hdcp" element={<SkidmoreHdcp />} />
         <Route path="board" element={<MessageBoard />} />
         <Route path="board/:threadId" element={<MessageBoardThread />} />
+        <Route path="side-bets" element={<SideBets />} />
+        <Route path="side-bets/new" element={<SideBetCreate />} />
+        <Route path="side-bets/:betId" element={<SideBetDetail />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

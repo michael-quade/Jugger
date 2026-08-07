@@ -3,21 +3,22 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
-  History, ArrowRight, Calculator, Gamepad2, Hotel, MessageSquare,
+  History, ArrowRight, Calculator, Gamepad2, Hotel, MessageSquare, DollarSign,
   type LucideIcon,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
 import { isSupabaseEnabled } from '../lib/supabase'
-import { useIsAdmin, useCanAccessBoard } from '../store/useAuthStore'
+import { useIsAdmin, useIsPlayer, useCanAccessBoard } from '../store/useAuthStore'
 import { useBoardStore } from '../store/useBoardStore'
 
-const NAV: { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; boardOnly?: boolean }[] = [
+const NAV: { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; boardOnly?: boolean; playerOrAdmin?: boolean }[] = [
   { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
   { to: '/teams',      label: 'Teams',        icon: Users },
   { to: '/schedule',   label: 'Schedule',     icon: Calendar },
   { to: '/pairings',   label: 'Pairings',     icon: Shuffle,       adminOnly: true },
   { to: '/scorecards', label: 'Scorecards',   icon: ClipboardList },
+  { to: '/side-bets',  label: 'Side Bets',    icon: DollarSign,    playerOrAdmin: true },
   { to: '/lodging',    label: 'Lodging',      icon: Hotel },
   { to: '/board',      label: 'Board',        icon: MessageSquare },
   { to: '/courses',      label: 'Courses',      icon: MapPin },
@@ -59,6 +60,7 @@ export default function Layout() {
   const { connected } = useSyncStatus()
   const dateRange   = formatDateRange(roundConfigs, year)
   const isAdmin     = useIsAdmin()
+  const isPlayer    = useIsPlayer()
   const canBoard    = useCanAccessBoard()
   const unreadCount = useBoardStore(s => s.unreadCount)
 
@@ -116,8 +118,8 @@ export default function Layout() {
         <nav className="bg-masters-green text-white shadow">
           <div className="max-w-7xl mx-auto px-4">
             <ul className="flex gap-0.5 py-1 overflow-x-auto nav-scrollable">
-              {NAV.filter(({ adminOnly, boardOnly }) =>
-                (!adminOnly || isAdmin) && (!boardOnly || canBoard)
+              {NAV.filter(({ adminOnly, boardOnly, playerOrAdmin }) =>
+                (!adminOnly || isAdmin) && (!boardOnly || canBoard) && (!playerOrAdmin || isPlayer || isAdmin)
               ).map(({ to, label, icon: Icon }) => (
                 <li key={to} className="shrink-0">
                   <NavLink
