@@ -218,6 +218,7 @@ export interface TournamentState {
   gameConfig: GameConfig
   location?: string
   lodgingConfig?: LodgingConfig
+  sideBets?: SideBet[]
 }
 
 export interface CourseHistoryRound {
@@ -307,5 +308,117 @@ export interface SkidmoreScore {
   score: number       // adjusted gross score
   holes?: 9 | 18      // defaults to 18 when absent
   hdcpAtTime?: number // WHS 2024: Handicap Index when the 9-hole round was played
+  notes?: string
+}
+
+// ── Side Bets ──────────────────────────────────────────────────────────────
+
+export type SideBetFormat =
+  | 'nassau'
+  | 'skins'
+  | 'match_money'
+  | 'stroke_play'
+  | 'wolf'
+  | 'gruesomes'
+  | 'vegas_side'
+  | 'dots'
+  | 'bingo_bango_bongo'
+
+export interface SideBetParticipant {
+  playerId: string
+  playerName: string
+  teamId: string
+  side: 'A' | 'B'
+}
+
+export interface NassauConfig {
+  front9: number
+  back9: number
+  overall: number
+  press: boolean
+  pressAmount?: number
+}
+
+export interface SkinsConfig {
+  amountPerSkin: number
+  carryover: boolean
+}
+
+export interface MatchMoneyConfig {
+  amountPerHole: number
+}
+
+export interface StrokePlayConfig {
+  front9: number
+  back9: number
+  overall: number
+  useNet: boolean
+}
+
+export interface DotsConfig {
+  amountPerDot: number
+  birdie: boolean
+  eagle: boolean
+  sandy: boolean
+  greenie: boolean
+  ferret: boolean
+  poley: boolean
+  barky: boolean
+  customDots: string[]
+}
+
+export interface BingoBangoBongoConfig {
+  amountPerPoint: number
+}
+
+export interface WolfConfig {
+  baseAmountPerHole: number
+  wolfAloneMultiplier: number
+}
+
+export interface GroesomesConfig {
+  amountPerHole: number
+}
+
+export interface VegasSideConfig {
+  amountPerHole: number
+  birdieMultiplier: number
+  eagleMultiplier: number
+}
+
+export type SideBetConfig =
+  | NassauConfig
+  | SkinsConfig
+  | MatchMoneyConfig
+  | StrokePlayConfig
+  | DotsConfig
+  | BingoBangoBongoConfig
+  | WolfConfig
+  | GroesomesConfig
+  | VegasSideConfig
+
+export interface SideBetHoleEntry {
+  hole: number
+  dots?: Record<string, string[]>            // playerId -> dot types earned
+  bbb?: { bingo: string; bango: string; bongo: string }  // playerIds for each point
+  wolfChoice?: { wolfId: string; partnerId?: string; alone: boolean }
+  wolfWinnerSide?: 'A' | 'B' | null
+  gruesomesChoice?: { sideAForcedId: string; sideBForcedId: string }
+  notes?: string
+}
+
+export interface SideBet {
+  id: string
+  year: number
+  matchId: string
+  round: number
+  format: SideBetFormat
+  participants: SideBetParticipant[]         // 2 or 4
+  config: SideBetConfig
+  holes: SideBetHoleEntry[]                  // empty for auto-computed formats
+  createdBy: string
+  createdAt: string
+  status: 'pending' | 'active' | 'complete' | 'cancelled'
+  settledAt?: string
   notes?: string
 }

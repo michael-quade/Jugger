@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig, LodgingConfig } from '../types'
+import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig, LodgingConfig, SideBet, SideBetHoleEntry } from '../types'
 import { computeChampion } from '../utils/champion'
 import { configureHdcpSettings } from '../utils/handicap'
 import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY, INITIAL_SKIDMORE_SCORES } from '../data/initialData'
@@ -75,6 +75,12 @@ interface Actions {
   setGameConfig: (config: GameConfig) => void
   setLocation: (location: string) => void
   setLodgingConfig: (config: LodgingConfig) => void
+
+  createSideBet: (bet: Omit<SideBet, 'id' | 'createdAt'>) => void
+  updateSideBetHole: (betId: string, entry: SideBetHoleEntry) => void
+  completeSideBet: (betId: string) => void
+  cancelSideBet: (betId: string) => void
+  deleteSideBet: (betId: string) => void
 
   clearMatchScores: (matchId: string) => void
   clearAllMatchScores: () => void
@@ -156,6 +162,7 @@ const DEFAULT_STATE: TournamentState = {
   gameConfig: DEFAULT_GAME_CONFIG,
   location: 'Pinehurst, NC',
   lodgingConfig: DEFAULT_LODGING_CONFIG,
+  sideBets: [],
 }
 
 export const useTournamentStore = create<TournamentState & Actions>()(
@@ -534,6 +541,31 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       setLocation: (location) => set({ location }),
       setLodgingConfig: (lodgingConfig) => set({ lodgingConfig }),
 
+      createSideBet: (bet) => set(state => ({
+        sideBets: [...(state.sideBets ?? []), { ...bet, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
+      })),
+
+      updateSideBetHole: (betId, entry) => set(state => ({
+        sideBets: (state.sideBets ?? []).map(b => b.id !== betId ? b : {
+          ...b,
+          holes: b.holes.some(h => h.hole === entry.hole)
+            ? b.holes.map(h => h.hole === entry.hole ? entry : h)
+            : [...b.holes, entry].sort((a, bh) => a.hole - bh.hole),
+        }),
+      })),
+
+      completeSideBet: (betId) => set(state => ({
+        sideBets: (state.sideBets ?? []).map(b => b.id !== betId ? b : { ...b, status: 'complete' as const, settledAt: new Date().toISOString() }),
+      })),
+
+      cancelSideBet: (betId) => set(state => ({
+        sideBets: (state.sideBets ?? []).map(b => b.id !== betId ? b : { ...b, status: 'cancelled' as const }),
+      })),
+
+      deleteSideBet: (betId) => set(state => ({
+        sideBets: (state.sideBets ?? []).filter(b => b.id !== betId),
+      })),
+
       clearMatchScores: (matchId) =>
         set(state => {
           const sourceMatch = state.matches.find(m => m.id === matchId)
@@ -725,7 +757,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 23,
+      version: 24,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -863,6 +895,10 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         if (fromVersion < 23) {
           const b = base as any
           if (!b.lodgingConfig) b.lodgingConfig = DEFAULT_LODGING_CONFIG
+        }
+        if (fromVersion < 24) {
+          const b = base as any
+          if (!b.sideBets) b.sideBets = []
         }
         if (fromVersion < 22) {
           // Remove duplicate HIO and CTP donation records created by pre-fix Sync/Add-player behavior

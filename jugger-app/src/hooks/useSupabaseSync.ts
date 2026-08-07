@@ -11,7 +11,7 @@ const APP_STATE_KEYS: (keyof TournamentState)[] = [
   'year', 'teams', 'courses', 'roundConfigs', 'holeInOnes',
   'ctpEntries', 'ctpDonations', 'ctpHioHistory', 'hdcpLocked',
   'courseHistory', 'admins', 'pairingsLocked', 'lockedRounds', 'hioDonations', 'skidmoreScores',
-  'sandbaggerPlayerId', 'toiletAwardPlayerId', 'defendingChampionTeamId', 'gameConfig', 'location', 'lodgingConfig',
+  'sandbaggerPlayerId', 'toiletAwardPlayerId', 'defendingChampionTeamId', 'gameConfig', 'location', 'lodgingConfig', 'sideBets',
 ]
 
 // Counter instead of boolean so nested remote-apply calls compose correctly.

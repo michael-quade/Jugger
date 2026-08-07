@@ -8,6 +8,7 @@ import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas } from '../utils/matchplay'
+import { computeSideBet, FORMAT_DISPLAY_NAMES as SIDE_BET_FORMAT_NAMES } from '../utils/sideBets'
 import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
@@ -28,7 +29,7 @@ function getRoundName(round: number, configs: RoundConfig[]): string {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, admins, setMatchScore, setMatchScoresBatch, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, admins, setMatchScore, setMatchScoresBatch, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound, sideBets = [] } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const isPlayer = useIsPlayer()
   const canEnterScores = useCanEnterScores()
@@ -829,6 +830,53 @@ export default function ScorecardView() {
           <span>Score entry is limited to your own matches on the day they are scheduled.</span>
         </div>
       )}
+
+      {/* Side bets for this match */}
+      {match && (() => {
+        const activeSideBetsForMatch = sideBets.filter(b => b.matchId === match.id && (b.status === 'pending' || b.status === 'active'))
+        if (activeSideBetsForMatch.length === 0 && !isAdmin && !isPlayer) return null
+        if (activeSideBetsForMatch.length === 0) return null
+
+        function betSummaryStr(bet: typeof sideBets[0]): string {
+          const rc2 = roundConfigs.find(r => r.round === bet.round)
+          const crs2 = rc2 ? courses.find(c => c.id === rc2.courseId) : null
+          if (!crs2) return '—'
+          const allPlayers = teams.flatMap(t => t.players)
+          const hdcps: Record<string, number> = {}
+          for (const p of bet.participants) {
+            const player = allPlayers.find(pl => pl.id === p.playerId)
+            if (player) hdcps[p.playerId] = getPlayerCourseHdcp(player, crs2, rc2!.tee, bet.round, allPlayers)
+          }
+          try { return computeSideBet(bet, match!, crs2.holes, hdcps).summary } catch { return '—' }
+        }
+
+        return (
+          <div className="card">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="section-header text-sm mb-0">Side Bets</h3>
+              <Link to="/side-bets" className="text-xs text-masters-green hover:underline">View all</Link>
+            </div>
+            <div className="space-y-1">
+              {activeSideBetsForMatch.map(bet => (
+                <Link key={bet.id} to={`/side-bets/${bet.id}`} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0 hover:text-masters-green">
+                  <span className="font-medium">{SIDE_BET_FORMAT_NAMES[bet.format] ?? bet.format}</span>
+                  <span className="text-gray-500 text-xs">{betSummaryStr(bet)}</span>
+                </Link>
+              ))}
+            </div>
+            {(isAdmin || isPlayer) && (
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <Link
+                  to="/side-bets/new"
+                  className="text-xs text-masters-green hover:underline flex items-center gap-1"
+                >
+                  + New side bet for this match
+                </Link>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {matches.length === 0 ? (
         <div className="card text-center py-12 text-gray-400">
