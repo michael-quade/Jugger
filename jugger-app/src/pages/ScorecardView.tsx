@@ -958,14 +958,12 @@ export default function ScorecardView() {
                 )}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   {/* --- MOBILE SCORING FEATURE (remove this block + Smartphone import to revert) --- */}
-                  {canEnterScores && (
-                    <Link
-                      to={`/scorecards/${match.id}/mobile?round=${activeRound}&hole=1`}
-                      className="flex items-center gap-1.5 text-xs bg-masters-green text-white border border-masters-green hover:bg-masters-dark rounded px-3 py-1.5 font-semibold transition-colors lg:hidden"
-                    >
-                      <Smartphone size={13} /> Score Hole-by-Hole
-                    </Link>
-                  )}
+                  <Link
+                    to={`/scorecards/${match.id}/mobile?round=${activeRound}&hole=1`}
+                    className="flex items-center gap-1.5 text-xs bg-masters-green text-white border border-masters-green hover:bg-masters-dark rounded px-3 py-1.5 font-semibold transition-colors lg:hidden"
+                  >
+                    <Smartphone size={13} /> Score Hole-by-Hole
+                  </Link>
                   {/* --- END MOBILE SCORING --- */}
                   {isAdmin && !match.isBlind && (
                     <div className="flex items-center gap-2 flex-wrap">
