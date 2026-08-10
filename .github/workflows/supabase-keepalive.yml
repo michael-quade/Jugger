@@ -11,14 +11,20 @@ jobs:
     steps:
       - name: Ping Supabase REST API
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "$SUPABASE_URL/rest/v1/" \
-            -H "apikey: $SUPABASE_KEY")
-          echo "Supabase responded with HTTP $HTTP_STATUS"
-          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 400 ]; then
-            echo "Unexpected status code $HTTP_STATUS"
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Error: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY secret is not configured on this repository."
             exit 1
           fi
+          HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: $SUPABASE_KEY" \
+            || echo "000")
+          echo "Supabase responded with HTTP $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 400 ]; then
+            echo "Unexpected status code $HTTP_STATUS — ping failed"
+            exit 1
+          fi
+          echo "Ping successful"
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}

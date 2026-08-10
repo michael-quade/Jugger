@@ -24,6 +24,9 @@ import MessageBoardThread from './pages/MessageBoardThread'
 import SideBets from './pages/SideBets'
 import SideBetCreate from './pages/SideBetCreate'
 import SideBetDetail from './pages/SideBetDetail'
+// --- MOBILE SCORING FEATURE (remove this import + the route below to revert) ---
+import MobileScoring from './pages/MobileScoring'
+// --- END MOBILE SCORING ---
 import { useTournamentStore } from './store/useTournamentStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hashPassword, DEFAULT_PASSWORD, generateUsername } from './utils/auth'
@@ -127,6 +130,9 @@ export default function App() {
 
   return (
     <Routes>
+      {/* --- MOBILE SCORING FEATURE (remove this route + import above to revert) --- */}
+      <Route path="/scorecards/:matchId/mobile" element={<MobileScoring />} />
+      {/* --- END MOBILE SCORING --- */}
       <Route path="/" element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="teams" element={<Teams />} />

@@ -9,7 +9,7 @@ import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas } from '../utils/matchplay'
 import { computeSideBet, FORMAT_DISPLAY_NAMES as SIDE_BET_FORMAT_NAMES } from '../utils/sideBets'
-import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown } from 'lucide-react'
+import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown, Smartphone } from 'lucide-react'
 import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
@@ -957,6 +957,16 @@ export default function ScorecardView() {
                   </div>
                 )}
                 <div className="flex items-center justify-between flex-wrap gap-2">
+                  {/* --- MOBILE SCORING FEATURE (remove this block + Smartphone import to revert) --- */}
+                  {canEnterScores && (
+                    <Link
+                      to={`/scorecards/${match.id}/mobile?round=${activeRound}&hole=1`}
+                      className="flex items-center gap-1.5 text-xs bg-masters-green text-white border border-masters-green hover:bg-masters-dark rounded px-3 py-1.5 font-semibold transition-colors lg:hidden"
+                    >
+                      <Smartphone size={13} /> Score Hole-by-Hole
+                    </Link>
+                  )}
+                  {/* --- END MOBILE SCORING --- */}
                   {isAdmin && !match.isBlind && (
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
