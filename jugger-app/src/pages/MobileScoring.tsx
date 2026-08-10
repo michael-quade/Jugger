@@ -235,12 +235,26 @@ export default function MobileScoring() {
     })
   }
   function numpadDone() {
-    if (activePid && matchId) {
-      setMatchScore(matchId, activePid, currentHole, numpadVal)
-      afterScoreChange()
+    if (!activePid || !matchId) { setShowNumpad(false); setActivePid(null); return }
+
+    setMatchScore(matchId, activePid, currentHole, numpadVal)
+    afterScoreChange()
+
+    // Auto-advance to next unscored player in sequence; keep numpad open
+    const currentIdx = playerIds.indexOf(activePid)
+    const nextPid = playerIds.slice(currentIdx + 1).find(pid => {
+      const freshMatch = useTournamentStore.getState().matches.find(m => m.id === matchId)
+      return freshMatch?.scores[pid]?.[currentHole] == null
+    })
+
+    if (nextPid) {
+      setActivePid(nextPid)
+      setNumpadVal(null)
+    } else {
+      setShowNumpad(false)
+      setActivePid(null)
+      // CTP auto-trigger fires via the allScored useEffect
     }
-    setShowNumpad(false)
-    setActivePid(null)
   }
 
   // ── Team score recomputation (mirrors ScorecardView logic) ──────────────────
