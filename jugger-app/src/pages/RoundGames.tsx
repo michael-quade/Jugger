@@ -200,6 +200,62 @@ export default function RoundGames() {
         )}
       </div>
 
+      {/* Juggerknocker Invitational House Rules */}
+      <div className="card border border-masters-green/30">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h2 className="section-header text-base mb-0">Juggerknocker Invitational Rules</h2>
+            <p className="text-xs text-gray-500 mt-0.5">USGA rules apply except as follows.</p>
+          </div>
+          <a
+            href="https://www.usga.org/rules/rules-of-golf.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded border border-masters-green text-masters-green text-xs font-semibold hover:bg-masters-green hover:text-white transition-colors"
+          >
+            USGA Rules ↗
+          </a>
+        </div>
+        <ol className="space-y-3 text-sm text-masters-dark">
+          <li className="flex gap-2.5">
+            <span className="font-black text-masters-green shrink-0 w-4 text-right leading-snug">1.</span>
+            <span className="leading-snug">Ball may not be moved when in play, until the green is reached. However, if on the first tee and before the first shot of the round is played, based on the condition of the course, the majority of the 12 players feels that &ldquo;lift, clean and place&rdquo; should be allowed, then it will be allowed. Note that this must be decided by the entire group, and not within each individual foursome.</span>
+          </li>
+          <li className="flex gap-2.5">
+            <span className="font-black text-masters-green shrink-0 w-4 text-right leading-snug">2.</span>
+            <span className="leading-snug">No club limit.</span>
+          </li>
+          <li className="flex gap-2.5">
+            <span className="font-black text-masters-green shrink-0 w-4 text-right leading-snug">3.</span>
+            <span className="leading-snug">All putts must be holed out in the Friday and Saturday afternoon rounds. In the Thursday round and the Friday and Saturday morning rounds, putts may be given by members of the opposing individual/twosome. Remember that, because of the Blind Matches, you&rsquo;ll need to play out every hole &hellip; until (see #4, below).</span>
+          </li>
+          <li className="flex gap-2.5">
+            <span className="font-black text-masters-green shrink-0 w-4 text-right leading-snug">4.</span>
+            <span className="leading-snug">Max net score on a hole: <strong>Net triple bogey.</strong></span>
+          </li>
+          <li className="flex gap-2.5">
+            <span className="font-black text-masters-green shrink-0 w-4 text-right leading-snug">5.</span>
+            <div className="leading-snug space-y-1.5">
+              <span><strong>NOTE: WHEN</strong> (not &ldquo;if&rdquo;) you hit a ball OB, there are several options:</span>
+              <ol className="space-y-1 pl-1">
+                <li className="flex gap-2">
+                  <span className="font-semibold text-masters-green shrink-0">a.</span>
+                  <span><strong>Tee shots:</strong> Play your ball as if you hit it OB and take stroke and distance (drop your ball in the nearest area of relief, no closer to the hole). This is a hybrid of USGA Rule 18.12 and Model Local Rule E-5.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-semibold text-masters-green shrink-0">b.</span>
+                  <span><strong>Other shots:</strong> Stroke and distance (drop your ball in the nearest area of relief, no closer to the hole).</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-semibold text-masters-green shrink-0">c.</span>
+                  <span><strong>All shots:</strong> Throw club, pick up ball (and club, if desired) and enjoy a nice, frosty beverage in the cart.</span>
+                </li>
+              </ol>
+            </div>
+          </li>
+        </ol>
+      </div>
+
       {/* Quick-jump pill bar */}
       <div className="flex flex-wrap gap-2">
         {(Object.entries(FORMAT_META) as [RoundFormat, typeof FORMAT_META[RoundFormat]][]).map(([format, meta]) => {

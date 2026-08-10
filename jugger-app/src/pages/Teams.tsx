@@ -223,7 +223,7 @@ export default function Teams() {
 // ─── HDCP Calculation Table (mirrors Excel HDCPs tab U1:AO20) ─────────────────
 
 function HdcpTable() {
-  const { teams, courses, roundConfigs } = useTournamentStore()
+  const { teams, courses, roundConfigs, gameConfig } = useTournamentStore()
   const allPlayers = teams.flatMap(t => t.players)
   if (allPlayers.length === 0) return null
 
@@ -238,6 +238,9 @@ function HdcpTable() {
     return { round, course, tee, format: config?.format ?? '' }
   })
 
+  const scramblePct = gameConfig?.texasScrambleHdcpPct ?? 0.6
+  const scramblePctLabel = `${Math.round(scramblePct * 100)}%`
+
   // Per-player values for all 5 rounds
   function calcPlayer(index: number) {
     return courseRounds.map(({ course, tee, format }) => {
@@ -248,7 +251,7 @@ function HdcpTable() {
       const raw = rawCourseHdcpDisplay(index, slope, rating, par)
       const nettedRaw = nettedCourseHdcpRaw(index, slope, rating, par, minIndex)
       const capped = apply18Cap(nettedRaw)
-      const final = format === 'texas_scramble' ? Math.round(capped * 0.6) : capped
+      const final = format === 'texas_scramble' ? Math.round(capped * scramblePct) : capped
       return { raw, nettedRaw, capped, final }
     })
   }
@@ -274,7 +277,7 @@ function HdcpTable() {
         <div>
           <strong>Tournament HDCP</strong> = player's rounded course HDCP − lowest player's rounded course HDCP.
           HDCPs above 18 are compressed: 18 + 50% of excess (e.g., 27 → 18 + 5 = 23).
-          Texas Scramble rounds apply an additional 60%.
+          Texas Scramble rounds apply an additional {scramblePctLabel}.
         </div>
       </div>
 
@@ -287,7 +290,7 @@ function HdcpTable() {
               <th className={thCell}>GHIN HDCP<br/>Index</th>
               {courseRounds.map(({ round, course, tee, format }) => (
                 <th key={round} colSpan={2} className={thCell + ' border-l-2 border-l-masters-green/40'}>
-                  <div>R{round} {course?.name ?? `Round ${round}`}{format === 'texas_scramble' ? ' (60%)' : ''}</div>
+                  <div>R{round} {course?.name ?? `Round ${round}`}{format === 'texas_scramble' ? ` (${scramblePctLabel})` : ''}</div>
                   {tee && course && (
                     <div className="font-normal text-[9px] text-gray-400">
                       {tee.rating}/{tee.slope} par {course.par}
@@ -364,7 +367,7 @@ function HdcpTable() {
                                   </span>
                                 )}
                                 {rv.nettedRaw === rv.capped && ri === 2 && rv.capped !== rv.final && (
-                                  <span className="text-[8px] text-blue-400">{rv.capped}×60%</span>
+                                  <span className="text-[8px] text-blue-400">{rv.capped}×{scramblePctLabel}</span>
                                 )}
                               </div>
                             )}
