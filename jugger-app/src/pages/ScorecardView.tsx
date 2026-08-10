@@ -76,7 +76,8 @@ export default function ScorecardView() {
   const [championModal, setChampionModal] = useState<{ team: Team; isComplete: boolean } | null>(null)
 
   const defaultCtpTeamId = teams[teams.length - 1]?.id ?? ''
-  const [ctpTeamIds, setCtpTeamIds] = useState<Record<number, string>>({ 3: defaultCtpTeamId, 5: defaultCtpTeamId })
+  const ctpTeamIds = useTournamentStore(s => s.ctpTeamIds ?? {})
+  const setCtpTeamIdStore = useTournamentStore(s => s.setCtpTeamId)
 
   const roundMatches = getMatchesForRound(matches, activeRound)
   const config = roundConfigs.find(r => r.round === activeRound)
@@ -1015,7 +1016,7 @@ export default function ScorecardView() {
                     <select
                       className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white"
                       value={ctpTeamIds[activeRound] ?? ''}
-                      onChange={e => setCtpTeamIds(prev => ({ ...prev, [activeRound]: e.target.value }))}
+                      onChange={e => setCtpTeamIdStore(activeRound, e.target.value)}
                     >
                       {roundMatches.map(m => {
                         const teamId = m.id.replace(`${activeRound}-`, '')

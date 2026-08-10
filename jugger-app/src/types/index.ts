@@ -210,6 +210,7 @@ export interface TournamentState {
   admins: AdminCredential[]
   pairingsLocked: boolean
   lockedRounds: number[]
+  ctpTeamIds?: Record<number, string>
   hioDonations: HioDonation[]
   skidmoreScores: SkidmoreScore[]
   sandbaggerPlayerId?: string
