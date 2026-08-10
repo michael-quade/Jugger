@@ -280,22 +280,9 @@ function HoleRow({
                   <Heart size={12} /> Donated {fmtDollars(entry.hioDonationAmount ?? prizePerHole)} to HIO pot
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 text-masters-green text-xs font-semibold">
-                    <Trophy size={12} /> {entry.winnerName}
-                  </div>
-                  {isAdmin && (
-                    <button
-                      onClick={() => onUpdate({ winnerPaid: !entry.winnerPaid })}
-                      className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold transition-colors ${
-                        entry.winnerPaid
-                          ? 'bg-masters-green/15 border-masters-green/30 text-masters-green'
-                          : 'bg-gray-100 border-gray-300 text-gray-500 hover:border-masters-green'
-                      }`}
-                    >
-                      {entry.winnerPaid ? '✓ Paid' : 'Mark paid'}
-                    </button>
-                  )}
+                <div className="flex items-center gap-1.5 text-masters-green text-xs font-semibold">
+                  <Trophy size={12} /> {entry.winnerName}
+                  {entry.winnerPaid && <span className="text-[10px] text-masters-green/60 font-normal">· paid</span>}
                 </div>
               )
             ) : (
@@ -464,6 +451,108 @@ function WinnersChart({ entries, allPlayerNames }: { entries: CtpEntry[]; allPla
   )
 }
 
+// ── CTP winner payouts (current year, by player) ─────────────────────────────
+
+function WinnerPayouts({
+  entries, prizePerHole, isAdmin, year, onMarkPlayerPaid,
+}: {
+  entries: CtpEntry[]
+  prizePerHole: number
+  isAdmin: boolean
+  year: number
+  onMarkPlayerPaid: (name: string, paid: boolean) => void
+}) {
+  const winners = entries.filter(e => e.year === year && e.winnerName && !e.donatedToHio)
+
+  const byPlayer = new Map<string, CtpEntry[]>()
+  for (const e of winners) {
+    const name = e.winnerName!
+    if (!byPlayer.has(name)) byPlayer.set(name, [])
+    byPlayer.get(name)!.push(e)
+  }
+
+  if (byPlayer.size === 0) return null
+
+  const sorted = [...byPlayer.entries()].sort((a, b) => b[1].length - a[1].length)
+  const totalWins   = winners.length
+  const totalPaid   = winners.filter(e => e.winnerPaid).length
+  const totalOwed   = totalWins * prizePerHole
+  const totalPaidAmt = totalPaid * prizePerHole
+
+  return (
+    <div className="card">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 className="section-header mb-0">CTP Winnings</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {totalPaid}/{totalWins} holes paid · {fmtDollars(totalPaidAmt)} of {fmtDollars(totalOwed)} paid out
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-xs text-gray-400">Prize per hole</div>
+          <div className="text-lg font-bold text-masters-gold font-serif">{fmtDollars(prizePerHole)}</div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {sorted.map(([name, wins]) => {
+          const allPaid   = wins.every(e => e.winnerPaid)
+          const anyPaid   = wins.some(e => e.winnerPaid)
+          const total     = wins.length * prizePerHole
+          const holeList  = wins.map(e => `R${e.round}·H${e.hole}`).join(', ')
+
+          return (
+            <div
+              key={name}
+              className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                allPaid ? 'bg-masters-green/8 border-masters-green/25' : 'bg-gray-50 border-gray-200'
+              }`}
+            >
+              {/* Paid indicator */}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                allPaid ? 'bg-masters-green' : anyPaid ? 'bg-masters-green/40' : 'bg-gray-200'
+              }`}>
+                {allPaid
+                  ? <Check size={16} className="text-white" />
+                  : <DollarSign size={15} className={anyPaid ? 'text-white' : 'text-gray-400'} />
+                }
+              </div>
+
+              {/* Name + holes */}
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-masters-dark text-sm">{name}</div>
+                <div className="text-[10px] text-gray-400 font-mono truncate">{holeList}</div>
+              </div>
+
+              {/* Wins + amount */}
+              <div className="text-right shrink-0 mr-2">
+                <div className="text-lg font-black text-masters-dark font-serif leading-none">
+                  {fmtDollars(total)}
+                </div>
+                <div className="text-[10px] text-gray-400">{wins.length} win{wins.length !== 1 ? 's' : ''}</div>
+              </div>
+
+              {/* Mark paid button */}
+              {isAdmin && (
+                <button
+                  onClick={() => onMarkPlayerPaid(name, !allPaid)}
+                  className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
+                    allPaid
+                      ? 'bg-masters-green/10 border-masters-green/30 text-masters-green hover:bg-red-50 hover:border-red-300 hover:text-red-600'
+                      : 'bg-white border-gray-300 text-gray-600 hover:border-masters-green hover:text-masters-green'
+                  }`}
+                >
+                  {allPaid ? '✓ Paid' : 'Mark Paid'}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Winners history table ─────────────────────────────────────────────────────
 
 function WinnersTable({ entries, allPlayerNames }: { entries: CtpEntry[]; allPlayerNames: string[] }) {
@@ -518,7 +607,6 @@ function WinnersTable({ entries, allPlayerNames }: { entries: CtpEntry[]; allPla
               <th className="p-2 text-center">Hole</th>
               <th className="p-2 text-left">Course</th>
               <th className="p-2 text-center">Yardage</th>
-              <th className="p-2 text-center">Paid</th>
             </tr>
           </thead>
           <tbody>
@@ -530,11 +618,6 @@ function WinnersTable({ entries, allPlayerNames }: { entries: CtpEntry[]; allPla
                 <td className="p-2 text-center font-bold">#{e.hole}</td>
                 <td className="p-2 text-gray-500">{e.courseName}</td>
                 <td className="p-2 text-center">{e.yardage ? `${e.yardage} yds` : '—'}</td>
-                <td className="p-2 text-center">
-                  {e.winnerPaid
-                    ? <Check size={12} className="inline text-masters-green" />
-                    : <span className="text-gray-300">—</span>}
-                </td>
               </tr>
             ))}
           </tbody>
@@ -697,6 +780,13 @@ export default function CtpPage() {
     }
   }
 
+  // Mark all of a player's CTP wins as paid (or unpaid)
+  function handleMarkPlayerPaid(winnerName: string, paid: boolean) {
+    thisYearEntries
+      .filter(e => e.winnerName === winnerName && !e.donatedToHio)
+      .forEach(e => updateCtpEntry(e.id, { winnerPaid: paid }))
+  }
+
   const isInitialized = thisYearDonations.length > 0 || thisYearEntries.length > 0
 
   // History entries (all years with winners)
@@ -840,6 +930,17 @@ export default function CtpPage() {
               ))}
             </div>
           </div>
+
+          {/* CTP winner payouts */}
+          {isInitialized && (
+            <WinnerPayouts
+              entries={ctpEntries}
+              prizePerHole={prizePerHole}
+              isAdmin={isAdmin}
+              year={year}
+              onMarkPlayerPaid={handleMarkPlayerPaid}
+            />
+          )}
 
           {/* CTP → HIO summary */}
           <HioDonationSummary
