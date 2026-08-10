@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
-import { useIsAdmin } from '../store/useAuthStore'
+import { useIsAdmin, useCanManagePayments } from '../store/useAuthStore'
 import type { HoleInOneEntry, HioDonation, Player } from '../types'
 
 function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: Player[]): string {
@@ -134,11 +134,12 @@ function PotHero({
 // ── Year Payment Tracker ──────────────────────────────────────────────────────
 
 function YearTracker({
-  donations, year, isAdmin, onToggle, onAddPlayer, allPlayers,
+  donations, year, isAdmin, canManagePayments, onToggle, onAddPlayer, allPlayers,
 }: {
   donations: HioDonation[]
   year: number
   isAdmin: boolean
+  canManagePayments: boolean
   onToggle: (id: string, paid: boolean) => void
   onAddPlayer: (name: string, playerId?: string) => void
   allPlayers: Player[]
@@ -194,14 +195,14 @@ function YearTracker({
           return (
             <button
               key={d.id}
-              disabled={!isAdmin}
-              onClick={() => isAdmin && onToggle(d.id, !d.paid)}
+              disabled={!canManagePayments}
+              onClick={() => canManagePayments && onToggle(d.id, !d.paid)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left
                 ${d.paid
                   ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
                   : 'bg-gray-50 border-gray-200 text-gray-500'
                 }
-                ${isAdmin ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}
+                ${canManagePayments ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}
               `}
             >
               <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.paid ? 'bg-masters-green' : 'bg-gray-200'}`}>
@@ -765,7 +766,8 @@ export default function HoleInOne() {
     addHoleInOne, updateHoleInOne, deleteHoleInOne,
     setDonationPaid, claimPot, claimPotForYear, addHioDonation, setHioDonations,
   } = useTournamentStore()
-  const isAdmin = useIsAdmin()
+  const isAdmin           = useIsAdmin()
+  const canManagePayments = useCanManagePayments()
 
   const [showRecordModal, setShowRecordModal] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -847,6 +849,7 @@ export default function HoleInOne() {
           donations={currentYearDonations}
           year={year}
           isAdmin={isAdmin}
+          canManagePayments={canManagePayments}
           onToggle={setDonationPaid}
           onAddPlayer={handleAddPlayer}
           allPlayers={allPlayers}

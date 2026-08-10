@@ -250,8 +250,9 @@ export interface CourseHistoryEntry {
 export interface AdminCredential {
   username: string
   passwordHash: string
-  role?: 'admin' | 'scorer' | 'player'
+  role?: 'admin' | 'scorer' | 'player' | 'treasurer'
   canScore?: boolean              // player with scorer rights
+  canTreasure?: boolean           // player with treasurer rights (mark payments paid)
   isDefaultPassword?: boolean     // true until player changes their password
   mustChangePassword?: boolean    // forced change on next login
   playerId?: string               // roster Player.id this account is linked to

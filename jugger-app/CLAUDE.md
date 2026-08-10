@@ -164,8 +164,8 @@ jugger-app/src/
   index.css                     # Tailwind + custom component styles
   types/index.ts                # All TypeScript interfaces
   store/
-    useTournamentStore.ts       # Zustand store v23 (all state + actions)
-    useAuthStore.ts             # Auth state (admin/scorer login)
+    useTournamentStore.ts       # Zustand store v25 (all state + actions)
+    useAuthStore.ts             # Auth state (admin/scorer/treasurer login)
   lib/supabase.ts               # Supabase client init (null if env vars absent)
   hooks/useSupabaseSync.ts      # Real-time sync hook + useSyncStatus
   utils/
@@ -199,7 +199,10 @@ jugger-app/src/
     Schedule.tsx                # Round dates, tee times, format selector
     Pairings.tsx                # Match generation + manual editing (admin only)
     ScorecardView.tsx           # Score entry UI, per-round simulate, auto team scores;
-                                #   RoundInfoBanner reads live gameConfig
+                                #   RoundInfoBanner reads live gameConfig;
+                                #   "Score Hole-by-Hole" button (mobile, all users) links to MobileScoring
+    MobileScoring.tsx           # Full-screen per-hole mobile scoring page (all users can view;
+                                #   scorers/admins can edit); route outside Layout wrapper
     Courses.tsx                 # Active-year courses only (from roundConfigs); hole data
     RoundGames.tsx              # Game format rules + configurable house parameters;
                                 #   visible to all — admin edits, guests/scorers read-only
@@ -382,18 +385,28 @@ TournamentState {
   gameConfig: GameConfig            // house rules; wired into scoring calculations
   location?: string                 // trip destination (e.g. 'Pinehurst, NC'); shown in header
   lodgingConfig?: LodgingConfig     // admin-configurable; shown on Lodging page
+  ctpTeamIds?: Record<number, string>  // round → teamId; which team goes last in R3/R5 CTP entry; synced via Supabase
 }
 
-AdminCredential { username, passwordHash, role?: 'admin' | 'scorer' }
+AdminCredential {
+  username, passwordHash
+  role?: 'admin' | 'scorer' | 'player' | 'treasurer'
+  canScore?: boolean      // player-role accounts with scorer rights
+  canTreasure?: boolean   // player-role accounts with treasurer rights (mark payments paid)
+  displayName?: string    // friendly name shown in account management
+  isSubAccount?: boolean  // true for player accounts created from sub roster entries
+  isDefaultPassword?: boolean  // true until player changes their password
+  mustChangePassword?: boolean // force password change on next login
+}
 ```
 
 ---
 
 ## State Management
 
-### Zustand Store (`useTournamentStore`) — version 23
+### Zustand Store (`useTournamentStore`) — version 25
 
-Persists to `localStorage` key `jugger-tournament-2026`. All 23 versions have migration functions.
+Persists to `localStorage` key `jugger-tournament-2026`. All 25 versions have migration functions.
 
 **Key actions:**
 - `setYear / lockHandicaps / setPairingsLocked / lockRound(round) / unlockRound(round)`
@@ -424,6 +437,9 @@ Persists to `localStorage` key `jugger-tournament-2026`. All 23 versions have mi
 - `setCtpEntries / updateCtpEntry / addCtpDonation / setCtpDonationPaid`
 - `addCourseHistory / updateCourseHistory / deleteCourseHistory`
 - `addSkidmoreScore / updateSkidmoreScore / removeSkidmoreScore`
+- `setCtpTeamId(round, teamId)` — set which team goes last in CTP entry for R3/R5; synced to Supabase
+- `promotePlayerToTreasurer(username)` — grants `canTreasure: true` on a player-role account
+- `demotePlayerFromTreasurer(username)` — revokes treasurer rights
 
 **Score propagation:** When a non-blind match score changes (`setMatchScore` or `setMatchScoresBatch`), the store automatically propagates those scores to the player's corresponding blind match in the same round.
 
@@ -434,11 +450,18 @@ Persists to `localStorage` key `jugger-tournament-2026`. All 23 versions have mi
 Not persisted (session-only).
 
 ```typescript
-{ currentAdmin: string|null, currentRole: 'admin'|'scorer'|null, loggingIn, loginError }
+{
+  currentAdmin: string|null
+  currentRole: 'admin'|'scorer'|'player'|'treasurer'|null
+  canScore: boolean      // true for admin, scorer, player with canScore
+  canTreasure: boolean   // true for admin, treasurer, player with canTreasure
+  loggingIn, loginError, mustChangePassword
+}
 ```
 
-- `login(username, password)` — verifies SHA-256 hash against `admins` in tournament store, sets `currentRole` from `AdminCredential.role` (defaults to `'admin'`)
-- Selectors: `useIsAdmin()`, `useIsScorer()`, `useCanEnterScores()`, `useCurrentAdmin()`
+- `login(username, password)` — verifies SHA-256 hash against `admins` in tournament store; sets `currentRole`, `canScore`, `canTreasure` from credential; role defaults to `'admin'` if unset
+- Selectors: `useIsAdmin()`, `useIsScorer()`, `useIsPlayer()`, `useCanEnterScores()`, `useCanManagePayments()`, `useCurrentAdmin()`
+  - `useCanManagePayments()` — true for admins and any account with `canTreasure`; controls CTP winner paid toggles and HIO donation paid toggles
 
 **Default admin:** `App.tsx` bootstraps a `quade` admin on first load if no admins exist.
 
@@ -454,7 +477,7 @@ Not persisted (session-only).
 | `matches` | `match_id`, `tournament_year` | `match_json` (Match object) |
 | `team_scores` | `tournament_year`, `team_id`, `round` | `points`, `notes` |
 
-**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig, location, lodgingConfig`
+**APP_STATE_KEYS** (synced as single JSON): `year, teams, courses, roundConfigs, holeInOnes, ctpEntries, ctpDonations, ctpHioHistory, hdcpLocked, courseHistory, admins, pairingsLocked, lockedRounds, hioDonations, skidmoreScores, sandbaggerPlayerId, toiletAwardPlayerId, defendingChampionTeamId, gameConfig, location, lodgingConfig, ctpTeamIds`
 
 ### Sync Behavior
 - **On load:** Supabase wins over localStorage if rows exist
@@ -472,6 +495,8 @@ Not persisted (session-only).
 |---|---|---|
 | **Admin** | Shield icon → sign-in form | Everything: edit rosters, courses, schedule, pairings, scores, results, accounts |
 | **Scorer** | Same sign-in form | Enter scores, toggle Magic Ball, record match results |
+| **Treasurer** | Same sign-in form | Mark CTP winner payments paid; mark CTP/HIO contributions paid; no score entry |
+| **Player** | Same sign-in form | Read-only by default; can be granted Scorer and/or Treasurer rights individually |
 | **Guest** | No login | Read-only view of all pages except Pairings, Round Games, Team Results, and Skidmore HDCP |
 
 ### Page-Level Access
@@ -497,11 +522,12 @@ Not persisted (session-only).
 
 ### Account Management
 
-Admins open the "Manage Accounts" panel (Header → Manage). Two sections:
+Admins open the "Manage Accounts" panel (Header → Manage). Three sections:
+- **Players** — auto-created from roster; grant/revoke Scorer and/or Treasurer rights per player; default password shown until changed; subs labeled `SUB`
 - **Admins** — full access accounts
-- **Scorers** — score-entry-only accounts
+- **Scorers** — standalone scorer accounts (non-player volunteers)
 
-Both use SHA-256 password hashing via Web Crypto API.
+All accounts use SHA-256 password hashing via Web Crypto API. `useCanManagePayments()` returns true for admins and any account (regardless of role) where `canTreasure === true`.
 
 ---
 
@@ -571,7 +597,7 @@ Both use SHA-256 password hashing via Web Crypto API.
   - **Revert** restores original name, HDCP, and GHIN; `makeSubPermanent` clears `originalGhinNumber`
 - **Permanent replacement** — admin can permanently replace a player; carried forward on `finalizeYear`; badge: `PERM`
 - **Make Sub Permanent** — upgrades an existing sub to a permanent roster member
-- HDCP table: raw, netted, capped, final HDCPs for all rounds; column headers show course name and format; note distinguishes 60% scramble rounds dynamically based on `roundConfigs.format`
+- HDCP table: raw, netted, capped, final HDCPs for all rounds; column headers show course name and format; R3 header reads scramble % from `gameConfig.texasScrambleHdcpPct` (not hardcoded 60%)
 - Handicap lock toggle prevents edits; Captain's Choice team aggregate shown dynamically
 - **Award images** — player row shows `sandbagger.jpg` or `toilet_award.webp` (`h-full` filling the row height) for award holders; admin can assign/remove via thumbnail buttons; `✕` overlay removes the award
 - **Defending Champions** — team name row shows `🏆 Defending Champs` text; admin can click it to remove, or click `🏆` on other teams to assign
@@ -595,7 +621,8 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Round tabs (1–5) + match selector list (horizontal pill row on mobile, vertical sidebar on desktop)
 - **Round Info Banner** — per-round description panel above matches; collapsible on mobile (collapsed by default); reads live from `gameConfig` via `getFormatInfo(gc)` so all point values, pcts, and descriptions update instantly when house rules change
 - Per-match scorecard via `ScorecardCard` component (see below)
-- Score entry: desktop uses number inputs; mobile uses ▲/▼ stepper buttons (`lg:hidden`) — first tap from null sets to par
+- **"Score Hole-by-Hole"** button (mobile only, `lg:hidden`, visible to all users) — links to `/scorecards/:matchId/mobile?round=N&hole=1`; full-screen per-hole scoring with numpad, result bar, CTP picker; editing gated to scorers/admins
+- Score entry (desktop): number inputs; mobile stepper buttons ▲/▼ — first tap from null sets to par
 - Admin-only: **Simulate Scores** (per-round or global), **Clear Scores**, Clear All Scores
   - Simulate uses `setMatchScoresBatch` (one atomic update) to avoid Supabase realtime feedback loop overwriting scores mid-simulation
   - Simulate includes Magic Ball random assignment for non-blind Points Round matches
@@ -608,6 +635,17 @@ Both use SHA-256 password hashing via Web Crypto API.
 - **Auto-populates `match.result`** on every score entry and simulate for `team_match_play` and `individual_match` formats
 - Deep links: `?match={matchId}&round={round}`
 
+### Mobile Scoring (`/scorecards/:matchId/mobile`)
+Full-screen per-hole scoring page for mobile devices. Mounted OUTSIDE the Layout wrapper (no header/nav) so it fills the entire viewport. Visible to all users; score editing gated to `canEnterScores`.
+
+- **Hole navigation** — prev/next arrows + hole indicator; swipe-friendly layout
+- **Score entry** — tap a player name to open numpad; after tapping Done, auto-advances to the next unscored player with numpad kept open; closes after last player scored; tap any scored player to re-open numpad for editing
+- **Result bar** — format-aware running result below the hole scores (match play +/- holes, Stableford quota delta, team standings for scramble/captain's choice, individual match 3-row layout)
+- **Par 3 CTP picker** — auto-triggers after all players are scored on a par-3 hole; shows all 12 players grouped by team; admin/scorer only
+- **Score colors** — eagle=yellow, birdie=green, par=gray, bogey=red, double/worse=purple
+- Uses `useTournamentStore.getState()` directly in the Done callback for fresh post-update state (React useMemo hasn't re-run yet at callback time)
+- **Revert:** delete `src/pages/MobileScoring.tsx` + remove its import/route in `App.tsx` + remove the "Score Hole-by-Hole" button block in `ScorecardView.tsx`
+
 ### Courses (`/{year} Courses` at `/courses`)
 - Shows **only** courses assigned in the current year's `roundConfigs`; empty state if none assigned
 - Tab per active course
@@ -619,7 +657,8 @@ Both use SHA-256 password hashing via Web Crypto API.
 
 ### Round Games (`/round-games`)
 - Visible to **all users**; only admins can edit configurable parameters
-- **Quick-jump pill bar** at top — one pill per format; scrolls to that format's card
+- **"Juggerknocker Invitational Rules" card** — displayed above the format pills; 5 numbered house rules (ball in play, no club limit, gimmes, max net triple bogey, OB options a/b/c) with a USGA Rules external link
+- **Quick-jump pill bar** — one pill per format; scrolls to that format's card
 - Card per format (Team Match Play, Points Round, Texas Scramble, Individual Match Play, Captain's Choice, Vegas)
 - Each card: format name + informal nickname, assigned round badge, description, "How It Works" bullet list, HDCP note
 - **Stableford point values** (Points Round card) — visible to guests and scorers; shows all 6 values (Albatross/Eagle/Birdie/Par/Bogey/Double) even in read-only mode
@@ -656,9 +695,10 @@ Both use SHA-256 password hashing via Web Crypto API.
 ### Par 3 CTP (`/ctp`)
 - Auto-counts par-3 holes across all rounds from course data
 - Pot = paid player count × par-3 count × $1/hole
-- Per-hole CTP entry: round, hole, yardage, winner, paid toggle
+- Per-hole CTP entry: round, hole, yardage, winner name
+- **CTP Winnings card** (`WinnerPayouts` component) — groups wins by player; shows hole list (e.g. R2·H3), total dollar winnings, and a single "Mark Paid" button per player; visible to all; button gated to `useCanManagePayments()`
 - **Substitute name resolution** — donation records store `playerId`; when a sub is active the current player's name (sub's name) is displayed; legacy records without `playerId` fall back to stored `playerName`
-- CTP donation tracker per player
+- CTP donation tracker per player (payment toggle gated to `useCanManagePayments()`)
 - Historical CTP→HIO transfer bar chart
 - **Mobile**: Pot Summary and Player Contributions sections collapsed by default (chevron toggle); CTP results visible first
 
@@ -667,7 +707,7 @@ Both use SHA-256 password hashing via Web Crypto API.
 - Champion entries: year, player, course, hole, yardage, date, notes, photo
 - Photo upload (base64 stored in Zustand)
 - Claim Pot: sums all paid unclaimed donations → sets `potClaimed` on HIO entry
-- Per-player $20/year donation tracking with paid toggle (admin)
+- Per-player $20/year donation tracking with paid toggle (gated to `useCanManagePayments()`)
 - **Substitute name resolution** — donation records store `playerId`; when a sub is active the sub's name is shown in place of the original player's name; legacy records fall back to stored `playerName`
 - **Substitute pot eligibility** — substitutes can only receive an HIO pot payout for donations made in the year they are playing (not prior years); only current-year `hioDonations` are summed for a sub's claim
 

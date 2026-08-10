@@ -53,6 +53,8 @@ interface Actions {
   removeAdmin: (username: string) => void
   promotePlayerToScorer: (username: string) => void
   demotePlayerFromScorer: (username: string) => void
+  promotePlayerToTreasurer: (username: string) => void
+  demotePlayerFromTreasurer: (username: string) => void
   resetPlayerPassword: (username: string, defaultHash: string) => void
   setPairingsLocked: (locked: boolean) => void
   lockRound: (round: number) => void
@@ -456,6 +458,16 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       demotePlayerFromScorer: (username) =>
         set(state => ({
           admins: state.admins.map(a => a.username !== username ? a : { ...a, canScore: false }),
+        })),
+
+      promotePlayerToTreasurer: (username) =>
+        set(state => ({
+          admins: state.admins.map(a => a.username !== username ? a : { ...a, canTreasure: true }),
+        })),
+
+      demotePlayerFromTreasurer: (username) =>
+        set(state => ({
+          admins: state.admins.map(a => a.username !== username ? a : { ...a, canTreasure: false }),
         })),
 
       resetPlayerPassword: (username, defaultHash) =>

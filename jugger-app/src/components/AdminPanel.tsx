@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/useAuthStore'
 import { hashPassword, DEFAULT_PASSWORD } from '../utils/auth'
 import {
   X, Plus, Trash2, KeyRound, Eye, EyeOff, Shield, ClipboardList,
-  Users, RotateCcw, ClipboardCheck, ClipboardX,
+  Users, RotateCcw, ClipboardCheck, ClipboardX, Wallet,
 } from 'lucide-react'
 import type { AdminCredential } from '../types'
 
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function AdminPanel({ onClose }: Props) {
-  const { admins, addAdmin, removeAdmin, updateAdmin, promotePlayerToScorer, demotePlayerFromScorer, resetPlayerPassword } = useTournamentStore()
+  const { admins, addAdmin, removeAdmin, updateAdmin, promotePlayerToScorer, demotePlayerFromScorer, promotePlayerToTreasurer, demotePlayerFromTreasurer, resetPlayerPassword } = useTournamentStore()
   const { currentAdmin } = useAuthStore()
 
   const adminAccounts  = admins.filter(a => !a.role || a.role === 'admin')
@@ -168,6 +168,25 @@ export default function AdminPanel({ onClose }: Props) {
             >
               <ClipboardCheck size={13} />
               <span className="hidden sm:inline">Grant Scorer</span>
+            </button>
+          )}
+          {cred.canTreasure ? (
+            <button
+              className="flex items-center gap-1 text-xs text-amber-600 hover:text-red-500 transition-colors ml-1"
+              title="Revoke treasurer rights"
+              onClick={() => demotePlayerFromTreasurer(cred.username)}
+            >
+              <Wallet size={13} />
+              <span className="hidden sm:inline">Revoke Treasurer</span>
+            </button>
+          ) : (
+            <button
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-amber-600 transition-colors ml-1"
+              title="Grant treasurer rights — can mark CTP and HIO payments as paid"
+              onClick={() => promotePlayerToTreasurer(cred.username)}
+            >
+              <Wallet size={13} />
+              <span className="hidden sm:inline">Grant Treasurer</span>
             </button>
           )}
           <button

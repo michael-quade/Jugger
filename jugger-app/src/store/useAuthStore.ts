@@ -6,8 +6,9 @@ const SESSION_TIMEOUT_MS = 12 * 60 * 60 * 1000 // 12 hours
 
 interface AuthState {
   currentAdmin: string | null
-  currentRole: 'admin' | 'scorer' | 'player' | null
+  currentRole: 'admin' | 'scorer' | 'player' | 'treasurer' | null
   canScore: boolean
+  canTreasure: boolean
   mustChangePassword: boolean
   loginError: string | null
   loggingIn: boolean
@@ -25,6 +26,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   currentAdmin: null,
   currentRole: null,
   canScore: false,
+  canTreasure: false,
   mustChangePassword: false,
   loginError: null,
   loggingIn: false,
@@ -45,10 +47,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         role === 'admin' ||
         role === 'scorer' ||
         (role === 'player' && cred.canScore === true)
+      const canTreasure =
+        role === 'admin' ||
+        role === 'treasurer' ||
+        (role === 'player' && cred.canTreasure === true)
       set({
         currentAdmin: cred.username,
         currentRole: role,
         canScore,
+        canTreasure,
         mustChangePassword: cred.mustChangePassword === true,
         loggingIn: false,
         loginError: null,
@@ -64,6 +71,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     currentAdmin: null,
     currentRole: null,
     canScore: false,
+    canTreasure: false,
     mustChangePassword: false,
     loginError: null,
     loginAt: null,
@@ -80,11 +88,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
-export const useIsAdmin        = () => useAuthStore(s => s.currentRole === 'admin')
-export const useIsScorer       = () => useAuthStore(s => s.currentRole === 'scorer')
-export const useIsPlayer       = () => useAuthStore(s => s.currentRole === 'player')
-export const useCanEnterScores = () => useAuthStore(s => s.canScore)
-export const useCanAccessBoard = () => useAuthStore(s =>
+export const useIsAdmin           = () => useAuthStore(s => s.currentRole === 'admin')
+export const useIsScorer          = () => useAuthStore(s => s.currentRole === 'scorer')
+export const useIsPlayer          = () => useAuthStore(s => s.currentRole === 'player')
+export const useCanEnterScores    = () => useAuthStore(s => s.canScore)
+export const useCanManagePayments = () => useAuthStore(s => s.canTreasure)
+export const useCanAccessBoard    = () => useAuthStore(s =>
   s.currentRole === 'admin' || s.currentRole === 'player'
 )
-export const useCurrentAdmin   = () => useAuthStore(s => s.currentAdmin)
+export const useCurrentAdmin      = () => useAuthStore(s => s.currentAdmin)

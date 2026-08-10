@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
-import { useIsAdmin } from '../store/useAuthStore'
+import { useIsAdmin, useCanManagePayments } from '../store/useAuthStore'
 import type { CtpEntry, CtpDonation, Course, RoundConfig, Player } from '../types'
 
 function resolveName(donation: { playerId?: string; playerName: string }, allPlayers: Player[]): string {
@@ -151,10 +151,10 @@ function CtpPotBanner({
 // ── Player payment grid ───────────────────────────────────────────────────────
 
 function PaymentGrid({
-  donations, isAdmin, par3Count, onToggle, allPlayers,
+  donations, canManagePayments, par3Count, onToggle, allPlayers,
 }: {
   donations: CtpDonation[]
-  isAdmin: boolean
+  canManagePayments: boolean
   par3Count: number
   onToggle: (id: string, paid: boolean) => void
   allPlayers: Player[]
@@ -186,13 +186,13 @@ function PaymentGrid({
           return (
             <button
               key={d.id}
-              disabled={!isAdmin}
-              onClick={() => isAdmin && onToggle(d.id, !d.paid)}
+              disabled={!canManagePayments}
+              onClick={() => canManagePayments && onToggle(d.id, !d.paid)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left
                 ${d.paid
                   ? 'bg-masters-green/10 border-masters-green/30 text-masters-dark'
                   : 'bg-gray-50 border-gray-200 text-gray-500'}
-                ${isAdmin ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}`}
+                ${canManagePayments ? 'cursor-pointer hover:shadow-sm' : 'cursor-default'}`}
             >
               <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.paid ? 'bg-masters-green' : 'bg-gray-200'}`}>
                 {d.paid && <Check size={11} className="text-white" />}
@@ -454,11 +454,11 @@ function WinnersChart({ entries, allPlayerNames }: { entries: CtpEntry[]; allPla
 // ── CTP winner payouts (current year, by player) ─────────────────────────────
 
 function WinnerPayouts({
-  entries, prizePerHole, isAdmin, year, onMarkPlayerPaid,
+  entries, prizePerHole, canManagePayments, year, onMarkPlayerPaid,
 }: {
   entries: CtpEntry[]
   prizePerHole: number
-  isAdmin: boolean
+  canManagePayments: boolean
   year: number
   onMarkPlayerPaid: (name: string, paid: boolean) => void
 }) {
@@ -533,7 +533,7 @@ function WinnerPayouts({
               </div>
 
               {/* Mark paid button */}
-              {isAdmin && (
+              {canManagePayments && (
                 <button
                   onClick={() => onMarkPlayerPaid(name, !allPaid)}
                   className={`shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors ${
@@ -675,7 +675,8 @@ export default function CtpPage() {
     ctpEntries, ctpDonations, ctpHioHistory,
     setCtpEntries, updateCtpEntry, addCtpDonation, setCtpDonationPaid,
   } = useTournamentStore()
-  const isAdmin = useIsAdmin()
+  const isAdmin          = useIsAdmin()
+  const canManagePayments = useCanManagePayments()
 
   const [showHistory, setShowHistory] = useState(false)
   const [activeRound, setActiveRound] = useState<number | 'all'>('all')
@@ -862,7 +863,7 @@ export default function CtpPage() {
               <div className={`${contribExpanded ? 'block' : 'hidden'} lg:block`}>
                 <PaymentGrid
                   donations={thisYearDonations}
-                  isAdmin={isAdmin}
+                  canManagePayments={canManagePayments}
                   par3Count={par3Count}
                   onToggle={setCtpDonationPaid}
                   allPlayers={allPlayers}
@@ -936,7 +937,7 @@ export default function CtpPage() {
             <WinnerPayouts
               entries={ctpEntries}
               prizePerHole={prizePerHole}
-              isAdmin={isAdmin}
+              canManagePayments={canManagePayments}
               year={year}
               onMarkPlayerPaid={handleMarkPlayerPaid}
             />
