@@ -811,6 +811,25 @@ export default function ScorecardView() {
         })}
       </div>
 
+      {/* CTP team selector — visible at round level for admin on team formats */}
+      {isAdmin && isTeamFmt && roundMatches.length > 0 && (
+        <div className="flex items-center gap-2 text-xs bg-gray-50 border border-dashed border-gray-200 rounded p-2">
+          <Flag size={12} className="text-masters-green shrink-0" />
+          <span className="text-gray-500">CTP entry shown on team playing last:</span>
+          <select
+            className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white"
+            value={ctpTeamIds[activeRound] ?? ''}
+            onChange={e => setCtpTeamIdStore(activeRound, e.target.value)}
+          >
+            {roundMatches.map(m => {
+              const teamId = m.id.replace(`${activeRound}-`, '')
+              const team = teams.find(t => t.id === teamId)
+              return <option key={m.id} value={teamId}>{team?.name ?? teamId}</option>
+            })}
+          </select>
+        </div>
+      )}
+
       <RoundInfoBanner round={activeRound} />
 
       {isRoundLocked(activeRound) && (
@@ -1008,24 +1027,6 @@ export default function ScorecardView() {
                   )}
                 </div>
 
-                {/* Admin: assign which team's scorecard shows CTP entry (team formats) */}
-                {isAdmin && isTeamFmt && (
-                  <div className="flex items-center gap-2 text-xs bg-gray-50 border border-dashed border-gray-200 rounded p-2">
-                    <Flag size={12} className="text-masters-green shrink-0" />
-                    <span className="text-gray-500">CTP entry shown on team playing last:</span>
-                    <select
-                      className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white"
-                      value={ctpTeamIds[activeRound] ?? ''}
-                      onChange={e => setCtpTeamIdStore(activeRound, e.target.value)}
-                    >
-                      {roundMatches.map(m => {
-                        const teamId = m.id.replace(`${activeRound}-`, '')
-                        const team = teams.find(t => t.id === teamId)
-                        return <option key={m.id} value={teamId}>{team?.name ?? teamId}</option>
-                      })}
-                    </select>
-                  </div>
-                )}
                 <div ref={printRef}>
                   <ScorecardCard
                     match={match}
