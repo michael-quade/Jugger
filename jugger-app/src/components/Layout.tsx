@@ -304,6 +304,28 @@ export default function Layout() {
             </div>
 
           </div>
+
+          {/* Mobile portrait weather — compact single row; hidden on md+ where center strip shows */}
+          {weather && (
+            <div className="md:hidden flex items-center justify-center gap-2.5 pb-2 px-4 flex-wrap">
+              <span className="text-[8px] font-bold tracking-widest text-white/30 uppercase shrink-0">
+                {weather.label}
+              </span>
+              <div className="flex items-center gap-0.5">
+                {weather.days.map((day, i) => (
+                  <div key={day.date} className="flex items-center">
+                    {i > 0 && <span className="text-white/20 mx-1.5 text-xs">·</span>}
+                    <span className="text-sm leading-none mr-1">{wmoEmoji(day.wmo)}</span>
+                    <span className="text-[10px] font-bold text-masters-gold mr-0.5">{fmtDayLabel(day.date).split(' ·')[0]}</span>
+                    <span className="text-[10px] font-semibold text-white">{day.highF}°</span>
+                    {day.rainPct >= 40 && (
+                      <span className="text-[9px] text-blue-300/80 ml-0.5">💧{day.rainPct}%</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Sub-nav — scrolls horizontally on mobile instead of wrapping */}
