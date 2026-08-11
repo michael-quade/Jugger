@@ -133,70 +133,58 @@ export default function AdminPanel({ onClose }: Props) {
 
   function PlayerRow({ cred }: { cred: AdminCredential }) {
     return (
-      <div className="flex items-center gap-2 py-2 border-b last:border-0">
-        <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium text-masters-dark">
+      <div className="py-2.5 border-b last:border-0 space-y-1.5">
+        {/* Row 1: name + username + badges — wraps cleanly, no collision with buttons */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm font-medium text-masters-dark leading-tight">
             {cred.displayName ?? cred.username}
           </span>
+          <span className="text-xs text-gray-400">({cred.username})</span>
           {cred.isSubAccount && (
-            <span className="ml-1.5 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5">
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 leading-none">
               SUB
             </span>
           )}
-          <span className="text-xs text-gray-400 ml-1.5">({cred.username})</span>
           {cred.isDefaultPassword && (
-            <span className="ml-1.5 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5 py-0.5">
-              Default PW: {DEFAULT_PASSWORD}
+            <span className="text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 leading-none">
+              PW: {DEFAULT_PASSWORD}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {cred.canScore ? (
-            <button
-              className="flex items-center gap-1 text-xs text-masters-green hover:text-red-500 transition-colors"
-              title="Revoke scorer rights"
-              onClick={() => demotePlayerFromScorer(cred.username)}
-            >
-              <ClipboardX size={13} />
-              <span className="hidden sm:inline">Revoke Scorer</span>
-            </button>
-          ) : (
-            <button
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-masters-green transition-colors"
-              title="Grant scorer rights"
-              onClick={() => promotePlayerToScorer(cred.username)}
-            >
-              <ClipboardCheck size={13} />
-              <span className="hidden sm:inline">Grant Scorer</span>
-            </button>
-          )}
-          {cred.canTreasure ? (
-            <button
-              className="flex items-center gap-1 text-xs text-amber-600 hover:text-red-500 transition-colors ml-1"
-              title="Revoke treasurer rights"
-              onClick={() => demotePlayerFromTreasurer(cred.username)}
-            >
-              <Wallet size={13} />
-              <span className="hidden sm:inline">Revoke Treasurer</span>
-            </button>
-          ) : (
-            <button
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-amber-600 transition-colors ml-1"
-              title="Grant treasurer rights — can mark CTP and HIO payments as paid"
-              onClick={() => promotePlayerToTreasurer(cred.username)}
-            >
-              <Wallet size={13} />
-              <span className="hidden sm:inline">Grant Treasurer</span>
-            </button>
-          )}
+        {/* Row 2: action buttons — consistent pill style, state shown by color + icon */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-masters-dark transition-colors ml-1"
+            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition-colors ${
+              cred.canScore
+                ? 'text-masters-green border-masters-green/40 bg-green-50 hover:text-red-500 hover:border-red-300 hover:bg-red-50'
+                : 'text-gray-400 border-gray-200 hover:text-masters-green hover:border-masters-green/40'
+            }`}
+            title={cred.canScore ? 'Revoke scorer rights' : 'Grant scorer rights'}
+            onClick={() => cred.canScore ? demotePlayerFromScorer(cred.username) : promotePlayerToScorer(cred.username)}
+          >
+            {cred.canScore ? <ClipboardX size={11} /> : <ClipboardCheck size={11} />}
+            Scorer{cred.canScore ? ' ✓' : ''}
+          </button>
+          <button
+            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition-colors ${
+              cred.canTreasure
+                ? 'text-amber-600 border-amber-300 bg-amber-50 hover:text-red-500 hover:border-red-300 hover:bg-red-50'
+                : 'text-gray-400 border-gray-200 hover:text-amber-600 hover:border-amber-300'
+            }`}
+            title={cred.canTreasure ? 'Revoke treasurer rights' : 'Grant treasurer rights — can mark CTP and HIO payments as paid'}
+            onClick={() => cred.canTreasure ? demotePlayerFromTreasurer(cred.username) : promotePlayerToTreasurer(cred.username)}
+          >
+            <Wallet size={11} />
+            Treasurer{cred.canTreasure ? ' ✓' : ''}
+          </button>
+          <button
+            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-gray-200 text-gray-400 hover:text-masters-dark hover:border-gray-400 transition-colors ml-auto"
             title="Reset to default password"
             disabled={resettingPw === cred.username}
             onClick={() => handleResetPlayerPassword(cred.username)}
           >
-            <RotateCcw size={12} />
-            <span className="hidden sm:inline">Reset PW</span>
+            <RotateCcw size={11} />
+            Reset PW
           </button>
         </div>
       </div>
