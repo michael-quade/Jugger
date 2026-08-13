@@ -66,7 +66,7 @@ async function loadWeather(eventDates: string[]): Promise<WxCache | null> {
   const lastDateMs = new Date(eventDates[eventDates.length - 1] + 'T12:00:00').getTime()
   if (Date.now() > lastDateMs + 86_400_000) return null
 
-  const cacheKey = `jugger-weather-${eventDates[0]}`
+  const cacheKey = `jugger-weather-v2-${eventDates[0]}`
   try {
     const raw = localStorage.getItem(cacheKey)
     if (raw) {
@@ -80,7 +80,10 @@ async function loadWeather(eventDates: string[]): Promise<WxCache | null> {
   const daysUntilEnd = (lastDateMs - Date.now()) / 86_400_000
   let result: WxCache | null = null
 
-  if (daysUntilEnd > 16) {
+  // Switch to live forecast only when all event dates are comfortably inside
+  // the 16-day API window. 14-day threshold gives a 2-day buffer so we never
+  // ask the forecast API for dates right at its boundary (causes silent failure).
+  if (daysUntilEnd > 14) {
     // Historical: average same calendar dates from prior 3 years
     const eventYear  = parseInt(startDate.slice(0, 4), 10)
     const priorYears = [eventYear - 1, eventYear - 2, eventYear - 3]
