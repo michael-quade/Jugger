@@ -153,6 +153,8 @@ Required GitHub secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 
 Local dev: `.env.local` (gitignored) with the same two vars.
 
+`index.html` includes `Cache-Control: no-cache, no-store, must-revalidate` meta tags (browser hints for stale-cache mitigation on iOS Safari; Vite content-hashes all JS/CSS so only `index.html` itself is at risk of being served stale by the browser).
+
 ---
 
 ## Project Structure
@@ -203,6 +205,11 @@ jugger-app/src/
                                 #   "Score Hole-by-Hole" button (mobile, all users) links to MobileScoring
     MobileScoring.tsx           # Full-screen per-hole mobile scoring page (all users can view;
                                 #   scorers/admins can edit); route outside Layout wrapper
+    SideBets.tsx                # Player/admin side bets: list, status badges, settlement display
+    SideBetCreate.tsx           # Create a new side bet (player/admin)
+    SideBetDetail.tsx           # Per-bet detail: participants, stake, settlement result
+    MessageBoard.tsx            # Supabase-backed discussion board (threads list; player+admin access)
+    MessageBoardThread.tsx      # Single thread view with replies, photos, emoji reactions
     Courses.tsx                 # Active-year courses only (from roundConfigs); hole data
     RoundGames.tsx              # Game format rules + configurable house parameters;
                                 #   visible to all — admin edits, guests/scorers read-only
@@ -508,9 +515,11 @@ Not persisted (session-only).
 | Schedule | Read | Read | Full (edit dates, tee times, format) |
 | **Pairings** | **Hidden** | **Hidden** | Full (generate, edit, lock) |
 | Scorecards | Read | Enter scores, Magic Ball, match result | Full + simulate + clear |
+| **Side Bets** | **Hidden** | **Hidden** | Full; players can view/create their own |
+| Lodging | Read | Read | Full (edit property, units, dates) |
+| **Board** | **Hidden** | **Hidden** | Full; players can post/reply |
 | Courses | Read | Read | Full (edit hole data) |
 | Round Games | Read (rules + values) | Read | Full (edit house parameters) |
-| Lodging | Read | Read | Full (edit property, units, dates) |
 | **Team Results** | **Hidden** | **Hidden** | Edit scores |
 | Par 3 CTP | Read | Read | Full |
 | Hole in One | Read | Read | Full |
@@ -524,8 +533,9 @@ Not persisted (session-only).
 
 Admins open the "Manage Accounts" panel (Header → Manage). Three sections:
 - **Players** — auto-created from roster; grant/revoke Scorer and/or Treasurer rights per player; default password shown until changed; subs labeled `SUB`
-- **Admins** — full access accounts
-- **Scorers** — standalone scorer accounts (non-player volunteers)
+  - Each row uses a **2-row stacked layout**: row 1 has display name + username + `SUB`/default-PW badges (all flex-wrap to avoid collisions); row 2 has pill-style action buttons (Scorer toggle, Treasurer toggle, Reset PW — color-coded active/inactive state)
+- **Admins** — full access accounts; inline Change PW + Delete actions
+- **Scorers** — standalone scorer accounts (non-player volunteers); same inline actions as Admins
 
 All accounts use SHA-256 password hashing via Web Crypto API. `useCanManagePayments()` returns true for admins and any account (regardless of role) where `canTreasure === true`.
 
@@ -533,7 +543,7 @@ All accounts use SHA-256 password hashing via Web Crypto API. `useCanManagePayme
 
 ## Navigation Order
 
-1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Lodging · 7. Courses · 8. Round Games · 9. Team Results *(admin only)* · 10. Par 3 CTP · 11. Hole in One · 12. Analytics · 13. Archive *(admin only)* · 14. Course History · 15. Print All *(admin only)* · 16. Skidmore HDCP *(admin only)*
+1. Dashboard · 2. Teams · 3. Schedule · 4. Pairings *(admin only)* · 5. Scorecards · 6. Side Bets *(player/admin only)* · 7. Lodging · 8. Board · 9. Courses · 10. Round Games · 11. Team Results *(admin only)* · 12. Par 3 CTP · 13. Hole in One · 14. Analytics · 15. Archive *(admin only)* · 16. Course History · 17. Print All *(admin only)* · 18. Skidmore HDCP *(admin only)*
 
 **Mobile bottom nav** (fixed bar, `lg:hidden`): Home → Scores → Par 3 → Schedule → Results. Nav labels are icon-only on mobile (text hidden via `hidden lg:inline`). Top sub-nav scrolls horizontally on mobile (`overflow-x-auto no-scrollbar`); on desktop it shows a thin white scrollbar (`.nav-scrollable`) when items overflow so admin-only pages remain discoverable.
 
@@ -571,11 +581,19 @@ All accounts use SHA-256 password hashing via Web Crypto API. `useCanManagePayme
 
 ### Header Layout
 - Entire chrome (header + sub-nav + history banner) wrapped in one `sticky top-0 z-50` div — all three scroll as a unit and stay pinned
-- Header: tournament logo, title (links to Dashboard), year badge, sync status dot, admin widget
+- Header is a 3-zone flex row: **left** (logo + title, shrink-0) · **center** (weather strip, flex-1, `hidden md:flex`) · **right** (sync dot + admin widget, grouped together, shrink-0)
 - Logo and title are responsive: `h-14 w-14 lg:h-36 lg:w-36` / `text-lg lg:text-3xl`
-- Below the year badge: `location` (e.g. "Pinehurst, NC") and date range (e.g. "August 27–29, 2026") derived from `roundConfigs` dates filtered to the current year — both hidden if not set or if dates don't match the current year (prevents stale dates after `finalizeYear`)
-- Admin year selector (dropdown) — visible only when archived years exist and user is admin
+- Below the title: `location` (e.g. "Pinehurst, NC") and date range (e.g. "August 27–29, 2026") derived from `roundConfigs` dates filtered to the current year — both hidden if not set or if dates don't match the current year (prevents stale dates after `finalizeYear`)
+- Admin year selector (dropdown) — visible only when archived years exist and user is admin; positioned between the title block and the weather center zone
 - History mode amber banner with "Return to {liveYear}" button
+- **Weather strip** (center zone, `hidden md:flex`) — 3-day event forecast shown on tablet/desktop; one `WeatherCard` per unique event date (Thu/Fri/Sat), showing: day label, WMO weather emoji, high/low °F, condition label, rain probability
+  - **Forecast mode** (≤14 days until last event date): Open-Meteo `forecast` API (`api.open-meteo.com/v1/forecast`, `forecast_days=16`, `temperature_unit=fahrenheit`); label reads "Forecast" or "Extended Forecast" (>7 days)
+  - **Historical mode** (>14 days): Open-Meteo `archive` API (`archive-api.open-meteo.com/v1/archive`) for the same calendar dates in the prior 3 years; averages highs/lows; uses worst WMO severity code; `precipitation_sum` (mm) converted to approximate rain % via lookup table; label reads "Historical Avg · 3yr"
+  - 14-day threshold (not 16) gives a 2-day buffer so the API is never queried at its exact boundary
+  - Cache key `jugger-weather-v2-{firstEventDate}`, TTL 1 hour via `localStorage`; null result is not cached (retried next load)
+  - Event coordinates hardcoded: Pinehurst, NC (`WX_LAT = 35.195`, `WX_LON = -79.469`) — update for future venues
+  - Weather suppressed for archived/past years (last event date > 1 day ago)
+- **Mobile compact weather row** (`md:hidden`) — rendered below the main flex row inside `<header>`; shows emoji + day abbreviation + high°F + 💧rain% (only if ≥40%) for each day, separated by dots; no card borders
 
 ---
 
@@ -622,6 +640,7 @@ All accounts use SHA-256 password hashing via Web Crypto API. `useCanManagePayme
 - **Round Info Banner** — per-round description panel above matches; collapsible on mobile (collapsed by default); reads live from `gameConfig` via `getFormatInfo(gc)` so all point values, pcts, and descriptions update instantly when house rules change
 - Per-match scorecard via `ScorecardCard` component (see below)
 - **"Score Hole-by-Hole"** button (mobile only, `lg:hidden`, visible to all users) — links to `/scorecards/:matchId/mobile?round=N&hole=1`; full-screen per-hole scoring with numpad, result bar, CTP picker; editing gated to scorers/admins
+- **CTP team selector** — for team-format rounds (Texas Scramble, Captain's Choice), an admin-only dropdown appears above `<RoundInfoBanner>` as soon as the round tab is selected (no match click required); sets which team goes last and gets the CTP recording prompt in MobileScoring; persists to `ctpTeamIds` in store and syncs via Supabase
 - Score entry (desktop): number inputs; mobile stepper buttons ▲/▼ — first tap from null sets to par
 - Admin-only: **Simulate Scores** (per-round or global), **Clear Scores**, Clear All Scores
   - Simulate uses `setMatchScoresBatch` (one atomic update) to avoid Supabase realtime feedback loop overwriting scores mid-simulation
@@ -646,6 +665,25 @@ Full-screen per-hole scoring page for mobile devices. Mounted OUTSIDE the Layout
 - Uses `useTournamentStore.getState()` directly in the Done callback for fresh post-update state (React useMemo hasn't re-run yet at callback time)
 - **Revert:** delete `src/pages/MobileScoring.tsx` + remove its import/route in `App.tsx` + remove the "Score Hole-by-Hole" button block in `ScorecardView.tsx`
 
+### Side Bets (`/side-bets`) — Player/Admin only
+Player-vs-player side wagers independent of the main tournament formats.
+- Access gated to `isAdmin || isPlayer`; hidden from guests and scorer-only accounts
+- **Three tabs**: Active (pending + active bets), History (completed/cancelled), Stats (player bet performance)
+- Per-bet: participants, stake, format (`stroke_play`, `match_play`, `stableford`, etc.), target match/round, status badge (Pending / Active / Complete / Cancelled)
+- Settlement auto-computed via `computeSideBet()` from `utils/sideBets.ts` using live match scores and HDCPs
+- Create flow: `SideBetCreate.tsx` (format picker, participant selector, stake, match linkage); admin can create on behalf of any players
+- Detail view: `SideBetDetail.tsx` — full settlement breakdown, player net scores, result
+
+### Message Board (`/board`)
+Supabase-backed discussion thread list for players and admins.
+- Access gated to `useCanAccessBoard()` (logged-in players and admins; guests hidden)
+- **Thread list**: categorized by `MB_CATEGORIES`; filter by category tab or free-text search; unread count badge on nav item
+- **New thread**: title, category, body text, optional photo attachments (compressed via `compressImage`, stored in `jugger-board` Supabase Storage bucket); emoji picker
+- Thread detail (`MessageBoardThread.tsx`): replies, photo attachments, emoji reactions, timestamps
+- Admin can pin or lock threads
+- Unread tracking via `boardUtils.ts` (localStorage read receipts); `useBoardStore` tracks `unreadCount` for nav badge
+- Not synced via the main `app_state` Supabase row — uses dedicated `mb_threads` / `mb_replies` tables directly
+
 ### Courses (`/{year} Courses` at `/courses`)
 - Shows **only** courses assigned in the current year's `roundConfigs`; empty state if none assigned
 - Tab per active course
@@ -657,7 +695,7 @@ Full-screen per-hole scoring page for mobile devices. Mounted OUTSIDE the Layout
 
 ### Round Games (`/round-games`)
 - Visible to **all users**; only admins can edit configurable parameters
-- **"Juggerknocker Invitational Rules" card** — displayed above the format pills; 5 numbered house rules (ball in play, no club limit, gimmes, max net triple bogey, OB options a/b/c) with a USGA Rules external link
+- **"Juggerknocker Invitational Rules" card** — displayed above the format pills; 6 numbered house rules (ball in play, no club limit, gimmes, max net triple bogey, OB options a/b/c, handicap baseline from 12-month GHIN low or Rules Committee) with a USGA Rules external link
 - **Quick-jump pill bar** — one pill per format; scrolls to that format's card
 - Card per format (Team Match Play, Points Round, Texas Scramble, Individual Match Play, Captain's Choice, Vegas)
 - Each card: format name + informal nickname, assigned round badge, description, "How It Works" bullet list, HDCP note

@@ -253,6 +253,10 @@ export default function RoundGames() {
               </ol>
             </div>
           </li>
+          <li className="flex gap-2.5">
+            <span className="font-black text-masters-green shrink-0 w-4 text-right leading-snug">6.</span>
+            <span className="leading-snug">A Player&rsquo;s baseline handicap will be the 12 month low identified in GHIN, or through calculation by the Rules Committee if no GHIN or similar handicap tracking system is available.</span>
+          </li>
         </ol>
       </div>
 
