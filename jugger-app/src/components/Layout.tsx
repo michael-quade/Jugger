@@ -178,7 +178,7 @@ const NAV: { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; b
   { to: '/lodging',    label: 'Lodging',      icon: Hotel },
   { to: '/board',      label: 'Board',        icon: MessageSquare },
   { to: '/courses',      label: 'Courses',      icon: MapPin },
-  { to: '/round-games',  label: 'Round Games',  icon: Gamepad2 },
+  { to: '/round-games',  label: 'Rules/Games',  icon: Gamepad2 },
   { to: '/results',      label: 'Team Results', icon: Trophy,  adminOnly: true },
   { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },

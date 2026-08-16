@@ -188,7 +188,7 @@ export default function RoundGames() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="section-header">Round Games</h1>
+          <h1 className="section-header">Juggerknocker Invitational Rules and Game Options</h1>
           <p className="text-sm text-gray-500 mt-1">
             Game format rules and house parameters.{isAdmin ? ' Changes take effect immediately for all scoring.' : ''}
           </p>
