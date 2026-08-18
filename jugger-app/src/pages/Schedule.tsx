@@ -213,65 +213,50 @@ export default function Schedule() {
 
       {/* Selected player schedule summary */}
       {selectedPlayerId && (() => {
-        const schedule = buildPlayerSchedule(selectedPlayerId)
+        const schedule = buildPlayerSchedule(selectedPlayerId).filter(r => !r.isTeamFmt)
         const team = playerTeam(selectedPlayerId)
         return (
           <div className="card border-l-4" style={{ borderColor: team?.color ?? '#059669' }}>
             <h2 className="font-serif font-bold text-masters-dark text-base mb-3">
               {playerFullName(selectedPlayerId)}'s Schedule
             </h2>
-            <div className="divide-y divide-gray-100">
+            <div className="flex gap-3 overflow-x-auto pb-1">
               {schedule.map(row => (
-                <div key={row.round} className="py-2.5 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                  {/* Round + format label */}
-                  <div className="flex items-center gap-2 sm:w-52 shrink-0">
+                <div key={row.round} className="flex-1 min-w-[150px] bg-masters-cream rounded-lg p-3 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
                     <span className="badge bg-masters-green text-white text-xs shrink-0">R{row.round}</span>
-                    <span className="text-sm font-semibold text-masters-dark leading-tight">{row.label}</span>
+                    <span className="text-xs font-semibold text-masters-dark leading-tight truncate">{row.label}</span>
                   </div>
-                  {/* Details */}
-                  <div className="flex-1 text-sm">
-                    {row.date && (
-                      <div className="text-[11px] text-gray-400 mb-0.5">
-                        {new Date(row.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                        {row.courseName && ` · ${row.courseName}`}
-                      </div>
-                    )}
-                    {row.isTeamFmt ? (
-                      <div>
-                        <span className="text-xs text-gray-500 italic">Team round — </span>
-                        <span className="text-xs text-masters-dark font-medium">
-                          {row.teammates.map(n => n.split(' ')[0]).join(', ')}
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        {row.teeTime ? (
-                          <div className="font-semibold text-masters-dark">
-                            {fmt24to12(row.teeTime)}
-                            {row.matchLabel && (
-                              <span className="text-[11px] font-normal text-gray-400 ml-1.5">({row.matchLabel})</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-400 italic">Pairings not yet set</div>
-                        )}
-                        {row.partner && (
-                          <div className="text-xs mt-0.5">
-                            <span className="text-gray-400">Partner: </span>
-                            <span className="font-medium text-masters-dark">{playerFullName(row.partner)}</span>
-                          </div>
-                        )}
-                        {row.opponents && (
-                          <div className="text-xs mt-0.5">
-                            <span className="text-gray-400">vs. </span>
-                            <span className="font-medium text-masters-dark">
-                              {row.opponents.map(id => playerFullName(id)).join(' & ')}
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  {row.date && (
+                    <div className="text-[10px] text-gray-400 leading-tight">
+                      {new Date(row.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {row.courseName && <><br />{row.courseName}</>}
+                    </div>
+                  )}
+                  {row.teeTime ? (
+                    <div className="font-bold text-masters-dark text-sm">
+                      {fmt24to12(row.teeTime)}
+                      {row.matchLabel && (
+                        <span className="text-[10px] font-normal text-gray-400 ml-1">({row.matchLabel})</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-gray-400 italic">Pairings not yet set</div>
+                  )}
+                  {row.partner && (
+                    <div className="text-[11px] leading-snug">
+                      <span className="text-gray-400">Partner: </span>
+                      <span className="font-medium text-masters-dark">{playerFullName(row.partner)}</span>
+                    </div>
+                  )}
+                  {row.opponents && (
+                    <div className="text-[11px] leading-snug">
+                      <span className="text-gray-400">vs. </span>
+                      <span className="font-medium text-masters-dark">
+                        {row.opponents.map(id => playerFullName(id)).join(' & ')}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
