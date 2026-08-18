@@ -15,13 +15,12 @@ jobs:
             echo "Error: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY secret is not configured on this repository."
             exit 1
           fi
-          HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "$SUPABASE_URL/rest/v1/" \
-            -H "apikey: $SUPABASE_KEY" \
-            || echo "000")
+            -H "apikey: $SUPABASE_KEY")
           echo "Supabase responded with HTTP $HTTP_STATUS"
-          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 400 ]; then
-            echo "Unexpected status code $HTTP_STATUS — ping failed"
+          if [ "$HTTP_STATUS" = "000" ]; then
+            echo "Network failure — could not reach Supabase"
             exit 1
           fi
           echo "Ping successful"
