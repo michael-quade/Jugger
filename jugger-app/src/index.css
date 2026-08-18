@@ -49,8 +49,8 @@
 /* Print styles */
 @media print {
   @page {
-    size: letter;
-    margin: 0.4in;
+    size: letter landscape;
+    margin: 0.35in;
   }
   body {
     background: white !important;
