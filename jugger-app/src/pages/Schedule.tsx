@@ -57,6 +57,7 @@ export default function Schedule() {
 
   const [pendingFormat, setPendingFormat] = useState<{ round: number; format: RoundFormat } | null>(null)
   const [clearedRound, setClearedRound] = useState<number | null>(null)
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
 
   function handleFormatChange(round: number, newFormat: RoundFormat) {
     const current = roundConfigs.find(r => r.round === round)
@@ -85,12 +86,68 @@ export default function Schedule() {
   const playerName = (id: string) => {
     for (const t of teams) {
       const p = t.players.find(p => p.id === id)
-      if (p) return p.name.split(' ')[0] // first name only to keep it compact
+      if (p) return p.name.split(' ')[0]
     }
     return id
   }
 
+  const playerFullName = (id: string) => {
+    for (const t of teams) {
+      const p = t.players.find(pl => pl.id === id)
+      if (p) return p.name
+    }
+    return id
+  }
+
+  const playerTeam = (id: string) => teams.find(t => t.players.some(p => p.id === id))
+
   const sorted = [...roundConfigs].sort((a, b) => a.round - b.round)
+
+  function buildPlayerSchedule(playerId: string) {
+    return sorted.map(rc => {
+      const course = courses.find(c => c.id === rc.courseId)
+      const times = rc.teeTimes ?? ['', '', '']
+      const isTeamFmt = rc.format === 'texas_scramble' || rc.format === 'captains_choice'
+
+      if (isTeamFmt) {
+        const team = playerTeam(playerId)
+        return {
+          round: rc.round, label: FORMAT_LABELS[rc.format] ?? rc.format,
+          date: rc.date, courseName: course?.name, isTeamFmt: true,
+          teammates: team?.players.filter(p => p.id !== playerId).map(p => p.name) ?? [],
+          teeTime: null as string | null, matchLabel: null as string | null,
+          partner: null as string | null, opponents: null as string[] | null,
+        }
+      }
+
+      const regularIds = [`${rc.round}a`, `${rc.round}b`, `${rc.round}c`]
+      const match = matches.find(m =>
+        regularIds.includes(m.id) &&
+        (m.twosome1.playerIds.includes(playerId) || m.twosome2.playerIds.includes(playerId))
+      )
+
+      const slotChar = match ? match.id.slice(String(rc.round).length) : null
+      const slotIdx = slotChar ? ['a', 'b', 'c'].indexOf(slotChar) : -1
+      const teeTime = slotIdx >= 0 ? (times[slotIdx] ?? '') : null
+      const matchLabel = slotIdx >= 0 ? ['Match A', 'Match B', 'Match C'][slotIdx] : null
+
+      let partner: string | null = null
+      let opponents: string[] | null = null
+      if (match) {
+        const inT1 = match.twosome1.playerIds.includes(playerId)
+        const mine = inT1 ? match.twosome1 : match.twosome2
+        const opp  = inT1 ? match.twosome2 : match.twosome1
+        partner   = mine.playerIds.find(id => id !== playerId) ?? null
+        opponents = [...opp.playerIds]
+      }
+
+      return {
+        round: rc.round, label: FORMAT_LABELS[rc.format] ?? rc.format,
+        date: rc.date, courseName: course?.name, isTeamFmt: false,
+        teammates: [], teeTime, matchLabel, partner, opponents,
+      }
+    })
+  }
 
   function updateField(round: number, field: keyof RoundConfig, value: string) {
     if (!isAdmin) return
@@ -127,6 +184,100 @@ export default function Schedule() {
           <span className="text-sm text-gray-700">{location ?? '—'}</span>
         )}
       </div>
+
+      {/* Player quick-view pill selector */}
+      <div className="card py-3 space-y-2.5">
+        <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Select a Player for Their Schedule</p>
+        {teams.map(team => (
+          <div key={team.id} className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold w-24 shrink-0 truncate" style={{ color: team.color }}>{team.name}</span>
+            {team.players.map(player => {
+              const isSel = selectedPlayerId === player.id
+              return (
+                <button
+                  key={player.id}
+                  onClick={() => setSelectedPlayerId(isSel ? null : player.id)}
+                  className="px-3 py-1 rounded-full text-sm font-semibold transition-all"
+                  style={isSel
+                    ? { backgroundColor: team.color, color: '#fff' }
+                    : { backgroundColor: `${team.color}1a`, color: team.color, border: `1.5px solid ${team.color}55` }
+                  }
+                >
+                  {player.name.split(' ')[0]}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Selected player schedule summary */}
+      {selectedPlayerId && (() => {
+        const schedule = buildPlayerSchedule(selectedPlayerId)
+        const team = playerTeam(selectedPlayerId)
+        return (
+          <div className="card border-l-4" style={{ borderColor: team?.color ?? '#059669' }}>
+            <h2 className="font-serif font-bold text-masters-dark text-base mb-3">
+              {playerFullName(selectedPlayerId)}'s Schedule
+            </h2>
+            <div className="divide-y divide-gray-100">
+              {schedule.map(row => (
+                <div key={row.round} className="py-2.5 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                  {/* Round + format label */}
+                  <div className="flex items-center gap-2 sm:w-52 shrink-0">
+                    <span className="badge bg-masters-green text-white text-xs shrink-0">R{row.round}</span>
+                    <span className="text-sm font-semibold text-masters-dark leading-tight">{row.label}</span>
+                  </div>
+                  {/* Details */}
+                  <div className="flex-1 text-sm">
+                    {row.date && (
+                      <div className="text-[11px] text-gray-400 mb-0.5">
+                        {new Date(row.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {row.courseName && ` · ${row.courseName}`}
+                      </div>
+                    )}
+                    {row.isTeamFmt ? (
+                      <div>
+                        <span className="text-xs text-gray-500 italic">Team round — </span>
+                        <span className="text-xs text-masters-dark font-medium">
+                          {row.teammates.map(n => n.split(' ')[0]).join(', ')}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        {row.teeTime ? (
+                          <div className="font-semibold text-masters-dark">
+                            {fmt24to12(row.teeTime)}
+                            {row.matchLabel && (
+                              <span className="text-[11px] font-normal text-gray-400 ml-1.5">({row.matchLabel})</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 italic">Pairings not yet set</div>
+                        )}
+                        {row.partner && (
+                          <div className="text-xs mt-0.5">
+                            <span className="text-gray-400">Partner: </span>
+                            <span className="font-medium text-masters-dark">{playerFullName(row.partner)}</span>
+                          </div>
+                        )}
+                        {row.opponents && (
+                          <div className="text-xs mt-0.5">
+                            <span className="text-gray-400">vs. </span>
+                            <span className="font-medium text-masters-dark">
+                              {row.opponents.map(id => playerFullName(id)).join(' & ')}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       <div className="space-y-4">
         {sorted.map(rc => {
