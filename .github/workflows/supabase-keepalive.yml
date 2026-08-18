@@ -11,10 +11,14 @@ jobs:
     steps:
       - name: Ping Supabase REST API
         run: |
+          # Trim any accidental whitespace/newlines from secret values
+          SUPABASE_URL=$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]')
+          SUPABASE_KEY=$(printf '%s' "$SUPABASE_KEY" | tr -d '[:space:]')
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
             echo "Error: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY secret is not configured on this repository."
             exit 1
           fi
+          echo "URL length: ${#SUPABASE_URL}, starts with: ${SUPABASE_URL:0:8}"
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "$SUPABASE_URL/rest/v1/" \
             -H "apikey: $SUPABASE_KEY")
