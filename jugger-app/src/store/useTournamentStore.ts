@@ -819,7 +819,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 25,
+      version: 26,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -965,6 +965,20 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         if (fromVersion < 25) {
           const b = base as any
           if (!b.ctpTeamIds) b.ctpTeamIds = {}
+        }
+        if (fromVersion < 26) {
+          // Reset any active side bets with missing acceptances back to pending
+          // so the acceptance flow is enforced for pre-feature bets
+          const b = base as any
+          if (b.sideBets) {
+            b.sideBets = b.sideBets.map((bet: any) => {
+              if (bet.status !== 'active') return bet
+              const acceptances = bet.acceptances ?? {}
+              const allAccepted = (bet.participants ?? []).every((p: any) => acceptances[p.playerId] === 'accepted')
+              if (allAccepted) return bet
+              return { ...bet, status: 'pending' }
+            })
+          }
         }
         if (fromVersion < 22) {
           // Remove duplicate HIO and CTP donation records created by pre-fix Sync/Add-player behavior
