@@ -82,6 +82,8 @@ interface Actions {
   createSideBet: (bet: Omit<SideBet, 'id' | 'createdAt'>) => void
   updateSideBetHole: (betId: string, entry: SideBetHoleEntry) => void
   declareSideBetPress: (betId: string, startHole: number, declaredBy: string) => void
+  acceptSideBet: (betId: string, playerId: string) => void
+  declineSideBet: (betId: string, playerId: string) => void
   completeSideBet: (betId: string) => void
   cancelSideBet: (betId: string) => void
   deleteSideBet: (betId: string) => void
@@ -558,9 +560,23 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       setLocation: (location) => set({ location }),
       setLodgingConfig: (lodgingConfig) => set({ lodgingConfig }),
 
-      createSideBet: (bet) => set(state => ({
-        sideBets: [...(state.sideBets ?? []), { ...bet, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
-      })),
+      createSideBet: (bet) => set(state => {
+        // Pre-accept the creator's player (if identifiable from admins)
+        const creatorCred = state.admins.find(a => a.username === bet.createdBy)
+        const creatorPlayerId = creatorCred?.playerId ?? creatorCred?.subForPlayerId ?? null
+        const acceptances: Record<string, 'accepted' | 'declined'> = {}
+        if (creatorPlayerId && bet.participants.some(p => p.playerId === creatorPlayerId)) {
+          acceptances[creatorPlayerId] = 'accepted'
+        }
+        return {
+          sideBets: [...(state.sideBets ?? []), {
+            ...bet,
+            id: crypto.randomUUID(),
+            createdAt: new Date().toISOString(),
+            acceptances,
+          }],
+        }
+      }),
 
       updateSideBetHole: (betId, entry) => set(state => ({
         sideBets: (state.sideBets ?? []).map(b => b.id !== betId ? b : {
@@ -579,6 +595,25 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             { startHole, declaredAt: new Date().toISOString(), declaredBy },
           ],
         }),
+      })),
+
+      acceptSideBet: (betId, playerId) => set(state => ({
+        sideBets: (state.sideBets ?? []).map(b => {
+          if (b.id !== betId) return b
+          const acceptances = { ...(b.acceptances ?? {}), [playerId]: 'accepted' as const }
+          const allAccepted = b.participants.every(p => acceptances[p.playerId] === 'accepted')
+          return { ...b, acceptances, status: allAccepted ? 'active' as const : b.status }
+        }),
+      })),
+
+      declineSideBet: (betId, playerId) => set(state => ({
+        sideBets: (state.sideBets ?? []).map(b =>
+          b.id !== betId ? b : {
+            ...b,
+            acceptances: { ...(b.acceptances ?? {}), [playerId]: 'declined' as const },
+            status: 'cancelled' as const,
+          }
+        ),
       })),
 
       completeSideBet: (betId) => set(state => ({

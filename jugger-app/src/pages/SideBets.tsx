@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { PlusCircle, DollarSign, CheckCircle, XCircle, Clock, TrendingUp } from 'lucide-react'
+import { PlusCircle, DollarSign, CheckCircle, XCircle, Clock, TrendingUp, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin, useIsPlayer, useAuthStore } from '../store/useAuthStore'
 import { getPlayerCourseHdcp } from '../utils/handicap'
@@ -31,7 +31,7 @@ export default function SideBets() {
   const isAdmin = useIsAdmin()
   const isPlayer = useIsPlayer()
   const currentAdmin = useAuthStore(s => s.currentAdmin)
-  const { sideBets = [], teams, matches, courses, roundConfigs, admins } = useTournamentStore()
+  const { sideBets = [], teams, matches, courses, roundConfigs, admins, acceptSideBet, declineSideBet } = useTournamentStore()
 
   const [tab, setTab] = useState<'active' | 'history' | 'stats'>('active')
 
@@ -221,46 +221,103 @@ export default function SideBets() {
               const summary = settlement?.summary ?? '—'
               const isIndividual = !!settlement?.playerTotals
 
+              // Determine this player's acceptance state
+              const myAcceptance = playerRosterId ? (bet.acceptances ?? {})[playerRosterId] : undefined
+              const needsMyResponse = playerRosterId &&
+                bet.status === 'pending' &&
+                bet.participants.some(p => p.playerId === playerRosterId) &&
+                !myAcceptance
+
               return (
-                <Link
-                  key={bet.id}
-                  to={`/side-bets/${bet.id}`}
-                  className="card flex items-start justify-between gap-4 hover:shadow-md transition-shadow cursor-pointer no-underline"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="font-semibold text-masters-dark">{FORMAT_DISPLAY_NAMES[bet.format] ?? bet.format}</span>
-                      <StatusBadge status={bet.status} />
+                <div key={bet.id} className="card space-y-3">
+                  {/* Top row: format + status + meta */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="font-semibold text-masters-dark">{FORMAT_DISPLAY_NAMES[bet.format] ?? bet.format}</span>
+                        <StatusBadge status={bet.status} />
+                      </div>
+                      <p className="text-sm text-gray-500">Round {bet.round}{match ? ` · ${match.label}` : ''}</p>
                     </div>
-                    <p className="text-sm text-gray-500">Round {bet.round}{match ? ` · ${match.label}` : ''}</p>
-                    <div className="flex items-center gap-3 mt-2 flex-wrap">
-                      {isIndividual ? (
-                        <span className="text-xs text-gray-600">
-                          {bet.participants.map(p => p.playerName).join(' · ')}
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-masters-dark">{summary}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(bet.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {' · '}by {admins.find(a => a.username === bet.createdBy)?.displayName ?? bet.createdBy}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Participants with acceptance status */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {bet.participants.map(p => {
+                      const resp = (bet.acceptances ?? {})[p.playerId]
+                      return (
+                        <span
+                          key={p.playerId}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                            resp === 'accepted'
+                              ? 'bg-green-50 text-green-700 border-green-200'
+                              : resp === 'declined'
+                              ? 'bg-red-50 text-red-500 border-red-200 line-through'
+                              : 'bg-gray-50 text-gray-500 border-gray-200'
+                          }`}
+                        >
+                          {resp === 'accepted' && <CheckCircle size={10} />}
+                          {resp === 'declined' && <XCircle size={10} />}
+                          {resp === undefined && <Clock size={10} className="text-gray-400" />}
+                          {p.playerName.split(' ')[0]}
                         </span>
-                      ) : (
-                        (['A', 'B'] as const).map(side => {
-                          const sidePlayers = bet.participants.filter(p => p.side === side)
-                          return (
-                            <span key={side} className="text-xs text-gray-600">
-                              <span className={`font-semibold ${side === 'A' ? 'text-blue-600' : 'text-red-600'}`}>{side}:</span>{' '}
-                              {sidePlayers.map(p => p.playerName).join(' & ')}
-                            </span>
-                          )
-                        })
+                      )
+                    })}
+                  </div>
+
+                  {/* Accept / Decline buttons — shown when this player hasn't responded */}
+                  {(needsMyResponse || (isAdmin && bet.status === 'pending')) && (
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-100 flex-wrap">
+                      {needsMyResponse && (
+                        <>
+                          <span className="text-xs text-amber-700 font-medium">Your response needed:</span>
+                          <button
+                            className="flex items-center gap-1 px-3 py-1 rounded border border-green-300 bg-green-50 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors"
+                            onClick={() => acceptSideBet(bet.id, playerRosterId!)}
+                          >
+                            <ThumbsUp size={11} /> Accept
+                          </button>
+                          <button
+                            className="flex items-center gap-1 px-3 py-1 rounded border border-red-200 bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
+                            onClick={() => declineSideBet(bet.id, playerRosterId!)}
+                          >
+                            <ThumbsDown size={11} /> Decline
+                          </button>
+                        </>
+                      )}
+                      {isAdmin && bet.status === 'pending' && (
+                        <div className="ml-auto flex flex-wrap gap-1">
+                          {bet.participants
+                            .filter(p => (bet.acceptances ?? {})[p.playerId] !== 'accepted')
+                            .map(p => (
+                              <button
+                                key={p.playerId}
+                                className="px-2 py-0.5 rounded border border-masters-green/40 text-masters-green text-[11px] font-semibold hover:bg-masters-green hover:text-white transition-colors"
+                                onClick={() => acceptSideBet(bet.id, p.playerId)}
+                              >
+                                Approve {p.playerName.split(' ')[0]}
+                              </button>
+                            ))}
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-masters-dark">{summary}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {new Date(bet.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      by {admins.find(a => a.username === bet.createdBy)?.displayName ?? bet.createdBy}
-                    </p>
-                  </div>
-                </Link>
+                  )}
+
+                  {/* Link to detail */}
+                  <Link
+                    to={`/side-bets/${bet.id}`}
+                    className="text-xs text-masters-green font-semibold hover:underline"
+                  >
+                    View details →
+                  </Link>
+                </div>
               )
             })}
           </div>

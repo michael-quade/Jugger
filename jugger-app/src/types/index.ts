@@ -429,6 +429,7 @@ export interface SideBet {
   createdBy: string
   createdAt: string
   status: 'pending' | 'active' | 'complete' | 'cancelled'
+  acceptances?: Record<string, 'accepted' | 'declined'>  // playerId → response
   settledAt?: string
   notes?: string
   manualPresses?: ManualPress[]
