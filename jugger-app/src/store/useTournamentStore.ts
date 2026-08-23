@@ -819,7 +819,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 26,
+      version: 27,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -966,7 +966,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           const b = base as any
           if (!b.ctpTeamIds) b.ctpTeamIds = {}
         }
-        if (fromVersion < 26) {
+        if (fromVersion < 27) {
           // Reset any active side bets with missing acceptances back to pending
           // so the acceptance flow is enforced for pre-feature bets
           const b = base as any
