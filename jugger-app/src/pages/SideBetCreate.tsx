@@ -317,7 +317,7 @@ export default function SideBetCreate() {
       config,
       holes: [],
       createdBy: currentAdmin,
-      status: 'active',
+      status: 'pending',
     })
     navigate('/side-bets')
   }

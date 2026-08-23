@@ -273,30 +273,32 @@ export default function SideBets() {
                   </div>
 
                   {/* Accept / Decline buttons — shown when this player hasn't responded */}
-                  {(needsMyResponse || (isAdmin && bet.status === 'pending')) && (
-                    <div className="flex items-center gap-2 pt-1 border-t border-gray-100 flex-wrap">
-                      {needsMyResponse && (
-                        <>
-                          <span className="text-xs text-amber-700 font-medium">Your response needed:</span>
-                          <button
-                            className="flex items-center gap-1 px-3 py-1 rounded border border-green-300 bg-green-50 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors"
-                            onClick={() => acceptSideBet(bet.id, playerRosterId!)}
-                          >
-                            <ThumbsUp size={11} /> Accept
-                          </button>
-                          <button
-                            className="flex items-center gap-1 px-3 py-1 rounded border border-red-200 bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
-                            onClick={() => declineSideBet(bet.id, playerRosterId!)}
-                          >
-                            <ThumbsDown size={11} /> Decline
-                          </button>
-                        </>
-                      )}
-                      {isAdmin && bet.status === 'pending' && (
-                        <div className="ml-auto flex flex-wrap gap-1">
-                          {bet.participants
-                            .filter(p => (bet.acceptances ?? {})[p.playerId] !== 'accepted')
-                            .map(p => (
+                  {(() => {
+                    const unaccepted = bet.participants.filter(p => (bet.acceptances ?? {})[p.playerId] !== 'accepted')
+                    const showAdminApprove = isAdmin && unaccepted.length > 0 && bet.status !== 'complete' && bet.status !== 'cancelled'
+                    if (!needsMyResponse && !showAdminApprove) return null
+                    return (
+                      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 flex-wrap">
+                        {needsMyResponse && (
+                          <>
+                            <span className="text-xs text-amber-700 font-medium">Your response needed:</span>
+                            <button
+                              className="flex items-center gap-1 px-3 py-1 rounded border border-green-300 bg-green-50 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors"
+                              onClick={() => acceptSideBet(bet.id, playerRosterId!)}
+                            >
+                              <ThumbsUp size={11} /> Accept
+                            </button>
+                            <button
+                              className="flex items-center gap-1 px-3 py-1 rounded border border-red-200 bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100 transition-colors"
+                              onClick={() => declineSideBet(bet.id, playerRosterId!)}
+                            >
+                              <ThumbsDown size={11} /> Decline
+                            </button>
+                          </>
+                        )}
+                        {showAdminApprove && (
+                          <div className="ml-auto flex flex-wrap gap-1">
+                            {unaccepted.map(p => (
                               <button
                                 key={p.playerId}
                                 className="px-2 py-0.5 rounded border border-masters-green/40 text-masters-green text-[11px] font-semibold hover:bg-masters-green hover:text-white transition-colors"
@@ -305,10 +307,11 @@ export default function SideBets() {
                                 Approve {p.playerName.split(' ')[0]}
                               </button>
                             ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Link to detail */}
                   <Link
