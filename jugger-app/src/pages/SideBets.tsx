@@ -224,7 +224,7 @@ export default function SideBets() {
               // Determine this player's acceptance state
               const myAcceptance = playerRosterId ? (bet.acceptances ?? {})[playerRosterId] : undefined
               const needsMyResponse = playerRosterId &&
-                bet.status === 'pending' &&
+                (bet.status === 'pending' || bet.status === 'active') &&
                 bet.participants.some(p => p.playerId === playerRosterId) &&
                 !myAcceptance
 
