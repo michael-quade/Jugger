@@ -256,6 +256,9 @@ export default function SideBets() {
                     <p className="text-xs text-gray-400 mt-0.5">
                       {new Date(bet.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      by {admins.find(a => a.username === bet.createdBy)?.displayName ?? bet.createdBy}
+                    </p>
                   </div>
                 </Link>
               )
