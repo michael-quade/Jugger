@@ -31,7 +31,7 @@ export default function SideBets() {
   const isAdmin = useIsAdmin()
   const isPlayer = useIsPlayer()
   const currentAdmin = useAuthStore(s => s.currentAdmin)
-  const { sideBets = [], teams, matches, courses, roundConfigs, admins, acceptSideBet, declineSideBet } = useTournamentStore()
+  const { sideBets = [], teams, matches, courses, roundConfigs, admins, acceptSideBet, declineSideBet, resetSideBetToPending } = useTournamentStore()
 
   const [tab, setTab] = useState<'active' | 'history' | 'stats'>('active')
 
@@ -298,6 +298,12 @@ export default function SideBets() {
                         )}
                         {showAdminApprove && (
                           <div className="ml-auto flex flex-wrap gap-1">
+                            <button
+                              className="px-2 py-0.5 rounded border border-amber-400 text-amber-700 text-[11px] font-semibold hover:bg-amber-50 transition-colors"
+                              onClick={() => resetSideBetToPending(bet.id)}
+                            >
+                              Reset to Pending
+                            </button>
                             {unaccepted.map(p => (
                               <button
                                 key={p.playerId}

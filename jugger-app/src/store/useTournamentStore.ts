@@ -84,6 +84,7 @@ interface Actions {
   declareSideBetPress: (betId: string, startHole: number, declaredBy: string) => void
   acceptSideBet: (betId: string, playerId: string) => void
   declineSideBet: (betId: string, playerId: string) => void
+  resetSideBetToPending: (betId: string) => void
   completeSideBet: (betId: string) => void
   cancelSideBet: (betId: string) => void
   deleteSideBet: (betId: string) => void
@@ -613,6 +614,12 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             acceptances: { ...(b.acceptances ?? {}), [playerId]: 'declined' as const },
             status: 'cancelled' as const,
           }
+        ),
+      })),
+
+      resetSideBetToPending: (betId) => set(state => ({
+        sideBets: (state.sideBets ?? []).map(b =>
+          b.id !== betId ? b : { ...b, status: 'pending' as const, acceptances: {} }
         ),
       })),
 
