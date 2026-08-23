@@ -124,7 +124,7 @@ async function loadWeather(eventDates: string[]): Promise<WxCache | null> {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${WX_LAT}&longitude=${WX_LON}` +
       `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
       `&timezone=America%2FNew_York&temperature_unit=fahrenheit` +
-      `&start_date=${startDate}&end_date=${endDate}&forecast_days=16`
+      `&start_date=${startDate}&end_date=${endDate}`
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
       if (!res.ok) return null
