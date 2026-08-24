@@ -9,8 +9,8 @@ import {
 
 const TEAM_IMAGES: Record<string, { src: string; fit: string; position: string }> = {
   'billy-baroo': { src: 'BillyBaroo2.jpg',   fit: 'object-cover',   position: 'object-top' },
-  'ballgame':    { src: 'Kobe2.jpg',          fit: 'object-contain', position: 'object-center' },
-  'silverbacks': { src: 'Silverbacks2.png',   fit: 'object-contain', position: 'object-center' },
+  'ballgame':    { src: 'Kobe3.png',           fit: 'object-contain', position: 'object-center' },
+  'silverbacks': { src: 'Silverbacks3.png',   fit: 'object-contain', position: 'object-center' },
 }
 
 export default function Teams() {
