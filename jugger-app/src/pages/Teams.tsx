@@ -10,7 +10,7 @@ import {
 const TEAM_IMAGES: Record<string, string> = {
   'billy-baroo': 'BillyBaroo.jpg',
   'ballgame':    'Kobe.jpg',
-  'silverbacks': 'Silverbacks.webp',
+  'silverbacks': 'Silverbacks.WEBP',
 }
 
 export default function Teams() {
