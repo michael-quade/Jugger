@@ -7,10 +7,10 @@ import {
   rawCourseHdcpDisplay, tournamentHdcp, nettedCourseHdcpRaw, apply18Cap,
 } from '../utils/handicap'
 
-const TEAM_IMAGES: Record<string, string> = {
-  'billy-baroo': 'BillyBaroo.jpg',
-  'ballgame':    'Kobe.jpg',
-  'silverbacks': 'Silverbacks.WEBP',
+const TEAM_IMAGES: Record<string, { src: string; fit: string; position: string }> = {
+  'billy-baroo': { src: 'BillyBaroo.jpg',    fit: 'object-cover',   position: 'object-top' },
+  'ballgame':    { src: 'Kobe.jpg',           fit: 'object-cover',   position: 'object-top' },
+  'silverbacks': { src: 'Silverbacks.WEBP',   fit: 'object-contain', position: 'object-center' },
 }
 
 export default function Teams() {
@@ -101,15 +101,18 @@ export default function Teams() {
             )}
 
             {/* Team image */}
-            {TEAM_IMAGES[team.id] && (
-              <div className="rounded-lg overflow-hidden -mx-4">
-                <img
-                  src={`${import.meta.env.BASE_URL}${TEAM_IMAGES[team.id]}`}
-                  alt={team.name}
-                  className="w-full h-40 object-cover"
-                />
-              </div>
-            )}
+            {TEAM_IMAGES[team.id] && (() => {
+              const img = TEAM_IMAGES[team.id]
+              return (
+                <div className="rounded-lg overflow-hidden -mx-4 bg-gray-100">
+                  <img
+                    src={`${import.meta.env.BASE_URL}${img.src}`}
+                    alt={team.name}
+                    className={`w-full h-40 ${img.fit} ${img.position}`}
+                  />
+                </div>
+              )
+            })()}
 
             {/* Players */}
             <div className="space-y-2">
