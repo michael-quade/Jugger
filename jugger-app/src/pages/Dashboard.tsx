@@ -244,18 +244,6 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            {TEAM_IMAGES[team.id] && (() => {
-              const img = TEAM_IMAGES[team.id]
-              return (
-                <div className="rounded overflow-hidden -mx-4 mb-2 bg-gray-100 h-16">
-                  <img
-                    src={`${import.meta.env.BASE_URL}${img.src}`}
-                    alt={team.name}
-                    className={`w-full h-full ${img.fit} ${img.position}`}
-                  />
-                </div>
-              )
-            })()}
             <div className="flex justify-between items-end mb-1 pb-1 border-b border-gray-100">
               <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Player</span>
               <div className="w-16 flex justify-center">

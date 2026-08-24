@@ -9,7 +9,7 @@ import {
 
 const TEAM_IMAGES: Record<string, { src: string; fit: string; position: string }> = {
   'billy-baroo': { src: 'BillyBaroo.jpg',    fit: 'object-cover',   position: 'object-top' },
-  'ballgame':    { src: 'Kobe.jpg',           fit: 'object-cover',   position: 'object-top' },
+  'ballgame':    { src: 'Kobe.jpg',           fit: 'object-contain', position: 'object-center' },
   'silverbacks': { src: 'Silverbacks.WEBP',   fit: 'object-contain', position: 'object-center' },
 }
 
