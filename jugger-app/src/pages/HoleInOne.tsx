@@ -900,12 +900,53 @@ export default function HoleInOne() {
         </button>
 
         {showHistory && (
-          <DonationHistoryTable
-            donations={hioDonations}
-            hioEntries={holeInOnes}
-            years={donationYears}
-            teams={teams}
-          />
+          <>
+            <DonationHistoryTable
+              donations={hioDonations}
+              hioEntries={holeInOnes}
+              years={donationYears}
+              teams={teams}
+            />
+
+            {/* CTP → HIO Pot Donations */}
+            {(() => {
+              const appTracked: { year: number; amount: number }[] = []
+              ctpEntries.filter(e => e.donatedToHio && (e.hioDonationAmount ?? 0) > 0)
+                .forEach(e => {
+                  const existing = appTracked.find(r => r.year === e.year)
+                  if (existing) existing.amount += e.hioDonationAmount ?? 0
+                  else appTracked.push({ year: e.year, amount: e.hioDonationAmount ?? 0 })
+                })
+              const rows = [...ctpHioHistory, ...appTracked]
+                .reduce<{ year: number; amount: number }[]>((acc, r) => {
+                  const existing = acc.find(x => x.year === r.year)
+                  if (existing) existing.amount += r.amount
+                  else acc.push({ ...r })
+                  return acc
+                }, [])
+                .sort((a, b) => b.year - a.year)
+              if (!rows.length) return null
+              const total = rows.reduce((s, r) => s + r.amount, 0)
+              return (
+                <div className="mt-4 rounded-lg border border-masters-gold/30 bg-masters-cream/60 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-semibold text-sm text-masters-dark flex items-center gap-1.5">
+                      <span className="text-masters-gold">♡</span> CTP → HIO Pot Donations
+                    </span>
+                    <span className="text-sm font-bold text-masters-gold">${total} total</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {rows.map(r => (
+                      <div key={r.year} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-center min-w-[72px]">
+                        <div className="text-xs text-gray-400 mb-0.5">{r.year}</div>
+                        <div className="text-sm font-bold text-masters-gold">${r.amount}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+          </>
         )}
       </div>
 
