@@ -104,7 +104,7 @@ export default function Teams() {
             {TEAM_IMAGES[team.id] && (() => {
               const img = TEAM_IMAGES[team.id]
               return (
-                <div className="rounded-lg overflow-hidden -mx-4 bg-gray-100">
+                <div className="rounded-lg overflow-hidden -mx-4 bg-white">
                   <img
                     src={`${import.meta.env.BASE_URL}${img.src}`}
                     alt={team.name}
