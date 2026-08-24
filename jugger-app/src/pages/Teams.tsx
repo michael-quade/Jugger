@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react'
+import { useState, Fragment, useEffect } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
 import type { Player } from '../types'
@@ -235,7 +235,33 @@ export default function Teams() {
         ))}
       </div>
 
+      <InstagramReel url="https://www.instagram.com/reel/DcbhnVMpg5U/" />
+
       <HdcpTable />
+    </div>
+  )
+}
+
+function InstagramReel({ url }: { url: string }) {
+  useEffect(() => {
+    if ((window as any).instgrm) {
+      (window as any).instgrm.Embeds.process()
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://www.instagram.com/embed.js'
+    script.async = true
+    document.body.appendChild(script)
+  }, [])
+
+  return (
+    <div className="flex justify-center">
+      <blockquote
+        className="instagram-media"
+        data-instgrm-permalink={url}
+        data-instgrm-version="14"
+        style={{ maxWidth: 540, width: '100%', margin: 0 }}
+      />
     </div>
   )
 }
