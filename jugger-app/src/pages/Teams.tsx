@@ -7,6 +7,12 @@ import {
   rawCourseHdcpDisplay, tournamentHdcp, nettedCourseHdcpRaw, apply18Cap,
 } from '../utils/handicap'
 
+const TEAM_IMAGES: Record<string, string> = {
+  'billy-baroo': 'BillyBaroo.jpg',
+  'ballgame':    'Kobe.jpg',
+  'silverbacks': 'Silverbacks.webp',
+}
+
 export default function Teams() {
   const { teams, hdcpLocked, lockHandicaps, updatePlayer, removePlayer, updateTeamName, substitutePlayer, revertSubstitute, permanentlyReplacePlayer, makeSubPermanent, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion } = useTournamentStore()
   const isAdmin = useIsAdmin()
@@ -91,6 +97,17 @@ export default function Teams() {
                     <Edit2 size={14} className="text-gray-400 hover:text-masters-green" />
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Team image */}
+            {TEAM_IMAGES[team.id] && (
+              <div className="rounded-lg overflow-hidden -mx-4">
+                <img
+                  src={`${import.meta.env.BASE_URL}${TEAM_IMAGES[team.id]}`}
+                  alt={team.name}
+                  className="w-full h-40 object-cover"
+                />
               </div>
             )}
 
