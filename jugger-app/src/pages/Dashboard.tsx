@@ -8,6 +8,12 @@ import { computeChampion, getDefendingChampionId } from '../utils/champion'
 
 const MAX_PTS: Record<number, number> = { 1: 9, 2: 15, 3: 7, 4: 12, 5: 7 }
 
+const TEAM_IMAGES: Record<string, { src: string; fit: string; position: string }> = {
+  'billy-baroo': { src: 'BillyBaroo.jpg',  fit: 'object-cover',   position: 'object-top' },
+  'ballgame':    { src: 'Kobe.jpg',         fit: 'object-cover',   position: 'object-top' },
+  'silverbacks': { src: 'Silverbacks.WEBP', fit: 'object-contain', position: 'object-center' },
+}
+
 const ROUND_FORMATS: Record<string, string> = {
   team_match_play: 'Team Match Play',
   points_round: 'Points Round',
@@ -238,6 +244,18 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
+            {TEAM_IMAGES[team.id] && (() => {
+              const img = TEAM_IMAGES[team.id]
+              return (
+                <div className="rounded overflow-hidden -mx-4 mb-2 bg-gray-100 h-16">
+                  <img
+                    src={`${import.meta.env.BASE_URL}${img.src}`}
+                    alt={team.name}
+                    className={`w-full h-full ${img.fit} ${img.position}`}
+                  />
+                </div>
+              )
+            })()}
             <div className="flex justify-between items-end mb-1 pb-1 border-b border-gray-100">
               <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Player</span>
               <div className="w-16 flex justify-center">
