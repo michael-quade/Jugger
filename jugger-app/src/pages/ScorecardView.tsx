@@ -69,7 +69,9 @@ export default function ScorecardView() {
   }
   const [searchParams] = useSearchParams()
   const [activeRound, setActiveRound] = useState(() => Number(searchParams.get('round')) || 1)
-  const [activeMatch, setActiveMatch] = useState<string | null>(() => searchParams.get('match'))
+  const [activeMatch, setActiveMatch] = useState<string | null>(() =>
+    searchParams.get('match') ?? getMatchesForRound(matches, Number(searchParams.get('round')) || 1)[0]?.id ?? null
+  )
   const printRef = useRef<HTMLDivElement>(null)
   const printRoundRef = useRef<HTMLDivElement>(null)
 
@@ -776,7 +778,7 @@ export default function ScorecardView() {
           return (
             <div key={r} className="flex items-center gap-0.5">
               <button
-                onClick={() => { setActiveRound(r); setActiveMatch(null) }}
+                onClick={() => { setActiveRound(r); setActiveMatch(getMatchesForRound(matches, r)[0]?.id ?? null) }}
                 className={`px-3 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-1.5 ${
                   activeRound === r ? 'bg-masters-green text-white' : 'bg-white border border-gray-300 hover:border-masters-green'
                 }`}
