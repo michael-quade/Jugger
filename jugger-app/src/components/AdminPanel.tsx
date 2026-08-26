@@ -4,9 +4,10 @@ import { useAuthStore } from '../store/useAuthStore'
 import { hashPassword, DEFAULT_PASSWORD } from '../utils/auth'
 import {
   X, Plus, Trash2, KeyRound, Eye, EyeOff, Shield, ClipboardList,
-  Users, RotateCcw, ClipboardCheck, ClipboardX, Wallet,
+  Users, RotateCcw, ClipboardCheck, ClipboardX, Wallet, Mail,
 } from 'lucide-react'
 import type { AdminCredential } from '../types'
+import ComposeEmailModal from './ComposeEmailModal'
 
 interface Props {
   onClose: () => void
@@ -39,6 +40,7 @@ export default function AdminPanel({ onClose }: Props) {
   const [addingScorer,  setAddingScorer]  = useState(false)
 
   const [resettingPw, setResettingPw] = useState<string | null>(null)
+  const [showCompose, setShowCompose] = useState(false)
   const [editEmailFor, setEditEmailFor] = useState<string | null>(null)
   const [editEmailVal, setEditEmailVal] = useState('')
 
@@ -237,13 +239,24 @@ export default function AdminPanel({ onClose }: Props) {
   }
 
   return (
+    <>
+    {showCompose && <ComposeEmailModal teams={teams} onClose={() => setShowCompose(false)} />}
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
           <h2 className="font-serif font-bold text-lg text-masters-dark">Manage Accounts</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCompose(true)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded px-2.5 py-1.5 transition-colors"
+              title="Send email to all players"
+            >
+              <Mail size={12} /> Send Group Email
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="p-5 space-y-6">
@@ -373,5 +386,6 @@ export default function AdminPanel({ onClose }: Props) {
         </div>
       </div>
     </div>
+    </>
   )
 }

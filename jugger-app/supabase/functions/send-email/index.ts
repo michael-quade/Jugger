@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { subject, html, recipients } = await req.json()
+    const { subject, html, recipients, attachments } = await req.json()
 
     if (!subject || !html || !Array.isArray(recipients) || recipients.length === 0) {
       return new Response(JSON.stringify({ error: 'Missing required fields: subject, html, recipients' }), {
@@ -39,6 +39,7 @@ serve(async (req) => {
         to: recipients,
         subject,
         html,
+        ...(Array.isArray(attachments) && attachments.length > 0 ? { attachments } : {}),
       }),
     })
 

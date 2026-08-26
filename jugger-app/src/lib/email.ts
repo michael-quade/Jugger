@@ -395,19 +395,41 @@ export function buildDayEmail(
   return { subject, html: shell(year, body) }
 }
 
+// ── Compose email (freeform admin message) ────────────────────────────────────
+
+export function buildComposeEmail(year: number, subject: string, body: string): string {
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map(p => p.replace(/\n/g, '<br>'))
+    .map(p => `<p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${C.dark};">${p}</p>`)
+    .join('')
+
+  const content = `
+    <div style="font-size:13px;font-weight:bold;color:${C.dark};text-transform:uppercase;letter-spacing:2px;border-bottom:2px solid ${C.gold};padding-bottom:6px;margin-bottom:20px;">${subject}</div>
+    ${paragraphs}
+  `
+  return shell(year, content)
+}
+
 // ── Send via Supabase Edge Function ───────────────────────────────────────────
+
+export interface EmailAttachment {
+  filename: string
+  content: string  // base64
+}
 
 export async function sendEmail(
   subject: string,
   html: string,
   recipients: string[],
+  attachments?: EmailAttachment[],
 ): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not configured' }
   if (!recipients.length) return { success: false, error: 'No recipients with email addresses' }
 
   try {
     const { data, error } = await supabase.functions.invoke('send-email', {
-      body: { subject, html, recipients },
+      body: { subject, html, recipients, attachments: attachments ?? [] },
     })
     if (error) return { success: false, error: error.message }
     if (data?.error) return { success: false, error: data.error }
