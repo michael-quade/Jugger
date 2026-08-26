@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { verifyPassword } from '../utils/auth'
 import { useTournamentStore } from './useTournamentStore'
 
@@ -22,7 +23,9 @@ interface AuthState {
 
 export { SESSION_TIMEOUT_MS }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
   currentAdmin: null,
   currentRole: null,
   canScore: false,
@@ -86,7 +89,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       logout()
     }
   },
-}))
+    }),
+    {
+      name: 'jugger-auth-session',
+      partialize: (state) => ({
+        currentAdmin: state.currentAdmin,
+        currentRole: state.currentRole,
+        canScore: state.canScore,
+        canTreasure: state.canTreasure,
+        mustChangePassword: state.mustChangePassword,
+        loginAt: state.loginAt,
+      }),
+    }
+  )
+)
 
 export const useIsAdmin           = () => useAuthStore(s => s.currentRole === 'admin')
 export const useIsScorer          = () => useAuthStore(s => s.currentRole === 'scorer')

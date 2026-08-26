@@ -232,8 +232,14 @@ export default function Layout() {
   useEffect(() => {
     if (!eventDates.length) return
     let cancelled = false
-    loadWeather(eventDates).then(result => { if (!cancelled && result) setWeather(result) })
-    return () => { cancelled = true }
+    function fetchWeather() {
+      if (cancelled) return
+      loadWeather(eventDates).then(result => { if (!cancelled && result) setWeather(result) })
+    }
+    fetchWeather()
+    // Re-check every 15 min — loadWeather uses its own 1-hour cache so API calls are rare
+    const id = setInterval(fetchWeather, 15 * 60 * 1000)
+    return () => { cancelled = true; clearInterval(id) }
   }, [eventDates.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
