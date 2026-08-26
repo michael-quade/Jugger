@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig, LodgingConfig, SideBet, SideBetHoleEntry } from '../types'
+import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig, LodgingConfig, SideBet, SideBetHoleEntry, HoleShotStat } from '../types'
 import { computeChampion } from '../utils/champion'
 import { configureHdcpSettings } from '../utils/handicap'
 import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY, INITIAL_SKIDMORE_SCORES } from '../data/initialData'
@@ -32,6 +32,7 @@ interface Actions {
   setMatchScoresBatch: (matchId: string, scores: Match['scores']) => void
   setTeamHoleScore: (matchId: string, hole: number, score: number | null) => void
   setTeeShot: (matchId: string, hole: number, playerId: string | null) => void
+  setShotStat: (matchId: string, playerId: string, hole: number, stat: Partial<HoleShotStat>) => void
 
   setTeamScore: (score: TeamRoundScore) => void
 
@@ -392,6 +393,27 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           }
         }),
 
+      setShotStat: (matchId, playerId, hole, stat) =>
+        set(state => {
+          const sourceMatch = state.matches.find(m => m.id === matchId)
+          const propagate = sourceMatch && !sourceMatch.isBlind
+          return {
+            matches: state.matches.map(m => {
+              const applyStat = (match: Match) => {
+                const existing = match.shotStats?.[playerId]?.[hole] ?? {}
+                const playerStats = { ...(match.shotStats?.[playerId] ?? {}), [hole]: { ...existing, ...stat } }
+                return { ...match, shotStats: { ...(match.shotStats ?? {}), [playerId]: playerStats } }
+              }
+              if (m.id === matchId) return applyStat(m)
+              if (propagate && m.isBlind && m.round === sourceMatch!.round) {
+                const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+                if (blindPids.includes(playerId)) return applyStat(m)
+              }
+              return m
+            }),
+          }
+        }),
+
       setTeamScore: (score) =>
         set(state => {
           const existing = state.teamScores.findIndex(
@@ -644,14 +666,15 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             : []
           return {
             matches: state.matches.map(m => {
-              if (m.id === matchId) return { ...m, scores: {}, teamHoleScores: {}, teeShotsUsed: {}, result: undefined, magicBall1: undefined, magicBall2: undefined }
+              if (m.id === matchId) return { ...m, scores: {}, teamHoleScores: {}, teeShotsUsed: {}, result: undefined, magicBall1: undefined, magicBall2: undefined, shotStats: {} }
               if (isRegular && m.isBlind && m.round === sourceMatch!.round) {
                 const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
                 const affected = regularPids.filter(pid => blindPids.includes(pid))
                 if (affected.length > 0) {
                   const newScores = { ...m.scores }
-                  affected.forEach(pid => { delete newScores[pid] })
-                  return { ...m, scores: newScores, result: undefined }
+                  const newStats = { ...(m.shotStats ?? {}) }
+                  affected.forEach(pid => { delete newScores[pid]; delete newStats[pid] })
+                  return { ...m, scores: newScores, shotStats: newStats, result: undefined }
                 }
               }
               return m
@@ -661,7 +684,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
 
       clearAllMatchScores: () =>
         set(state => ({
-          matches: state.matches.map(m => ({ ...m, scores: {}, teamHoleScores: {}, teeShotsUsed: {}, result: undefined, magicBall1: undefined, magicBall2: undefined })),
+          matches: state.matches.map(m => ({ ...m, scores: {}, teamHoleScores: {}, teeShotsUsed: {}, result: undefined, magicBall1: undefined, magicBall2: undefined, shotStats: {} })),
         })),
 
       clearAllTeamScores: () => set({ teamScores: [] }),
@@ -826,7 +849,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 27,
+      version: 28,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }

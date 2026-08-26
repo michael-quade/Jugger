@@ -4,15 +4,16 @@ import {
   ResponsiveContainer, ReferenceLine, Cell, RadarChart, Radar,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend,
 } from 'recharts'
-import { Trophy, TrendingUp, Users, Crosshair, BarChart2, BookOpen, Star, Flag } from 'lucide-react'
+import { Trophy, TrendingUp, Users, Crosshair, BarChart2, BookOpen, Star, Flag, Target } from 'lucide-react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { PLAYER_HDCP_HISTORY, HDCP_YEARS } from '../data/hdcpHistory'
 import type { Team, ArchivedYear, CtpEntry, CtpDonation } from '../types'
 import {
   computeScoringProfiles, computeH2H, computePartnerRecords,
   computeTeamResults, computeFormatStats, computeCourseStats,
-  computeRecords, computePlayerFormatStats,
+  computeRecords, computePlayerFormatStats, computeShotStats,
   type YearBundle, type RndFormat, type CourseLike,
+  type PlayerShotStats, type ShotStatDirs,
 } from '../utils/analytics'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ const SCORE_COLORS = {
   worse:  '#7f1d1d',
 }
 
-type Tab = 'team' | 'scoring' | 'h2h' | 'format' | 'course' | 'hdcp' | 'records' | 'ctp'
+type Tab = 'team' | 'scoring' | 'h2h' | 'format' | 'course' | 'hdcp' | 'records' | 'ctp' | 'shots'
 
 // ─── Root page ────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,7 @@ export default function Analytics() {
   const courseStat = useMemo(() => computeCourseStats(bundles, courses, courseHistoryTyped), [bundles, courses, courseHistoryTyped])
   const records    = useMemo(() => computeRecords(bundles, playerName, courses, courseHistoryTyped, gameConfig.captainsChoiceHdcpPct), [bundles, playerName, courses, courseHistoryTyped, gameConfig.captainsChoiceHdcpPct])
   const pfmt       = useMemo(() => computePlayerFormatStats(bundles, courses, courseHistoryTyped), [bundles, courses, courseHistoryTyped])
+  const shotStats  = useMemo(() => computeShotStats(bundles), [bundles])
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'team',    label: 'Team Results',     icon: Trophy },
@@ -175,6 +177,7 @@ export default function Analytics() {
     { id: 'hdcp',    label: 'HDCP Trends',      icon: TrendingUp },
     { id: 'records', label: 'Records',          icon: Users },
     { id: 'ctp',     label: 'Par 3 CTP',        icon: Flag },
+    { id: 'shots',   label: 'Shot Stats',       icon: Target },
   ]
 
   return (
@@ -216,6 +219,7 @@ export default function Analytics() {
         {activeTab === 'hdcp'    && <HdcpTrends     liveTeams={liveTeams} archivedYears={archivedYears} liveYear={liveYear} />}
         {activeTab === 'records' && <RecordsTab     records={records} />}
         {activeTab === 'ctp'     && <CtpAnalyticsTab ctpEntries={ctpEntries} ctpDonations={ctpDonations} scoring={scoring} />}
+        {activeTab === 'shots'   && <ShotStatsTab shotStats={shotStats} />}
       </div>
     </RosterContext.Provider>
   )
@@ -1592,6 +1596,163 @@ function CtpAnalyticsTab({ ctpEntries, ctpDonations, scoring }: {
           <li><span className="font-semibold">CTP→HIO donation history</span> — Year-over-year chart of how CTP winnings flow into the HIO pot</li>
           <li><span className="font-semibold">Hole-in-one on CTP holes</span> — Whether any CTP holes have produced HIOs historically</li>
         </ul>
+      </div>
+    </div>
+  )
+}
+
+// ─── Shot Stats tab ───────────────────────────────────────────────────────────
+
+const MISS_DIRS: { key: keyof ShotStatDirs; sym: string }[] = [
+  { key: 'left',  sym: '←' },
+  { key: 'long',  sym: '↑' },
+  { key: 'short', sym: '↓' },
+  { key: 'right', sym: '→' },
+]
+
+function formatMissDir(miss: ShotStatDirs, total: number): string {
+  if (total === 0) return '—'
+  const sorted = MISS_DIRS.map(d => ({ ...d, n: miss[d.key] })).filter(d => d.n > 0).sort((a, b) => b.n - a.n)
+  if (!sorted.length) return '—'
+  return sorted.map(d => `${d.sym}${d.n} (${Math.round(d.n / total * 100)}%)`).join(' ')
+}
+
+function pctColor(pct: number | null): string {
+  if (pct === null) return ''
+  if (pct >= 60) return 'text-green-600 font-bold'
+  if (pct >= 40) return 'text-amber-600'
+  return 'text-red-600'
+}
+
+function ShotStatsTab({ shotStats }: { shotStats: PlayerShotStats[] }) {
+  const { teamGroups, playerColors, playerName } = useContext(RosterContext)
+
+  const hasData = shotStats.some(s => s.fwAttempts > 0 || s.girAttempts > 0 || s.puttsHoles > 0)
+
+  if (!hasData) {
+    return (
+      <div className="card p-8 text-center text-gray-500">
+        <div className="text-4xl mb-3">🎯</div>
+        <p className="font-semibold">No shot stats recorded yet.</p>
+        <p className="text-sm mt-1 text-gray-400">Stats are entered during mobile scoring — tap a player's name to open the score panel, then record fairway, GIR, and putts.</p>
+      </div>
+    )
+  }
+
+  // Build display order: team group order, then any unlisted players
+  const ordered: PlayerShotStats[] = []
+  for (const grp of teamGroups) {
+    for (const id of grp.ids) {
+      const ps = shotStats.find(s => s.playerId === id)
+      if (ps) ordered.push(ps)
+    }
+  }
+  for (const ps of shotStats) {
+    if (!ordered.find(s => s.playerId === ps.playerId)) ordered.push(ps)
+  }
+  const withData = ordered.filter(s => s.fwAttempts > 0 || s.girAttempts > 0 || s.puttsHoles > 0)
+
+  const totalFwAtt  = shotStats.reduce((s, p) => s + p.fwAttempts, 0)
+  const totalFwHit  = shotStats.reduce((s, p) => s + p.fwHit, 0)
+  const totalGirAtt = shotStats.reduce((s, p) => s + p.girAttempts, 0)
+  const totalGirHit = shotStats.reduce((s, p) => s + p.girHit, 0)
+  const totalPutts  = shotStats.reduce((s, p) => s + p.puttsTotal, 0)
+  const totalPuttsH = shotStats.reduce((s, p) => s + p.puttsHoles, 0)
+
+  const fieldFwPct  = totalFwAtt  > 0 ? Math.round(totalFwHit  / totalFwAtt  * 100) : null
+  const fieldGirPct = totalGirAtt > 0 ? Math.round(totalGirHit / totalGirAtt * 100) : null
+  const fieldPuttAvg = totalPuttsH > 0 ? (totalPutts / totalPuttsH).toFixed(2) : null
+
+  return (
+    <div className="space-y-6">
+      {/* Field average tiles */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="card text-center p-4">
+          <div className={`text-3xl font-serif font-bold ${pctColor(fieldFwPct)}`}>
+            {fieldFwPct !== null ? `${fieldFwPct}%` : '—'}
+          </div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-1">Fairways Hit</div>
+          <div className="text-xs text-gray-400 mt-1">Field avg · {totalFwAtt} par 4/5 holes</div>
+        </div>
+        <div className="card text-center p-4">
+          <div className={`text-3xl font-serif font-bold ${pctColor(fieldGirPct)}`}>
+            {fieldGirPct !== null ? `${fieldGirPct}%` : '—'}
+          </div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-1">Greens in Reg</div>
+          <div className="text-xs text-gray-400 mt-1">Field avg · {totalGirAtt} holes</div>
+        </div>
+        <div className="card text-center p-4">
+          <div className="text-3xl font-serif font-bold text-masters-dark">
+            {fieldPuttAvg ?? '—'}
+          </div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-1">Avg Putts</div>
+          <div className="text-xs text-gray-400 mt-1">Field avg per hole</div>
+        </div>
+      </div>
+
+      {/* Per-player breakdown */}
+      <div className="card">
+        <h2 className="section-header mb-3">Per-Player Breakdown</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <thead>
+              <tr className="bg-masters-light">
+                <th className="text-left px-3 py-2 font-semibold text-gray-500">Player</th>
+                <th className="px-2 py-2 font-semibold text-gray-500 text-center">FW Hit</th>
+                <th className="px-2 py-2 font-semibold text-gray-500 text-center">FW%</th>
+                <th className="px-3 py-2 font-semibold text-gray-500 text-left">FW Misses</th>
+                <th className="px-2 py-2 font-semibold text-gray-500 text-center">GIR</th>
+                <th className="px-2 py-2 font-semibold text-gray-500 text-center">GIR%</th>
+                <th className="px-3 py-2 font-semibold text-gray-500 text-left">GIR Misses</th>
+                <th className="px-2 py-2 font-semibold text-gray-500 text-center">Putts</th>
+                <th className="px-2 py-2 font-semibold text-gray-500 text-center">Avg/Hole</th>
+              </tr>
+            </thead>
+            <tbody>
+              {withData.map(ps => {
+                const fwP   = ps.fwAttempts  > 0 ? Math.round(ps.fwHit  / ps.fwAttempts  * 100) : null
+                const girP  = ps.girAttempts > 0 ? Math.round(ps.girHit / ps.girAttempts * 100) : null
+                const puttA = ps.puttsHoles  > 0 ? (ps.puttsTotal / ps.puttsHoles).toFixed(2)  : null
+                const fwMissTotal  = ps.fwAttempts  - ps.fwHit
+                const girMissTotal = ps.girAttempts - ps.girHit
+                return (
+                  <tr key={ps.playerId} className="border-t border-gray-100 hover:bg-masters-light/40">
+                    <td className="px-3 py-2 font-semibold" style={{ color: playerColors[ps.playerId] }}>
+                      {playerName(ps.playerId)}
+                    </td>
+                    <td className="text-center px-2 py-2">
+                      {ps.fwAttempts > 0 ? `${ps.fwHit}/${ps.fwAttempts}` : '—'}
+                    </td>
+                    <td className={`text-center px-2 py-2 ${pctColor(fwP)}`}>
+                      {fwP !== null ? `${fwP}%` : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-gray-500">
+                      {formatMissDir(ps.fwMissDir, fwMissTotal)}
+                    </td>
+                    <td className="text-center px-2 py-2">
+                      {ps.girAttempts > 0 ? `${ps.girHit}/${ps.girAttempts}` : '—'}
+                    </td>
+                    <td className={`text-center px-2 py-2 ${pctColor(girP)}`}>
+                      {girP !== null ? `${girP}%` : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-gray-500">
+                      {formatMissDir(ps.girMissDir, girMissTotal)}
+                    </td>
+                    <td className="text-center px-2 py-2">
+                      {ps.puttsHoles > 0 ? ps.puttsTotal : '—'}
+                    </td>
+                    <td className="text-center px-2 py-2">
+                      {puttA ?? '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-3 py-2 text-[10px] text-gray-400 border-t border-gray-100">
+          Excludes Texas Scramble (R3) and Captain's Choice (R5). Miss breakdown sorted by frequency; denominator is misses only. Only holes where stats were recorded count toward attempts.
+        </div>
       </div>
     </div>
   )

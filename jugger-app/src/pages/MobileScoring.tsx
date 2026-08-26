@@ -24,7 +24,7 @@ import {
   computeVegas,
 } from '../utils/matchplay'
 import { computeSideBet } from '../utils/sideBets'
-import type { Match, Player, Team, CtpEntry } from '../types'
+import type { Match, Player, Team, CtpEntry, HoleShotStat, ShotDirection } from '../types'
 
 // ─── Score colour helpers ─────────────────────────────────────────────────────
 
@@ -62,6 +62,12 @@ const SCORE_LABEL_CLS: Record<ScoreCat, string> = {
 
 function first(name: string) { return name.split(' ')[0] }
 
+// ─── Shot stat direction config ────────────────────────────────────────────────
+
+const SHOT_DIR_ORDER: ShotDirection[] = ['left', 'long', 'hit', 'short', 'right']
+const SHOT_DIR_LABEL: Record<ShotDirection, string> = { left: '←', long: '↑', hit: '✓ Hit', short: '↓', right: '→' }
+const SHOT_DIR_SYM:   Record<ShotDirection, string> = { left: '←', long: '↑', hit: '✓',    short: '↓', right: '→' }
+
 // ─── Result bar types ─────────────────────────────────────────────────────────
 
 interface IndividualRow { label: string; text: string; color: string }
@@ -88,7 +94,7 @@ export default function MobileScoring() {
   const {
     matches, teams, courses, roundConfigs, year,
     ctpEntries, sideBets, lockedRounds, admins, gameConfig,
-    setMatchScore, updateMatch, setTeamScore, setCtpEntries,
+    setMatchScore, updateMatch, setTeamScore, setCtpEntries, setShotStat,
   } = useTournamentStore()
 
   const gc = gameConfig ?? DEFAULT_GAME_CONFIG
@@ -99,11 +105,12 @@ export default function MobileScoring() {
 
   // ── Local state
   const [currentHole, setCurrentHole] = useState(() => Math.max(1, Math.min(18, holeParam || 1)))
-  const [showNumpad,  setShowNumpad]   = useState(false)
-  const [activePid,   setActivePid]    = useState<string | null>(null)
-  const [numpadVal,   setNumpadVal]    = useState<number | null>(null)
-  const [showCtp,     setShowCtp]      = useState(false)
-  const [ctpSelected, setCtpSelected]  = useState<string | null>(null)
+  const [showNumpad,    setShowNumpad]    = useState(false)
+  const [activePid,     setActivePid]     = useState<string | null>(null)
+  const [numpadVal,     setNumpadVal]     = useState<number | null>(null)
+  const [showCtp,       setShowCtp]       = useState(false)
+  const [ctpSelected,   setCtpSelected]   = useState<string | null>(null)
+  const [pendingStats,  setPendingStats]  = useState<Partial<HoleShotStat>>({})
 
   // ── Match & config
   const match = useMemo(() => matches.find(m => m.id === matchId), [matches, matchId])
@@ -219,6 +226,8 @@ export default function MobileScoring() {
     if (!canScoreMatch || match?.isBlind) return
     setActivePid(pid)
     setNumpadVal(getScore(pid))
+    const storedStat = match?.shotStats?.[pid]?.[currentHole]
+    setPendingStats(storedStat ? { ...storedStat } : {})
     setShowNumpad(true)
     setShowCtp(false)
   }
@@ -238,6 +247,14 @@ export default function MobileScoring() {
     if (!activePid || !matchId) { setShowNumpad(false); setActivePid(null); return }
 
     setMatchScore(matchId, activePid, currentHole, numpadVal)
+
+    // Save shot stats (skip team formats and blind matches)
+    if (!isTeamFormat && match && !match.isBlind) {
+      const finalStats = { ...pendingStats }
+      if (isPar3) finalStats.fairway = null  // par 3: fairway always N/A
+      setShotStat(matchId, activePid, currentHole, finalStats)
+    }
+
     afterScoreChange()
 
     // Auto-advance to next unscored player in sequence; keep numpad open
@@ -250,9 +267,13 @@ export default function MobileScoring() {
     if (nextPid) {
       setActivePid(nextPid)
       setNumpadVal(null)
+      const freshMatch = useTournamentStore.getState().matches.find(m => m.id === matchId)
+      const nextStored = freshMatch?.shotStats?.[nextPid]?.[currentHole]
+      setPendingStats(nextStored ? { ...nextStored } : {})
     } else {
       setShowNumpad(false)
       setActivePid(null)
+      setPendingStats({})
       // CTP auto-trigger fires via the allScored useEffect
     }
   }
@@ -882,7 +903,7 @@ export default function MobileScoring() {
               <div className="text-white font-bold font-serif text-base">{first(matchPlayerMap[activePid]?.name ?? '')}</div>
               <div className="text-white/50 text-xs mt-0.5">Hole {currentHole} · Par {par}</div>
             </div>
-            <div className="flex flex-col items-center py-4 gap-1.5">
+            <div className="flex flex-col items-center py-3 gap-1">
               <div className="text-6xl font-black text-masters-gold font-serif leading-none">{numpadVal ?? '—'}</div>
               {numpadVal !== null && (() => {
                 const cat = scoreCat(numpadVal, par)
@@ -892,6 +913,79 @@ export default function MobileScoring() {
               })()}
               <div className="text-xs text-gray-400 font-semibold">Par {par}</div>
             </div>
+
+            {/* Shot stats — skip team formats and blind matches */}
+            {!isTeamFormat && match && !match.isBlind && (
+              <div className="px-4 pb-1 space-y-1.5">
+                <div className="h-px bg-gray-200 mb-1" />
+
+                {/* Fairway — hidden on par 3 */}
+                {!isPar3 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">Fairway</span>
+                    <div className="flex gap-1 flex-1">
+                      {SHOT_DIR_ORDER.map(dir => (
+                        <button key={dir}
+                          onClick={() => setPendingStats(s => ({ ...s, fairway: s.fairway === dir ? undefined : dir }))}
+                          className={`flex-1 h-8 rounded-lg text-[11px] font-bold border-2 transition-colors ${
+                            pendingStats.fairway === dir
+                              ? dir === 'hit' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-red-100 border-red-500 text-red-700'
+                              : 'bg-white border-gray-200 text-gray-500 active:bg-gray-50'
+                          }`}>
+                          {SHOT_DIR_LABEL[dir]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* GIR */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">GIR</span>
+                  <div className="flex gap-1 flex-1">
+                    {SHOT_DIR_ORDER.map(dir => (
+                      <button key={dir}
+                        onClick={() => setPendingStats(s => ({ ...s, gir: s.gir === dir ? undefined : dir }))}
+                        className={`flex-1 h-8 rounded-lg text-[11px] font-bold border-2 transition-colors ${
+                          pendingStats.gir === dir
+                            ? dir === 'hit' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-red-100 border-red-500 text-red-700'
+                            : 'bg-white border-gray-200 text-gray-500 active:bg-gray-50'
+                        }`}>
+                        {SHOT_DIR_LABEL[dir]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Putts */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-gray-400 w-14 shrink-0">Putts</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPendingStats(s => ({ ...s, putts: Math.max(0, (s.putts ?? 2) - 1) }))}
+                      className="w-8 h-8 bg-white border-2 border-gray-200 rounded-lg text-base font-bold text-masters-green active:bg-gray-50">
+                      −
+                    </button>
+                    <span className="text-xl font-black text-masters-dark font-serif w-6 text-center">
+                      {pendingStats.putts ?? '—'}
+                    </span>
+                    <button
+                      onClick={() => setPendingStats(s => ({ ...s, putts: Math.min(5, (s.putts ?? 1) + 1) }))}
+                      className="w-8 h-8 bg-white border-2 border-gray-200 rounded-lg text-base font-bold text-masters-green active:bg-gray-50">
+                      +
+                    </button>
+                    {pendingStats.putts !== undefined && (
+                      <button
+                        onClick={() => setPendingStats(s => { const n = { ...s }; delete n.putts; return n })}
+                        className="text-[10px] text-gray-400 active:text-red-500 ml-1">
+                        clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-2 px-4 pb-2">
               {[1,2,3,4,5,6,7,8,9].map(n => (
                 <button key={n} onClick={() => numpadTap(n)}
@@ -937,6 +1031,14 @@ export default function MobileScoring() {
     const dots   = holeData ? getStrokeDots(hdcps[pid] ?? 0, holeData.hdcpOrder) : ''
     const active = activePid === pid && showNumpad
     const team   = teamOf(pid)
+    const stat = (!isTeamFormat && match && !match.isBlind) ? (match.shotStats?.[pid]?.[currentHole] ?? null) : null
+    const statParts: string[] = []
+    if (stat) {
+      if (stat.fairway === null) statParts.push('P3')
+      else if (stat.fairway !== undefined) statParts.push(stat.fairway === 'hit' ? 'FW✓' : `FW${SHOT_DIR_SYM[stat.fairway]}`)
+      if (stat.gir !== undefined && stat.gir !== null) statParts.push(stat.gir === 'hit' ? 'GIR✓' : `GIR${SHOT_DIR_SYM[stat.gir]}`)
+      if (stat.putts !== undefined) statParts.push(`${stat.putts}pt`)
+    }
     return (
       <button
         onClick={() => openNumpad(pid)}
@@ -945,7 +1047,12 @@ export default function MobileScoring() {
         } ${canScoreMatch && !match?.isBlind ? 'active:bg-masters-light' : 'cursor-default'}`}
         style={{ borderLeftColor: team?.color, borderLeftWidth: 3 }}
       >
-        <span className="flex-1 text-left text-sm font-bold text-masters-dark">{first(player.name)}</span>
+        <div className="flex-1 text-left">
+          <span className="text-sm font-bold text-masters-dark">{first(player.name)}</span>
+          {statParts.length > 0 && (
+            <span className="ml-2 text-[10px] text-gray-400">{statParts.join(' · ')}</span>
+          )}
+        </div>
         <span className="text-xs text-masters-green font-bold w-4 text-center">{dots}</span>
         <div className={`w-11 h-11 rounded-lg border-2 flex items-center justify-center text-xl font-black font-serif shrink-0 ${SCORE_CELL[cat]}`}>
           {gross !== null ? gross : '—'}

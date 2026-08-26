@@ -307,6 +307,89 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
       <div className="mt-1 text-[9px] text-gray-400 italic">
         * {formatLabel[config.format]}
       </div>
+
+      {/* Shot Stats summary (no-print) */}
+      {(() => {
+        const isTeamFmt = config.format === 'texas_scramble' || config.format === 'captains_choice'
+        if (isTeamFmt || !match.shotStats) return null
+        const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+        type PStats = { pid: string; fwAtt: number; fwHit: number; girAtt: number; girHit: number; fwMiss: Record<string, number>; girMiss: Record<string, number>; puttsTotal: number; puttsHoles: number }
+        const rows: PStats[] = allPids.map(pid => {
+          const holeStats = match.shotStats![pid] ?? {}
+          let fwAtt = 0, fwHit = 0, girAtt = 0, girHit = 0, puttsTotal = 0, puttsHoles = 0
+          const fwMiss: Record<string, number> = {}
+          const girMiss: Record<string, number> = {}
+          for (const s of Object.values(holeStats)) {
+            if (s.fairway !== undefined && s.fairway !== null) {
+              fwAtt++
+              if (s.fairway === 'hit') fwHit++
+              else fwMiss[s.fairway] = (fwMiss[s.fairway] ?? 0) + 1
+            }
+            if (s.gir !== undefined && s.gir !== null) {
+              girAtt++
+              if (s.gir === 'hit') girHit++
+              else girMiss[s.gir] = (girMiss[s.gir] ?? 0) + 1
+            }
+            if (s.putts !== undefined) { puttsTotal += s.putts; puttsHoles++ }
+          }
+          return { pid, fwAtt, fwHit, girAtt, girHit, fwMiss, girMiss, puttsTotal, puttsHoles }
+        }).filter(r => r.fwAtt > 0 || r.girAtt > 0 || r.puttsHoles > 0)
+        if (!rows.length) return null
+        const DIR_SYM: Record<string, string> = { left: '←', right: '→', long: '↑', short: '↓' }
+        const fmtMiss = (miss: Record<string, number>, total: number) => {
+          if (total === 0) return '—'
+          const sorted = Object.entries(miss).filter(([,n]) => n > 0).sort((a,b) => b[1]-a[1])
+          if (!sorted.length) return '—'
+          return sorted.map(([d,n]) => `${DIR_SYM[d]}${n} (${Math.round(n/total*100)}%)`).join(' ')
+        }
+        const pctCls = (pct: number | null) => pct === null ? 'text-gray-400' : pct >= 60 ? 'text-green-600 font-bold' : pct >= 40 ? 'text-amber-600' : 'text-red-500'
+        return (
+          <div className="mt-2 no-print">
+            <div className="text-[9px] font-bold uppercase tracking-wide text-masters-gold mb-1">Shot Stats</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px] border-collapse" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <thead>
+                  <tr className="bg-masters-light">
+                    <th className="text-left px-1 py-0.5 font-semibold text-gray-500">Player</th>
+                    <th className="px-1 py-0.5 font-semibold text-gray-500">FW</th>
+                    <th className="px-1 py-0.5 font-semibold text-gray-500">FW%</th>
+                    <th className="text-left px-1 py-0.5 font-semibold text-gray-500">Misses</th>
+                    <th className="px-1 py-0.5 font-semibold text-gray-500">GIR</th>
+                    <th className="px-1 py-0.5 font-semibold text-gray-500">GIR%</th>
+                    <th className="text-left px-1 py-0.5 font-semibold text-gray-500">Misses</th>
+                    <th className="px-1 py-0.5 font-semibold text-gray-500">Putts</th>
+                    <th className="px-1 py-0.5 font-semibold text-gray-500">Avg</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => {
+                    const team = teams.find(t => t.players.some(p => p.id === r.pid))
+                    const player = teams.flatMap(t => t.players).find(p => p.id === r.pid)
+                    const fwPct = r.fwAtt > 0 ? Math.round(r.fwHit / r.fwAtt * 100) : null
+                    const girPct = r.girAtt > 0 ? Math.round(r.girHit / r.girAtt * 100) : null
+                    const puttAvg = r.puttsHoles > 0 ? (r.puttsTotal / r.puttsHoles).toFixed(1) : null
+                    return (
+                      <tr key={r.pid} className="border-t border-gray-100">
+                        <td className="px-1 py-0.5 font-semibold" style={{ color: team?.color }}>
+                          {player?.name.split(' ')[0] ?? r.pid}
+                        </td>
+                        <td className="text-center px-1 py-0.5">{r.fwAtt > 0 ? `${r.fwHit}/${r.fwAtt}` : '—'}</td>
+                        <td className={`text-center px-1 py-0.5 ${pctCls(fwPct)}`}>{fwPct !== null ? `${fwPct}%` : '—'}</td>
+                        <td className="px-1 py-0.5 text-gray-400">{fmtMiss(r.fwMiss, r.fwAtt - r.fwHit)}</td>
+                        <td className="text-center px-1 py-0.5">{r.girAtt > 0 ? `${r.girHit}/${r.girAtt}` : '—'}</td>
+                        <td className={`text-center px-1 py-0.5 ${pctCls(girPct)}`}>{girPct !== null ? `${girPct}%` : '—'}</td>
+                        <td className="px-1 py-0.5 text-gray-400">{fmtMiss(r.girMiss, r.girAtt - r.girHit)}</td>
+                        <td className="text-center px-1 py-0.5">{r.puttsHoles > 0 ? r.puttsTotal : '—'}</td>
+                        <td className="text-center px-1 py-0.5">{puttAvg ?? '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

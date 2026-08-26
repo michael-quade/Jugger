@@ -1,4 +1,4 @@
-import type { Match, Team, RoundConfig, HoleData, TeamRoundScore, CourseTee } from '../types'
+import type { Match, Team, RoundConfig, HoleData, TeamRoundScore, CourseTee, ShotDirection } from '../types'
 
 // Minimal course shape — satisfied by both Course and CourseHistoryEntry (after filtering nulls)
 export interface CourseLike {
@@ -951,4 +951,81 @@ export function computePlayerFormatStats(
   }
 
   return stats
+}
+
+// ─── Shot Stats ──────────────────────────────────────────────────────────────
+
+export interface ShotStatDirs {
+  left: number
+  right: number
+  long: number
+  short: number
+}
+
+export interface PlayerShotStats {
+  playerId: string
+  fwAttempts: number
+  fwHit: number
+  fwMissDir: ShotStatDirs
+  girAttempts: number
+  girHit: number
+  girMissDir: ShotStatDirs
+  puttsTotal: number
+  puttsHoles: number
+}
+
+const EXCLUDED_SHOT_STAT_FORMATS = new Set(['texas_scramble', 'captains_choice'])
+
+export function computeShotStats(bundles: YearBundle[]): PlayerShotStats[] {
+  const map = new Map<string, PlayerShotStats>()
+
+  const getEntry = (pid: string): PlayerShotStats => {
+    if (!map.has(pid)) {
+      map.set(pid, {
+        playerId: pid,
+        fwAttempts: 0, fwHit: 0, fwMissDir: { left: 0, right: 0, long: 0, short: 0 },
+        girAttempts: 0, girHit: 0, girMissDir: { left: 0, right: 0, long: 0, short: 0 },
+        puttsTotal: 0, puttsHoles: 0,
+      })
+    }
+    return map.get(pid)!
+  }
+
+  for (const bundle of bundles) {
+    for (const match of bundle.matches) {
+      if (match.isBlind) continue
+      const rc = bundle.roundConfigs.find(r => r.round === match.round)
+      if (rc && EXCLUDED_SHOT_STAT_FORMATS.has(rc.format)) continue
+      if (!match.shotStats) continue
+
+      for (const [pid, holeStats] of Object.entries(match.shotStats)) {
+        const st = getEntry(pid)
+        for (const stat of Object.values(holeStats)) {
+          // fairway: null = par 3 N/A, undefined = not recorded
+          if (stat.fairway !== undefined && stat.fairway !== null) {
+            st.fwAttempts++
+            if (stat.fairway === 'hit') {
+              st.fwHit++
+            } else {
+              st.fwMissDir[stat.fairway as Exclude<ShotDirection, 'hit'>]++
+            }
+          }
+          if (stat.gir !== undefined && stat.gir !== null) {
+            st.girAttempts++
+            if (stat.gir === 'hit') {
+              st.girHit++
+            } else {
+              st.girMissDir[stat.gir as Exclude<ShotDirection, 'hit'>]++
+            }
+          }
+          if (stat.putts !== undefined) {
+            st.puttsTotal += stat.putts
+            st.puttsHoles++
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(map.values())
 }

@@ -10,9 +10,32 @@ import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } 
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas } from '../utils/matchplay'
 import { computeSideBet, FORMAT_DISPLAY_NAMES as SIDE_BET_FORMAT_NAMES } from '../utils/sideBets'
 import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown, Smartphone } from 'lucide-react'
-import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig } from '../types'
+import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig, HoleData, ShotDirection } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
+
+const MISS_DIR_POOL: ShotDirection[] = ['left', 'right', 'left', 'right', 'long', 'short']
+function randMissDir(): ShotDirection {
+  return MISS_DIR_POOL[Math.floor(Math.random() * MISS_DIR_POOL.length)]
+}
+
+function buildSimShotStats(match: Match, holes: HoleData[]): NonNullable<Match['shotStats']> {
+  const stats: NonNullable<Match['shotStats']> = {}
+  const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+  for (const pid of allPids) {
+    stats[pid] = {}
+    for (const hole of holes) {
+      const isPar3 = hole.par === 3
+      const r1 = Math.random(), r2 = Math.random(), r3 = Math.random()
+      stats[pid][hole.number] = {
+        fairway: isPar3 ? null : (r1 < 0.50 ? 'hit' : randMissDir()),
+        gir: r2 < (isPar3 ? 0.38 : 0.33) ? 'hit' : randMissDir(),
+        putts: r3 < 0.14 ? 1 : r3 < 0.73 ? 2 : 3,
+      }
+    }
+  }
+  return stats
+}
 
 const FORMAT_DISPLAY: Record<string, string> = {
   team_match_play:  'Team Match Play',
@@ -375,6 +398,12 @@ export default function ScorecardView() {
       updateMatch(match.id, { magicBall1: simMb1, magicBall2: simMb2 })
     }
 
+    // Simulate shot stats for non-blind, non-team-format matches
+    const noShotStatFmts = new Set(['texas_scramble', 'captains_choice'])
+    if (!match.isBlind && !noShotStatFmts.has(config.format)) {
+      updateMatch(match.id, { shotStats: buildSimShotStats(match, course.holes) })
+    }
+
     // Simulate CTP winners for any non-blind match (keyed by round+hole, not match)
     if (!match.isBlind) {
       const par3Holes = getPar3Holes(roundConfigs, courses).filter(h => h.round === activeRound)
@@ -563,9 +592,16 @@ export default function ScorecardView() {
       } else {
         const simScores = simulateMatchScores(m, crs, rc, teams)
         setMatchScoresBatch(m.id, simScores as Match['scores'])
+        const roundUpdates: Partial<Match> = {}
         if (rc.format === 'points_round') {
-          updateMatch(m.id, { magicBall1: Math.random() < 0.5, magicBall2: Math.random() < 0.5 })
+          roundUpdates.magicBall1 = Math.random() < 0.5
+          roundUpdates.magicBall2 = Math.random() < 0.5
         }
+        const noShotStatFmts = new Set(['texas_scramble', 'captains_choice'])
+        if (!noShotStatFmts.has(rc.format)) {
+          roundUpdates.shotStats = buildSimShotStats(m, crs.holes)
+        }
+        if (Object.keys(roundUpdates).length > 0) updateMatch(m.id, roundUpdates)
       }
     }
 

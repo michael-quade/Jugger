@@ -69,6 +69,14 @@ export interface Twosome {
   playerIds: [string, string]
 }
 
+export type ShotDirection = 'hit' | 'left' | 'right' | 'long' | 'short'
+
+export interface HoleShotStat {
+  fairway?: ShotDirection | null  // null = N/A (par 3); undefined = not recorded
+  gir?: ShotDirection | null
+  putts?: number                  // 0–5
+}
+
 export interface Match {
   id: string
   round: number
@@ -82,6 +90,7 @@ export interface Match {
   magicBall2?: boolean  // twosome2 finished with Magic Ball
   teeShotsUsed?: Record<number, string>        // hole# -> playerId (Round 5: whose tee shot was used)
   teamHoleScores?: Record<number, number | null> // hole# -> gross team score (Round 5)
+  shotStats?: Record<string, Record<number, HoleShotStat>> // playerId -> hole# -> stat
 }
 
 export interface TeamRoundScore {
