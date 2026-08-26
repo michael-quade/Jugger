@@ -9,7 +9,8 @@ import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas } from '../utils/matchplay'
 import { computeSideBet, FORMAT_DISPLAY_NAMES as SIDE_BET_FORMAT_NAMES } from '../utils/sideBets'
-import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown, Smartphone } from 'lucide-react'
+import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown, Smartphone, Mail } from 'lucide-react'
+import { sendEmail, buildMatchEmail, buildRoundEmail, getMatchRecipients, getRoundRecipients } from '../lib/email'
 import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig, HoleData, ShotDirection } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
@@ -97,6 +98,8 @@ export default function ScorecardView() {
   )
   const printRef = useRef<HTMLDivElement>(null)
   const printRoundRef = useRef<HTMLDivElement>(null)
+  const [emailStatus, setEmailStatus] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   const [championModal, setChampionModal] = useState<{ team: Team; isComplete: boolean } | null>(null)
 
@@ -129,6 +132,34 @@ export default function ScorecardView() {
     pageStyle: PRINT_STYLE,
     documentTitle: `Jugger ${year} — ${getRoundName(activeRound, roundConfigs)}`,
   })
+
+  async function handleSendMatchEmail() {
+    if (!match || !course || !config) return
+    setSendingEmail(true)
+    setEmailStatus(null)
+    const recipients = getMatchRecipients(match, teams)
+    const { subject, html } = buildMatchEmail(match, teams, course, config, year, ctpEntries)
+    const result = await sendEmail(subject, html, recipients)
+    setSendingEmail(false)
+    setEmailStatus(result.success
+      ? { msg: `Sent to ${recipients.length} recipient${recipients.length !== 1 ? 's' : ''}`, ok: true }
+      : { msg: result.error ?? 'Send failed', ok: false })
+    setTimeout(() => setEmailStatus(null), 5000)
+  }
+
+  async function handleSendRoundEmail() {
+    if (!course || !config) return
+    setSendingEmail(true)
+    setEmailStatus(null)
+    const recipients = getRoundRecipients(activeRound, matches, teams)
+    const { subject, html } = buildRoundEmail(activeRound, matches, teams, course, config, teamScores, year, ctpEntries)
+    const result = await sendEmail(subject, html, recipients)
+    setSendingEmail(false)
+    setEmailStatus(result.success
+      ? { msg: `Sent to ${recipients.length} recipient${recipients.length !== 1 ? 's' : ''}`, ok: true }
+      : { msg: result.error ?? 'Send failed', ok: false })
+    setTimeout(() => setEmailStatus(null), 5000)
+  }
 
   // Shared team score computation for points_round — call after any MB toggle.
   // Pass updatedMatches to incorporate an in-flight match update not yet in store.
@@ -1047,6 +1078,24 @@ export default function ScorecardView() {
                       </button>
                     </div>
                   )}
+                  {(isAdmin || (isPlayer && match && isPlayerInMatch(match))) && (
+                    <button
+                      onClick={handleSendMatchEmail}
+                      disabled={sendingEmail}
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded px-3 py-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <Mail size={13} /> Email Match
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      onClick={handleSendRoundEmail}
+                      disabled={sendingEmail}
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded px-3 py-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <Mail size={13} /> Email Round
+                    </button>
+                  )}
                   {isAdmin && (
                     <div className="flex items-center gap-2">
                       <button
@@ -1064,6 +1113,12 @@ export default function ScorecardView() {
                     </div>
                   )}
                 </div>
+
+                {emailStatus && (
+                  <div className={`text-xs px-3 py-2 rounded flex items-center gap-2 ${emailStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    <Mail size={12} /> {emailStatus.msg}
+                  </div>
+                )}
 
                 <div ref={printRef}>
                   <ScorecardCard

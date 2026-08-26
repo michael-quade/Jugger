@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useIsAdmin } from '../store/useAuthStore'
-import { Lock, Unlock, CheckCircle, AlertTriangle, X, Trophy } from 'lucide-react'
+import { Lock, Unlock, CheckCircle, AlertTriangle, X, Trophy, Mail } from 'lucide-react'
 import type { Match, Team } from '../types'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
+import { sendEmail, buildDayEmail, getAllRecipients } from '../lib/email'
 
 const MAX_PTS: Record<number, number> = { 1: 9, 2: 15, 3: 7, 4: 12, 5: 7 }
 
@@ -23,12 +24,42 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion, ctpEntries } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
   const [pendingSandbagger, setPendingSandbagger] = useState<string>(sandbaggerPlayerId ?? '')
   const [pendingToilet, setPendingToilet] = useState<string>(toiletAwardPlayerId ?? '')
+  const [sendingDay, setSendingDay] = useState<string | null>(null)
+  const [dayEmailStatus, setDayEmailStatus] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  // Group rounds by date → day label
+  const dayGroups: { label: string; rounds: number[] }[] = []
+  const dateToRounds: Record<string, number[]> = {}
+  for (const rc of roundConfigs) {
+    if (rc.date) {
+      if (!dateToRounds[rc.date]) dateToRounds[rc.date] = []
+      dateToRounds[rc.date].push(rc.round)
+    }
+  }
+  for (const [date, rounds] of Object.entries(dateToRounds).sort()) {
+    const dt = new Date(date + 'T12:00:00')
+    const label = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    dayGroups.push({ label, rounds })
+  }
+
+  async function handleSendDayEmail(label: string, rounds: number[]) {
+    setSendingDay(label)
+    setDayEmailStatus(null)
+    const recipients = getAllRecipients(teams)
+    const { subject, html } = buildDayEmail(label, rounds, matches, teams, teamScores, year, ctpEntries, roundConfigs, courses)
+    const result = await sendEmail(subject, html, recipients)
+    setSendingDay(null)
+    setDayEmailStatus(result.success
+      ? { msg: `Sent to ${recipients.length} recipient${recipients.length !== 1 ? 's' : ''}`, ok: true }
+      : { msg: result.error ?? 'Send failed', ok: false })
+    setTimeout(() => setDayEmailStatus(null), 5000)
+  }
 
   const allPlayers = teams.flatMap(t => t.players.map(p => ({ ...p, teamName: t.name, teamColor: t.color })))
 
@@ -125,6 +156,28 @@ export default function Dashboard() {
           </tbody>
         </table>
       </div>
+
+      {/* Admin: send day recap emails */}
+      {isAdmin && !isViewingHistory && dayGroups.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap mt-1">
+          <span className="text-xs text-gray-400 flex items-center gap-1"><Mail size={11} /> Email Day Recap:</span>
+          {dayGroups.map(({ label, rounds }) => (
+            <button
+              key={label}
+              disabled={!!sendingDay}
+              onClick={() => handleSendDayEmail(label, rounds)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded px-2.5 py-1 transition-colors disabled:opacity-50"
+            >
+              {sendingDay === label ? '…' : label}
+            </button>
+          ))}
+          {dayEmailStatus && (
+            <span className={`text-xs px-2 py-1 rounded ${dayEmailStatus.ok ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`}>
+              {dayEmailStatus.msg}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Round Schedule & Pairings */}
       <div className="card">

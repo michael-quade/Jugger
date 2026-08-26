@@ -27,6 +27,7 @@ import SideBetDetail from './pages/SideBetDetail'
 // --- MOBILE SCORING FEATURE (remove this import + the route below to revert) ---
 import MobileScoring from './pages/MobileScoring'
 // --- END MOBILE SCORING ---
+import Summary from './pages/Summary'
 import { useTournamentStore } from './store/useTournamentStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hashPassword, DEFAULT_PASSWORD, generateUsername } from './utils/auth'
@@ -156,6 +157,7 @@ export default function App() {
         <Route path="side-bets" element={<SideBets />} />
         <Route path="side-bets/new" element={<SideBetCreate />} />
         <Route path="side-bets/:betId" element={<SideBetDetail />} />
+        <Route path="summary" element={<Summary />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

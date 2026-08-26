@@ -2,6 +2,7 @@ export interface Player {
   id: string
   name: string
   ghinNumber?: string
+  playerEmail?: string
   handicapIndex: number
   hdcpLocked: boolean
   hdcp2009gross?: number // used for Round 2 quota

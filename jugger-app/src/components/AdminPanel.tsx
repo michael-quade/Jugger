@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function AdminPanel({ onClose }: Props) {
-  const { admins, addAdmin, removeAdmin, updateAdmin, promotePlayerToScorer, demotePlayerFromScorer, promotePlayerToTreasurer, demotePlayerFromTreasurer, resetPlayerPassword } = useTournamentStore()
+  const { admins, addAdmin, removeAdmin, updateAdmin, promotePlayerToScorer, demotePlayerFromScorer, promotePlayerToTreasurer, demotePlayerFromTreasurer, resetPlayerPassword, teams, updatePlayer } = useTournamentStore()
   const { currentAdmin } = useAuthStore()
 
   const adminAccounts  = admins.filter(a => !a.role || a.role === 'admin')
@@ -39,6 +39,19 @@ export default function AdminPanel({ onClose }: Props) {
   const [addingScorer,  setAddingScorer]  = useState(false)
 
   const [resettingPw, setResettingPw] = useState<string | null>(null)
+  const [editEmailFor, setEditEmailFor] = useState<string | null>(null)
+  const [editEmailVal, setEditEmailVal] = useState('')
+
+  const allPlayers = teams.flatMap(t => t.players)
+
+  function handleSaveEmail(cred: AdminCredential) {
+    const pid = cred.playerId ?? (cred.subForPlayerId)
+    if (!pid) return
+    const team = teams.find(t => t.players.some(p => p.id === pid))
+    if (!team) return
+    updatePlayer(team.id, pid, { playerEmail: editEmailVal.trim() || undefined })
+    setEditEmailFor(null)
+  }
 
   async function handleAdd(username: string, password: string, role: AdminCredential['role'],
     setAdding: (v: boolean) => void, resetForm: () => void) {
@@ -187,6 +200,38 @@ export default function AdminPanel({ onClose }: Props) {
             Reset PW
           </button>
         </div>
+        {/* Row 3: email field */}
+        {(() => {
+          const pid = cred.playerId ?? cred.subForPlayerId
+          const player = pid ? allPlayers.find(p => p.id === pid) : null
+          const currentEmail = player?.playerEmail ?? ''
+          if (editEmailFor === cred.username) {
+            return (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <input
+                  type="email"
+                  className="input text-xs flex-1 py-0.5"
+                  placeholder="Email address"
+                  value={editEmailVal}
+                  onChange={e => setEditEmailVal(e.target.value)}
+                  autoFocus
+                />
+                <button className="btn-primary text-xs py-1" onClick={() => handleSaveEmail(cred)}>Save</button>
+                <button className="btn-ghost text-xs py-1" onClick={() => setEditEmailFor(null)}>Cancel</button>
+              </div>
+            )
+          }
+          return (
+            <button
+              className="text-[10px] text-gray-400 hover:text-masters-green transition-colors flex items-center gap-1 mt-0.5"
+              onClick={() => { setEditEmailFor(cred.username); setEditEmailVal(currentEmail) }}
+            >
+              {currentEmail
+                ? <span className="truncate max-w-[200px]">✉ {currentEmail}</span>
+                : <span>+ Add email</span>}
+            </button>
+          )
+        })()}
       </div>
     )
   }

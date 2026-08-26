@@ -4,7 +4,7 @@ import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
   ClipboardList, Trophy, Aperture, Printer, BookOpen, TrendingUp, Archive, Crosshair,
-  History, ArrowRight, Calculator, Gamepad2, Hotel, MessageSquare, DollarSign,
+  History, ArrowRight, Calculator, Gamepad2, Hotel, MessageSquare, DollarSign, ScrollText,
   type LucideIcon,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
@@ -183,6 +183,7 @@ const NAV: { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; b
   { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
   { to: '/analytics',  label: 'Analytics',    icon: TrendingUp },
+  { to: '/summary',    label: 'Summary',      icon: ScrollText },
   { to: '/archive',    label: 'Archive',      icon: Archive,    adminOnly: true },
   { to: '/history',    label: 'Course History', icon: BookOpen },
   { to: '/print',           label: 'Print All',      icon: Printer,   adminOnly: true },
