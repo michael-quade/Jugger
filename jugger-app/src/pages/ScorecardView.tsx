@@ -106,6 +106,8 @@ export default function ScorecardView() {
   const defaultCtpTeamId = teams[teams.length - 1]?.id ?? ''
   const ctpTeamIds = useTournamentStore(s => s.ctpTeamIds ?? {})
   const setCtpTeamIdStore = useTournamentStore(s => s.setCtpTeamId)
+  const ctpMatchIds = useTournamentStore(s => s.ctpMatchIds ?? {})
+  const setCtpMatchIdStore = useTournamentStore(s => s.setCtpMatchId)
 
   const roundMatches = getMatchesForRound(matches, activeRound)
   const config = roundConfigs.find(r => r.round === activeRound)
@@ -114,8 +116,9 @@ export default function ScorecardView() {
 
   const isTeamFmt = config?.format === 'texas_scramble' || config?.format === 'captains_choice'
   const effectiveCtpTeamId = ctpTeamIds[activeRound] ?? defaultCtpTeamId
+  const effectiveCtpMatchSuffix = ctpMatchIds[activeRound] ?? 'c'
   const showCtpPanel = !!(match && !match.isBlind && (
-    (!isTeamFmt && match.id === `${activeRound}c`) ||
+    (!isTeamFmt && match.id === `${activeRound}${effectiveCtpMatchSuffix}`) ||
     (isTeamFmt && match.id === `${activeRound}-${effectiveCtpTeamId}`)
   ))
 
@@ -894,6 +897,24 @@ export default function ScorecardView() {
               const teamId = m.id.replace(`${activeRound}-`, '')
               const team = teams.find(t => t.id === teamId)
               return <option key={m.id} value={teamId}>{team?.name ?? teamId}</option>
+            })}
+          </select>
+        </div>
+      )}
+
+      {/* CTP match selector — visible at round level for admin on non-team formats */}
+      {isAdmin && !isTeamFmt && roundMatches.filter(m => !m.isBlind).length > 0 && (
+        <div className="flex items-center gap-2 text-xs bg-gray-50 border border-dashed border-gray-200 rounded p-2">
+          <Flag size={12} className="text-masters-green shrink-0" />
+          <span className="text-gray-500">CTP entry recorded for:</span>
+          <select
+            className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white"
+            value={ctpMatchIds[activeRound] ?? 'c'}
+            onChange={e => setCtpMatchIdStore(activeRound, e.target.value)}
+          >
+            {roundMatches.filter(m => !m.isBlind).map(m => {
+              const suffix = m.id.replace(`${activeRound}`, '')
+              return <option key={m.id} value={suffix}>{m.label}</option>
             })}
           </select>
         </div>

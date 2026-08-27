@@ -61,6 +61,7 @@ interface Actions {
   lockRound: (round: number) => void
   unlockRound: (round: number) => void
   setCtpTeamId: (round: number, teamId: string) => void
+  setCtpMatchId: (round: number, matchSuffix: string) => void
 
   addHioDonation: (donation: HioDonation) => void
   setHioDonations: (donations: HioDonation[]) => void
@@ -164,6 +165,7 @@ const DEFAULT_STATE: TournamentState = {
   pairingsLocked: false,
   lockedRounds: [],
   ctpTeamIds: {},
+  ctpMatchIds: {},
   hioDonations: INITIAL_HIO_DONATIONS,
   skidmoreScores: INITIAL_SKIDMORE_SCORES,
   sandbaggerPlayerId: 'pitts',
@@ -515,6 +517,8 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         set(state => ({ lockedRounds: state.lockedRounds.filter(r => r !== round) })),
       setCtpTeamId: (round, teamId) =>
         set(state => ({ ctpTeamIds: { ...(state.ctpTeamIds ?? {}), [round]: teamId } })),
+      setCtpMatchId: (round, matchSuffix) =>
+        set(state => ({ ctpMatchIds: { ...(state.ctpMatchIds ?? {}), [round]: matchSuffix } })),
 
       addHioDonation: (donation) =>
         set(state => ({ hioDonations: [...state.hioDonations, donation] })),
@@ -849,7 +853,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 28,
+      version: 29,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -995,6 +999,10 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         if (fromVersion < 25) {
           const b = base as any
           if (!b.ctpTeamIds) b.ctpTeamIds = {}
+        }
+        if (fromVersion < 29) {
+          const b = base as any
+          if (!b.ctpMatchIds) b.ctpMatchIds = {}
         }
         if (fromVersion < 27) {
           // Reset any active side bets with missing acceptances back to pending

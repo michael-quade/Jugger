@@ -221,6 +221,7 @@ export interface TournamentState {
   pairingsLocked: boolean
   lockedRounds: number[]
   ctpTeamIds?: Record<number, string>
+  ctpMatchIds?: Record<number, string>   // round → 'a'|'b'|'c'; which match handles CTP in non-team formats
   hioDonations: HioDonation[]
   skidmoreScores: SkidmoreScore[]
   sandbaggerPlayerId?: string

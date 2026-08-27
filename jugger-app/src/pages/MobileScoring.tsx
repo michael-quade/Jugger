@@ -94,6 +94,7 @@ export default function MobileScoring() {
   const {
     matches, teams, courses, roundConfigs, year,
     ctpEntries, sideBets, lockedRounds, admins, gameConfig,
+    ctpTeamIds, ctpMatchIds,
     setMatchScore, updateMatch, setTeamScore, setCtpEntries, setShotStat,
   } = useTournamentStore()
 
@@ -118,6 +119,18 @@ export default function MobileScoring() {
   const roundConfig = useMemo(() => roundConfigs.find(rc => rc.round === round), [roundConfigs, round])
   const format = roundConfig?.format ?? 'team_match_play'
   const isTeamFormat = format === 'texas_scramble' || format === 'captains_choice'
+
+  // Is this the designated CTP match for this round?
+  const isCtpMatch = useMemo(() => {
+    if (!match || match.isBlind) return false
+    if (isTeamFormat) {
+      const effectiveTeamId = (ctpTeamIds ?? {})[round] ?? teams[teams.length - 1]?.id ?? ''
+      return match.id === `${round}-${effectiveTeamId}`
+    }
+    const effectiveSuffix = (ctpMatchIds ?? {})[round] ?? 'c'
+    return match.id === `${round}${effectiveSuffix}`
+  }, [match, isTeamFormat, ctpTeamIds, ctpMatchIds, round, teams])
+
   const course = useMemo(() => courses.find(c => c.id === roundConfig?.courseId) ?? null, [courses, roundConfig])
   const tee    = roundConfig?.tee ?? ''
 
@@ -188,15 +201,15 @@ export default function MobileScoring() {
     [sideBets, matchId]
   )
 
-  // ── Auto-show CTP picker when all 4 enter scores on a par 3
+  // ── Auto-show CTP picker when all 4 enter scores on a par 3 (designated CTP match only)
   const prevAllScored = useRef(false)
   useEffect(() => {
-    if (isPar3 && allScored && !prevAllScored.current && !ctpEntry?.winnerName) {
+    if (isPar3 && allScored && !prevAllScored.current && !ctpEntry?.winnerName && isCtpMatch) {
       setShowCtp(true)
       setCtpSelected(null)
     }
     prevAllScored.current = allScored
-  }, [allScored, isPar3, ctpEntry])
+  }, [allScored, isPar3, ctpEntry, isCtpMatch])
 
   // ── Keep ?hole= in sync with URL
   useEffect(() => {
