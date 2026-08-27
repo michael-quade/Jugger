@@ -45,11 +45,30 @@ export function useSupabaseSync() {
     function applyMatch(match: Match) {
       if (useTournamentStore.getState().isViewingHistory) return
       remoteDepth++
-      useTournamentStore.setState(state => ({
-        matches: state.matches.some(m => m.id === match.id)
+      useTournamentStore.setState(state => {
+        const updatedMatches = state.matches.some(m => m.id === match.id)
           ? state.matches.map(m => m.id === match.id ? match : m)
-          : [...state.matches, match],
-      }))
+          : [...state.matches, match]
+
+        // Propagate scores from a non-blind match to blind matches in the same round
+        if (!match.isBlind) {
+          const sourcePids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+          return {
+            matches: updatedMatches.map(m => {
+              if (!m.isBlind || m.round !== match.round) return m
+              const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+              const overlay: Match['scores'] = {}
+              for (const pid of sourcePids) {
+                if (blindPids.includes(pid) && match.scores[pid]) {
+                  overlay[pid] = { ...(m.scores[pid] ?? {}), ...match.scores[pid] }
+                }
+              }
+              return Object.keys(overlay).length > 0 ? { ...m, scores: { ...m.scores, ...overlay } } : m
+            }),
+          }
+        }
+        return { matches: updatedMatches }
+      })
       prevState = useTournamentStore.getState()
       remoteDepth--
     }
@@ -242,10 +261,38 @@ export function useSupabaseSync() {
       }
     })()
 
+    // ── Polling fallback: re-fetch matches every 30s to catch missed realtime events ──
+    const POLL_MS = 30_000
+    async function pollMatches() {
+      if (useTournamentStore.getState().isViewingHistory) return
+      const res = await db.from('matches').select('match_json').eq('tournament_year', YEAR)
+      if (res.error || !res.data || res.data.length === 0) return
+      const remoteMatches: Match[] = res.data.map((r: any) => r.match_json)
+      remoteDepth++
+      useTournamentStore.setState(state => {
+        let changed = false
+        const merged = state.matches.map(local => {
+          const remote = remoteMatches.find(r => r.id === local.id)
+          if (!remote || remote === local) return local
+          changed = true
+          return remote
+        })
+        // Add any remote matches not in local state
+        for (const r of remoteMatches) {
+          if (!merged.find(m => m.id === r.id)) { merged.push(r); changed = true }
+        }
+        return changed ? { matches: merged } : {}
+      })
+      prevState = useTournamentStore.getState()
+      remoteDepth--
+    }
+    const pollTimer = setInterval(pollMatches, POLL_MS)
+
     return () => {
       unsubscribe()
       db.removeChannel(channel)
       if (appStateTimer) clearTimeout(appStateTimer)
+      clearInterval(pollTimer)
       useSyncStatus.setState({ connected: false })
     }
   }, [])

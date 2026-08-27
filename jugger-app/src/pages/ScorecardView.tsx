@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useReactToPrint } from 'react-to-print'
 import { useTournamentStore } from '../store/useTournamentStore'
@@ -166,6 +166,40 @@ export default function ScorecardView() {
 
   // Shared team score computation for points_round — call after any MB toggle.
   // Pass updatedMatches to incorporate an in-flight match update not yet in store.
+  function recomputeMatchPlayTeamScores(updatedMatches: typeof matches) {
+    if (!course || !config) return
+    const allPlayers = teams.flatMap(t => t.players)
+    const roundMatchesList = updatedMatches.filter(m => m.round === config.round)
+    const teamPts: Record<string, number> = {}
+    teams.forEach(t => { teamPts[t.id] = 0 })
+
+    for (const m of roundMatchesList) {
+      const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+      const allFullyScored = allPids.every(pid =>
+        course.holes.every(h => m.scores[pid]?.[h.number] != null)
+      )
+      if (!allFullyScored) continue
+      const localHdcps: Record<string, number> = {}
+      allPids.forEach(pid => {
+        const player = allPlayers.find(p => p.id === pid)
+        if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
+      })
+      const mpRes = computeMatchPlay(m, course.holes, localHdcps)
+      const pts = m.isBlind ? (useTournamentStore.getState().gameConfig?.blindMatchPts ?? 1)
+                            : (useTournamentStore.getState().gameConfig?.regularMatchPts ?? 2)
+      if (mpRes.winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
+      else if (mpRes.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
+      else if (mpRes.winner === 'all_square') {
+        teamPts[m.twosome1.teamId] += pts / 2
+        teamPts[m.twosome2.teamId] += pts / 2
+      }
+    }
+
+    teams.forEach(t => {
+      setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
+    })
+  }
+
   function recomputePointsRoundTeamScores(updatedMatches: typeof matches) {
     if (!course || !config) return
     const allPlayers = teams.flatMap(t => t.players)
@@ -185,7 +219,8 @@ export default function ScorecardView() {
           if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
         })
         const prRes = computePointsRound(m, course.holes, localHdcps)
-        const pts = m.isBlind ? 1 : 2
+        const pts = m.isBlind ? (useTournamentStore.getState().gameConfig?.blindMatchPts ?? 1)
+                              : (useTournamentStore.getState().gameConfig?.regularMatchPts ?? 2)
         if (prRes.winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
         else if (prRes.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
         else if (prRes.winner === 'all_square') {
@@ -337,6 +372,24 @@ export default function ScorecardView() {
       setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
     })
   }
+
+  // Reactive recompute: when matches change from a remote sync, update team scores.
+  // Uses a ref so the first render (stale localStorage state) doesn't accidentally
+  // zero out team scores before Supabase data loads.
+  const prevMatchesRef = useRef(matches)
+  useEffect(() => {
+    if (matches === prevMatchesRef.current) return
+    prevMatchesRef.current = matches
+    if (!course || !config) return
+    const fmt = config.format
+    if (fmt === 'team_match_play') recomputeMatchPlayTeamScores(matches)
+    else if (fmt === 'points_round') recomputePointsRoundTeamScores(matches)
+    else if (fmt === 'texas_scramble') recomputeScrambleTeamScores(matches)
+    else if (fmt === 'individual_match') recomputeIndividualMatchTeamScores(matches)
+    else if (fmt === 'captains_choice') recomputeCaptainsChoiceTeamScores(matches)
+    else if (fmt === 'vegas') recomputeVegasTeamScores(matches)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches])
 
   function autoUpdateMatchResult(currentMatch: Match) {
     if (!course || !config) return
@@ -1150,17 +1203,24 @@ export default function ScorecardView() {
                     interactive={canEditMatch(activeRound, match) && !match.isBlind}
                     onScoreChange={(pid, hole, val) => {
                       setMatchScore(match.id, pid, hole, val)
+                      const latestMatches = useTournamentStore.getState().matches
+                      if (config.format === 'team_match_play') {
+                        recomputeMatchPlayTeamScores(latestMatches)
+                      }
+                      if (config.format === 'points_round') {
+                        recomputePointsRoundTeamScores(latestMatches)
+                      }
                       if (config.format === 'texas_scramble') {
-                        recomputeScrambleTeamScores(useTournamentStore.getState().matches)
+                        recomputeScrambleTeamScores(latestMatches)
                       }
                       if (config.format === 'individual_match') {
-                        recomputeIndividualMatchTeamScores(useTournamentStore.getState().matches)
+                        recomputeIndividualMatchTeamScores(latestMatches)
                       }
                       if (config.format === 'vegas') {
-                        recomputeVegasTeamScores(useTournamentStore.getState().matches)
+                        recomputeVegasTeamScores(latestMatches)
                       }
                       if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas') {
-                        const cur = useTournamentStore.getState().matches.find(m => m.id === match.id)
+                        const cur = latestMatches.find(m => m.id === match.id)
                         if (cur) autoUpdateMatchResult(cur)
                       }
                     }}
