@@ -886,7 +886,7 @@ export default function ScorecardView() {
           <div className="flex items-center gap-2 flex-wrap">
             {(['team_match_play', 'points_round', 'texas_scramble', 'individual_match', 'captains_choice'] as string[]).includes(config?.format ?? '') && teamScores.some(s => s.round === activeRound) && (
               <button
-                onClick={() => { if (confirm('Clear team points for this round? Match scores are kept.')) clearAllTeamScores() }}
+                onClick={() => { if (confirm('Clear team points for this round? Match scores are kept.')) clearTeamScoresForRound(activeRound) }}
                 className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 border border-amber-200 hover:border-amber-400 rounded px-3 py-1.5 transition-colors"
               >
                 <Trash2 size={12} /> Clear Team Pts
