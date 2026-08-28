@@ -62,16 +62,43 @@ export function useSupabaseSync() {
       return merged
     }
 
+    // Merge shotStats the same way: remote wins per hole, but local per-hole stat
+    // is preserved when remote doesn't have one (concurrent scorers entering fairway/GIR).
+    function mergeShotStats(
+      local: Match['shotStats'],
+      remote: Match['shotStats'],
+    ): Match['shotStats'] {
+      if (!local && !remote) return undefined
+      const merged: NonNullable<Match['shotStats']> = { ...(remote ?? {}) }
+      for (const pid of Object.keys(local ?? {})) {
+        const lps = local![pid] ?? {}
+        const rps = (remote ?? {})[pid] ?? {}
+        const mergedPlayer: typeof lps = { ...rps }
+        for (const holeStr of Object.keys(lps)) {
+          const hole = Number(holeStr)
+          if (rps[hole] == null) mergedPlayer[hole] = lps[hole]
+        }
+        merged[pid] = mergedPlayer
+      }
+      return merged
+    }
+
+    function mergeMatch(local: Match, remote: Match): Match {
+      return {
+        ...remote,
+        scores: mergeScores(local.scores, remote.scores),
+        shotStats: mergeShotStats(local.shotStats, remote.shotStats),
+      }
+    }
+
     function applyMatch(match: Match) {
       if (useTournamentStore.getState().isViewingHistory) return
       remoteDepth++
       useTournamentStore.setState(state => {
         const localMatch = state.matches.find(m => m.id === match.id)
-        // Always merge scores (never replace) so two devices entering scores into
-        // two different regular matches don't overwrite each other's blind propagation.
-        const mergedMatch: Match = localMatch
-          ? { ...match, scores: mergeScores(localMatch.scores, match.scores) }
-          : match
+        // Always merge (never replace) so two devices entering scores/stats into
+        // the same match don't overwrite each other's work.
+        const mergedMatch: Match = localMatch ? mergeMatch(localMatch, match) : match
         const updatedMatches = localMatch
           ? state.matches.map(m => m.id === match.id ? mergedMatch : m)
           : [...state.matches, mergedMatch]
@@ -283,22 +310,7 @@ export function useSupabaseSync() {
             const merged = state.matches.map(local => {
               const remote = remoteMatches.find(r => r.id === local.id)
               if (!remote) return local
-              // Merge per-player per-hole: remote wins unless local has a non-null value
-              // that remote doesn't (score entered during the fetch window)
-              const mergedScores: Match['scores'] = { ...remote.scores }
-              for (const pid of Object.keys(local.scores)) {
-                const localPlayerScores = local.scores[pid] ?? {}
-                const remotePlayerScores = remote.scores[pid] ?? {}
-                const mergedPlayer: Record<number, number | null> = { ...remotePlayerScores }
-                for (const holeStr of Object.keys(localPlayerScores)) {
-                  const hole = Number(holeStr)
-                  if (localPlayerScores[hole] !== null && remotePlayerScores[hole] == null) {
-                    mergedPlayer[hole] = localPlayerScores[hole]
-                  }
-                }
-                mergedScores[pid] = mergedPlayer
-              }
-              return { ...remote, scores: mergedScores }
+              return mergeMatch(local, remote)
             })
             for (const r of remoteMatches) {
               if (!merged.find(m => m.id === r.id)) merged.push(r)
@@ -339,29 +351,13 @@ export function useSupabaseSync() {
         const merged = state.matches.map(local => {
           const remote = remoteMatches.find(r => r.id === local.id)
           if (!remote) return local
-          // Merge per-player per-hole: remote wins unless local has a value remote doesn't
-          const mergedScores: Match['scores'] = { ...remote.scores }
-          let scoresDiffer = false
-          for (const pid of Object.keys(local.scores)) {
-            const lps = local.scores[pid] ?? {}
-            const rps = remote.scores[pid] ?? {}
-            const mergedPlayer: Record<number, number | null> = { ...rps }
-            for (const holeStr of Object.keys(lps)) {
-              const hole = Number(holeStr)
-              if (lps[hole] !== null && rps[hole] == null) {
-                mergedPlayer[hole] = lps[hole]
-                scoresDiffer = true
-              } else if (rps[hole] !== lps[hole]) {
-                scoresDiffer = true
-              }
-            }
-            mergedScores[pid] = mergedPlayer
-          }
-          if (scoresDiffer || remote.result !== local.result || remote.magicBall1 !== local.magicBall1) {
-            changed = true
-            return { ...remote, scores: mergedScores }
-          }
-          return local
+          if (remote === local) return local
+          // Check for any meaningful difference before merging
+          const scoresMatch = JSON.stringify(local.scores) === JSON.stringify(remote.scores)
+          const statsMatch = JSON.stringify(local.shotStats) === JSON.stringify(remote.shotStats)
+          if (scoresMatch && statsMatch && remote.result === local.result && remote.magicBall1 === local.magicBall1) return local
+          changed = true
+          return mergeMatch(local, remote)
         })
         for (const r of remoteMatches) {
           if (!merged.find(m => m.id === r.id)) { merged.push(r); changed = true }
