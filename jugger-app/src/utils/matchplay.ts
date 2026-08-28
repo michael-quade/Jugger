@@ -3,7 +3,7 @@ import { getStrokeDots, stablefordPoints } from './handicap'
 
 // ─── Texas Scramble ──────────────────────────────────────────────────────────
 
-function scrambleBallCount(holeNumber: number): number {
+export function scrambleBallCount(holeNumber: number): number {
   if (holeNumber <= 6)  return 1
   if (holeNumber <= 12) return 2
   if (holeNumber <= 15) return 3

@@ -22,6 +22,7 @@ import {
   computeIndividualMatch,
   computeCaptainsChoice,
   computeVegas,
+  scrambleBallCount,
 } from '../utils/matchplay'
 import { computeSideBet } from '../utils/sideBets'
 import type { Match, Player, Team, CtpEntry, HoleShotStat, ShotDirection } from '../types'
@@ -589,7 +590,9 @@ export default function MobileScoring() {
           const res = computeScramble(m, holes, lh)
           holesPlayed = res.holesPlayed
           if (holesPlayed > 0) {
-            const parThru = holes.slice(0, holesPlayed).reduce((s, h) => s + h.par, 0)
+            // Effective par = hole par × ball count (1/2/3/4 by range) since
+            // res.total sums best-N scores per hole, not just 1 score per hole
+            const parThru = holes.slice(0, holesPlayed).reduce((s, h) => s + h.par * scrambleBallCount(h.number), 0)
             relToPar = res.total - parThru
           }
         } else {
