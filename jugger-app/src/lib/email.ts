@@ -212,6 +212,31 @@ export function buildMatchEmail(
   return { subject, html: shell(year, body) }
 }
 
+function matchResultRow(m: Match, teams: Team[], dimmed = false): string {
+  const t1pids = m.twosome1.playerIds
+  const t2pids = m.twosome2.playerIds
+  const t1 = teamForPlayer(t1pids[0], teams)
+  const t2 = teamForPlayer(t2pids[0], teams)
+  const t1Names = t1pids.map(id => playerName(id, teams)).join(' & ')
+  const t2Names = t2pids.map(id => playerName(id, teams)).join(' & ')
+  const opacity = dimmed ? 'opacity:0.75;' : ''
+  return `<tr style="${opacity}">
+    <td style="font-size:12px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-weight:bold;color:${C.dark};">${m.label}</td>
+    <td style="font-size:12px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="color:${t1?.color ?? C.dark};">${t1Names}</span>
+      <span style="color:${C.gray};margin:0 6px;">vs</span>
+      <span style="color:${t2?.color ?? C.dark};">${t2Names}</span>
+    </td>
+    <td style="font-size:12px;padding:6px 0;border-bottom:1px solid #f0f0f0;text-align:right;color:${C.green};font-weight:bold;">${m.result ?? '—'}</td>
+  </tr>`
+}
+
+function blindDividerRow(): string {
+  return `<tr>
+    <td colspan="3" style="font-size:10px;padding:5px 0 3px;color:${C.gray};letter-spacing:1.5px;text-transform:uppercase;border-top:1px dashed #d1d5db;border-bottom:none;">Blind Matches</td>
+  </tr>`
+}
+
 export function buildRoundEmail(
   round: number,
   matches: Match[],
@@ -223,26 +248,14 @@ export function buildRoundEmail(
   ctpEntries: CtpEntry[],
 ): { subject: string; html: string } {
   const regularMatches = matches.filter(m => m.round === round && !m.isBlind)
+  const blindMatches = matches.filter(m => m.round === round && m.isBlind)
   const roundPts = teamScores.filter(s => s.round === round)
   const roundCtp = ctpEntries.filter(e => e.year === year && e.round === round && e.winnerName)
 
-  const matchRows = regularMatches.map(m => {
-    const t1pids = m.twosome1.playerIds
-    const t2pids = m.twosome2.playerIds
-    const t1 = teamForPlayer(t1pids[0], teams)
-    const t2 = teamForPlayer(t2pids[0], teams)
-    const t1Names = t1pids.map(id => playerName(id, teams)).join(' & ')
-    const t2Names = t2pids.map(id => playerName(id, teams)).join(' & ')
-    return `<tr>
-      <td style="font-size:12px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-weight:bold;color:${C.dark};">${m.label}</td>
-      <td style="font-size:12px;padding:7px 0;border-bottom:1px solid #f0f0f0;">
-        <span style="color:${t1?.color ?? C.dark};">${t1Names}</span>
-        <span style="color:${C.gray};margin:0 6px;">vs</span>
-        <span style="color:${t2?.color ?? C.dark};">${t2Names}</span>
-      </td>
-      <td style="font-size:12px;padding:7px 0;border-bottom:1px solid #f0f0f0;text-align:right;color:${C.green};font-weight:bold;">${m.result ?? '—'}</td>
-    </tr>`
-  }).join('')
+  const matchRows = [
+    ...regularMatches.map(m => matchResultRow(m, teams)),
+    ...(blindMatches.length ? [blindDividerRow(), ...blindMatches.map(m => matchResultRow(m, teams, true))] : []),
+  ].join('')
 
   const ptsRows = teams.map(t => {
     const pts = roundPts.find(s => s.teamId === t.id)?.points ?? 0
@@ -331,35 +344,21 @@ export function buildDayEmail(
     const rc = roundConfigs.find(r => r.round === round)
     const course = rc ? courses.find(c => c.id === rc.courseId) : null
     const regularMatches = allMatches.filter(m => m.round === round && !m.isBlind)
+    const blindMatches = allMatches.filter(m => m.round === round && m.isBlind)
 
     if (!rc || !course) return ''
 
-    const matchRows = regularMatches.map(m => {
-      const t1pids = m.twosome1.playerIds
-      const t2pids = m.twosome2.playerIds
-      const t1 = teamForPlayer(t1pids[0], teams)
-      const t2 = teamForPlayer(t2pids[0], teams)
-      const t1Names = t1pids.map(id => playerName(id, teams)).join(' & ')
-      const t2Names = t2pids.map(id => playerName(id, teams)).join(' & ')
-      const roundPts = teamScores.find(s => s.teamId === (t1?.id ?? '') && s.round === round)
-      return `<tr>
-        <td style="font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5;font-weight:bold;color:${C.dark};">${m.label}</td>
-        <td style="font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5;">
-          <span style="color:${t1?.color ?? C.dark};">${t1Names}</span>
-          <span style="color:${C.gray};margin:0 4px;">vs</span>
-          <span style="color:${t2?.color ?? C.dark};">${t2Names}</span>
-        </td>
-        <td style="font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5;text-align:right;color:${C.green};font-weight:bold;">${m.result ?? '—'}</td>
-      </tr>`
-      void roundPts
-    }).join('')
+    const matchRows = [
+      ...regularMatches.map(m => matchResultRow(m, teams)),
+      ...(blindMatches.length ? [blindDividerRow(), ...blindMatches.map(m => matchResultRow(m, teams, true))] : []),
+    ].join('')
 
     return `
       <div style="margin:16px 0 8px;font-size:14px;font-weight:bold;color:${C.green};">
         Round ${round} · ${FORMAT_LABELS[rc.format] ?? rc.format}
         <span style="font-size:11px;color:${C.gray};font-weight:normal;margin-left:8px;">${course.name}</span>
       </div>
-      ${regularMatches.length ? `<table width="100%" cellpadding="0" cellspacing="0">${matchRows}</table>` : '<div style="font-size:12px;color:#9ca3af;">No match data yet</div>'}
+      ${regularMatches.length || blindMatches.length ? `<table width="100%" cellpadding="0" cellspacing="0">${matchRows}</table>` : '<div style="font-size:12px;color:#9ca3af;">No match data yet</div>'}
     `
   }).join('<div style="height:8px;border-top:1px dashed #e5e7eb;margin:12px 0;"></div>')
 
