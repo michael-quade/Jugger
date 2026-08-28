@@ -97,6 +97,7 @@ export default function MobileScoring() {
     ctpEntries, sideBets, lockedRounds, admins, gameConfig,
     ctpTeamIds, ctpMatchIds,
     setMatchScore, updateMatch, setTeamScore, setTeamScoresBatch, setCtpEntries, setShotStat,
+    setTeamHoleScore, setTeeShot,
   } = useTournamentStore()
 
   const gc = gameConfig ?? DEFAULT_GAME_CONFIG
@@ -119,7 +120,9 @@ export default function MobileScoring() {
   const round = match?.round ?? roundParam
   const roundConfig = useMemo(() => roundConfigs.find(rc => rc.round === round), [roundConfigs, round])
   const format = roundConfig?.format ?? 'team_match_play'
-  const isTeamFormat = format === 'texas_scramble' || format === 'captains_choice'
+  const isTeamFormat      = format === 'texas_scramble' || format === 'captains_choice'
+  const isCaptainsChoice  = format === 'captains_choice'
+  const CC_TEAM_PID       = '__team__'
 
   // Is this the designated CTP match for this round?
   const isCtpMatch = useMemo(() => {
@@ -187,8 +190,11 @@ export default function MobileScoring() {
     [match, currentHole]
   )
 
-  // ── All 4 scored on current hole?
-  const allScored = playerIds.length > 0 && playerIds.every(pid => getScore(pid) !== null)
+  // ── All scored on current hole?
+  const ccTeamScore  = match?.teamHoleScores?.[currentHole] ?? null
+  const allScored    = isCaptainsChoice
+    ? ccTeamScore !== null
+    : playerIds.length > 0 && playerIds.every(pid => getScore(pid) !== null)
 
   // ── CTP entry for this hole
   const ctpEntry = useMemo(() =>
@@ -245,6 +251,13 @@ export default function MobileScoring() {
     setShowNumpad(true)
     setShowCtp(false)
   }
+  function openTeamNumpad() {
+    if (!canScoreMatch) return
+    setActivePid(CC_TEAM_PID)
+    setNumpadVal(ccTeamScore)
+    setShowNumpad(true)
+    setShowCtp(false)
+  }
   function numpadTap(n: number) {
     setNumpadVal(prev => {
       const s = String(prev ?? '') + n
@@ -259,6 +272,19 @@ export default function MobileScoring() {
   }
   function numpadDone() {
     if (!activePid || !matchId) { setShowNumpad(false); setActivePid(null); return }
+
+    // Captain's Choice: save team hole score then close
+    if (activePid === CC_TEAM_PID) {
+      setTeamHoleScore(matchId, currentHole, numpadVal)
+      setShowNumpad(false)
+      setActivePid(null)
+      afterScoreChange()
+      if (isPar3 && !ctpEntry?.winnerName && isCtpMatch) {
+        setShowCtp(true)
+        setCtpSelected(null)
+      }
+      return
+    }
 
     setMatchScore(matchId, activePid, currentHole, numpadVal)
 
@@ -732,7 +758,9 @@ export default function MobileScoring() {
       <div className="flex gap-1.5 justify-center px-4 py-2 bg-white border-b border-gray-100 flex-shrink-0">
         {Array.from({ length: 18 }, (_, i) => {
           const h       = i + 1
-          const scored  = playerIds.some(pid => match.scores[pid]?.[h] != null)
+          const scored  = isCaptainsChoice
+            ? match.teamHoleScores?.[h] != null
+            : playerIds.some(pid => match.scores[pid]?.[h] != null)
           const current = h === currentHole
           return (
             <button
@@ -761,7 +789,100 @@ export default function MobileScoring() {
           </div>
         )}
 
-        {/* ── Player rows ────────────────────────────────────────────── */}
+        {/* ── Captain's Choice: team score + tee shot picker ─────────── */}
+        {isCaptainsChoice ? (() => {
+          const team = t1
+          const ccCat = scoreCat(ccTeamScore, par)
+          const minTee = gc.captainsChoiceMinTeeBalls ?? 3
+          const teeCounts: Record<string, number> = {}
+          playerIds.forEach(pid => { teeCounts[pid] = 0 })
+          if (course) {
+            course.holes.forEach(h => {
+              const used = match.teeShotsUsed?.[h.number]
+              if (used && teeCounts[used] !== undefined) teeCounts[used]++
+            })
+          }
+          return (
+            <div className="px-3 pt-3 space-y-3">
+              {/* Team score entry */}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider px-1 mb-2" style={{ color: team?.color }}>
+                  {team?.name} — Team Score
+                </div>
+                <button
+                  onClick={openTeamNumpad}
+                  disabled={!canScoreMatch}
+                  className={`w-full flex items-center gap-3 bg-white rounded-xl px-3 py-3 border-2 transition-colors ${
+                    activePid === CC_TEAM_PID ? 'border-masters-gold' : 'border-transparent'
+                  } ${canScoreMatch ? 'active:bg-masters-light' : 'cursor-default'}`}
+                  style={{ borderLeftColor: team?.color, borderLeftWidth: 3 }}
+                >
+                  <div className="flex-1 text-left">
+                    <div className="text-xs text-gray-400 font-semibold">Hole {currentHole} · Par {par}</div>
+                    {ccTeamScore !== null && (
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {ccTeamScore - par === 0 ? 'Par' : ccTeamScore - par > 0 ? `+${ccTeamScore - par}` : `${ccTeamScore - par}`}
+                      </div>
+                    )}
+                  </div>
+                  <div className={`w-14 h-14 rounded-full border-2 flex items-center justify-center text-2xl font-black font-serif ${
+                    ccTeamScore !== null ? SCORE_CELL[ccCat] : 'bg-gray-100 border-dashed border-gray-300 text-gray-300'
+                  }`}>
+                    {ccTeamScore ?? '—'}
+                  </div>
+                </button>
+              </div>
+
+              {/* Tee shot selector */}
+              <div>
+                <div className="flex items-center justify-between px-1 mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Tee Shot Used</span>
+                  {minTee > 0 && <span className="text-[10px] text-gray-400">Min {minTee} each</span>}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {playerIds.map(pid => {
+                    const player = matchPlayerMap[pid]
+                    if (!player) return null
+                    const selected = match.teeShotsUsed?.[currentHole] === pid
+                    const count = teeCounts[pid] ?? 0
+                    const met = minTee > 0 && count >= minTee
+                    return (
+                      <button
+                        key={pid}
+                        onClick={() => {
+                          if (!canScoreMatch || !matchId) return
+                          setTeeShot(matchId, currentHole, selected ? '' : pid)
+                        }}
+                        className={`flex items-center gap-2 rounded-xl px-3 py-2.5 border-2 transition-colors ${
+                          selected
+                            ? 'bg-masters-green/10 border-masters-green'
+                            : 'bg-white border-gray-200 active:bg-gray-50'
+                        } ${canScoreMatch ? '' : 'cursor-default'}`}
+                      >
+                        <div className="flex-1 text-left">
+                          <div className={`text-sm font-bold ${selected ? 'text-masters-green' : 'text-masters-dark'}`}>
+                            {first(player.name)}
+                          </div>
+                          {minTee > 0 && (
+                            <div className={`text-[10px] font-semibold ${met ? 'text-green-600' : count > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                              {count}/{minTee} {met ? '✓' : 'balls'}
+                            </div>
+                          )}
+                        </div>
+                        {selected && (
+                          <div className="w-4 h-4 rounded-full bg-masters-green flex items-center justify-center shrink-0">
+                            <div className="w-2 h-2 rounded-full bg-white" />
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )
+        })() : (
+        /* ── Player rows (all other formats) ──────────────────────── */
         <div className="px-3 pt-3 space-y-2">
           {/* Twosome 1 */}
           <div className="text-[10px] font-bold uppercase tracking-wider px-1" style={{ color: t1?.color }}>
@@ -777,6 +898,7 @@ export default function MobileScoring() {
           </div>
           {match.twosome2.playerIds.map(pid => <PlayerRow key={pid} pid={pid} />)}
         </div>
+        )}
 
         {/* ── Result bar ─────────────────────────────────────────────── */}
         {resultData && (
@@ -929,7 +1051,9 @@ export default function MobileScoring() {
           <div className="flex-1 bg-black/50" onClick={() => { setShowNumpad(false); setActivePid(null) }} />
           <div className="bg-masters-cream rounded-t-2xl shadow-2xl">
             <div className="bg-masters-dark px-4 py-3 rounded-t-2xl text-center">
-              <div className="text-white font-bold font-serif text-base">{first(matchPlayerMap[activePid]?.name ?? '')}</div>
+              <div className="text-white font-bold font-serif text-base">
+                {activePid === CC_TEAM_PID ? (t1?.name ?? 'Team Score') : first(matchPlayerMap[activePid]?.name ?? '')}
+              </div>
               <div className="text-white/50 text-xs mt-0.5">Hole {currentHole} · Par {par}</div>
             </div>
             <div className="flex flex-col items-center py-3 gap-1">
