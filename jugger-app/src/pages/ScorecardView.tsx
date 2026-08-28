@@ -9,7 +9,7 @@ import { getMatchesForRound } from '../utils/pairings'
 import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas } from '../utils/matchplay'
 import { computeSideBet, FORMAT_DISPLAY_NAMES as SIDE_BET_FORMAT_NAMES } from '../utils/sideBets'
-import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown, Smartphone, Mail } from 'lucide-react'
+import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown, Smartphone, Mail, RefreshCw } from 'lucide-react'
 import { sendEmail, buildMatchEmail, buildRoundEmail, getMatchRecipients, getRoundRecipients } from '../lib/email'
 import type { Match, Course, RoundConfig, Team, CtpEntry, GameConfig, HoleData, ShotDirection } from '../types'
 import { DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
@@ -845,6 +845,25 @@ export default function ScorecardView() {
     checkAndShowChampion()
   }
 
+  function handleRefreshBlindScores(round: number) {
+    const current = useTournamentStore.getState().matches
+    const regularMatches = current.filter(m => m.round === round && !m.isBlind)
+    const blindMatches = current.filter(m => m.round === round && m.isBlind)
+    for (const blind of blindMatches) {
+      const blindPids = [...blind.twosome1.playerIds, ...blind.twosome2.playerIds]
+      let merged = { ...blind.scores }
+      for (const reg of regularMatches) {
+        const regPids = [...reg.twosome1.playerIds, ...reg.twosome2.playerIds]
+        for (const pid of regPids) {
+          if (blindPids.includes(pid) && reg.scores[pid]) {
+            merged[pid] = { ...(merged[pid] ?? {}), ...reg.scores[pid] }
+          }
+        }
+      }
+      updateMatch(blind.id, { scores: merged })
+    }
+  }
+
   return (
     <>
     {championModal && (
@@ -922,6 +941,15 @@ export default function ScorecardView() {
                   >
                     {locked ? <Lock size={13} /> : <LockOpen size={13} />}
                   </button>
+                  {roundConfigs.find(rc => rc.round === r && !['texas_scramble','captains_choice'].includes(rc.format)) && (
+                    <button
+                      onClick={() => handleRefreshBlindScores(r)}
+                      title={`Re-sync blind match scores from regular matches (Round ${r})`}
+                      className="p-1 rounded text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      <RefreshCw size={13} />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleSimulateRound(r)}
                     title={`Simulate all Round ${r} matches`}
