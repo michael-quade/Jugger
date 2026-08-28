@@ -148,6 +148,12 @@ export function useSupabaseSync() {
 
     // ── Local → Supabase: push store changes ────────────────────────────────
 
+    const upsertMatch = (match: Match) =>
+      db.from('matches').upsert(
+        { match_id: match.id, tournament_year: YEAR, match_json: match },
+        { onConflict: 'match_id' },
+      ).then(({ error }) => { if (error) console.error('[supabase] match upsert:', error.message) })
+
     const unsubscribe = useTournamentStore.subscribe(newState => {
       // Skip: this setState came from Supabase, or admin is viewing historical data
       if (remoteDepth > 0 || newState.isViewingHistory) { prevState = newState; return }
@@ -158,11 +164,20 @@ export function useSupabaseSync() {
           const old = prevState.matches.find(pm => pm.id === m.id)
           return old !== m
         })
+        // Track which rounds had a non-blind match change so we can also push
+        // the corresponding blind matches (safety net in case identity check misses them)
+        const roundsWithRegularChange = new Set<number>()
         for (const match of changedOrNew) {
-          db.from('matches').upsert(
-            { match_id: match.id, tournament_year: YEAR, match_json: match },
-            { onConflict: 'match_id' },
-          ).then(({ error }) => { if (error) console.error('[supabase] match upsert:', error.message) })
+          upsertMatch(match)
+          if (!match.isBlind) roundsWithRegularChange.add(match.round)
+        }
+        // Explicitly push blind matches for any round where a regular match changed
+        for (const round of roundsWithRegularChange) {
+          for (const blindMatch of newState.matches.filter(m => m.isBlind && m.round === round)) {
+            if (!changedOrNew.find(m => m.id === blindMatch.id)) {
+              upsertMatch(blindMatch)
+            }
+          }
         }
 
         // Delete removed matches (e.g. pairings reset)
@@ -215,9 +230,11 @@ export function useSupabaseSync() {
     })
 
     // ── Initial fetch: pull current Supabase state on load ─────────────────
+    // IMPORTANT: remoteDepth is only held during synchronous setState calls,
+    // NOT across the async fetch — otherwise local score entries during the
+    // fetch window are blocked from being pushed to Supabase.
 
     ;(async () => {
-      remoteDepth++
       try {
         const [appStateRes, matchesRes, teamScoresRes] = await Promise.all([
           db.from('app_state').select('state').eq('id', APP_STATE_ID).maybeSingle(),
@@ -232,37 +249,71 @@ export function useSupabaseSync() {
 
         // App state: Supabase wins if a row exists, else keep localStorage
         if (appStateRes.data?.state) {
+          remoteDepth++
           const updates: Partial<TournamentState> = {}
           for (const key of APP_STATE_KEYS) {
             if ((appStateRes.data.state as any)[key] !== undefined)
               (updates as any)[key] = (appStateRes.data.state as any)[key]
           }
           useTournamentStore.setState(updates)
+          prevState = useTournamentStore.getState()
+          remoteDepth--
         }
 
-        // Matches: Supabase wins if rows exist
+        // Matches: merge Supabase wins per-hole so any local scores entered during
+        // the fetch window are preserved rather than overwritten.
         if (matchesRes.data && matchesRes.data.length > 0) {
-          useTournamentStore.setState({ matches: matchesRes.data.map((r: any) => r.match_json) })
+          const remoteMatches: Match[] = matchesRes.data.map((r: any) => r.match_json)
+          remoteDepth++
+          useTournamentStore.setState(state => {
+            const merged = state.matches.map(local => {
+              const remote = remoteMatches.find(r => r.id === local.id)
+              if (!remote) return local
+              // Merge per-player per-hole: remote wins unless local has a non-null value
+              // that remote doesn't (score entered during the fetch window)
+              const mergedScores: Match['scores'] = { ...remote.scores }
+              for (const pid of Object.keys(local.scores)) {
+                const localPlayerScores = local.scores[pid] ?? {}
+                const remotePlayerScores = remote.scores[pid] ?? {}
+                const mergedPlayer: Record<number, number | null> = { ...remotePlayerScores }
+                for (const holeStr of Object.keys(localPlayerScores)) {
+                  const hole = Number(holeStr)
+                  if (localPlayerScores[hole] !== null && remotePlayerScores[hole] == null) {
+                    mergedPlayer[hole] = localPlayerScores[hole]
+                  }
+                }
+                mergedScores[pid] = mergedPlayer
+              }
+              return { ...remote, scores: mergedScores }
+            })
+            for (const r of remoteMatches) {
+              if (!merged.find(m => m.id === r.id)) merged.push(r)
+            }
+            return { matches: merged }
+          })
+          prevState = useTournamentStore.getState()
+          remoteDepth--
         }
 
         // Team scores: Supabase wins if rows exist
         if (teamScoresRes.data && teamScoresRes.data.length > 0) {
+          remoteDepth++
           useTournamentStore.setState({
             teamScores: teamScoresRes.data.map((r: any) => ({
               teamId: r.team_id, round: r.round, points: r.points, notes: r.notes ?? undefined,
             })),
           })
+          prevState = useTournamentStore.getState()
+          remoteDepth--
         }
       } catch (err) {
         console.error('[supabase] initial fetch failed:', err)
-      } finally {
-        prevState = useTournamentStore.getState()
-        remoteDepth--
       }
     })()
 
-    // ── Polling fallback: re-fetch matches every 30s to catch missed realtime events ──
-    const POLL_MS = 30_000
+    // ── Polling fallback: re-fetch matches every 10s to catch missed realtime events ──
+    // Merges per-hole to avoid overwriting any local score that hasn't been pushed yet.
+    const POLL_MS = 10_000
     async function pollMatches() {
       if (useTournamentStore.getState().isViewingHistory) return
       const res = await db.from('matches').select('match_json').eq('tournament_year', YEAR)
@@ -273,11 +324,31 @@ export function useSupabaseSync() {
         let changed = false
         const merged = state.matches.map(local => {
           const remote = remoteMatches.find(r => r.id === local.id)
-          if (!remote || remote === local) return local
-          changed = true
-          return remote
+          if (!remote) return local
+          // Merge per-player per-hole: remote wins unless local has a value remote doesn't
+          const mergedScores: Match['scores'] = { ...remote.scores }
+          let scoresDiffer = false
+          for (const pid of Object.keys(local.scores)) {
+            const lps = local.scores[pid] ?? {}
+            const rps = remote.scores[pid] ?? {}
+            const mergedPlayer: Record<number, number | null> = { ...rps }
+            for (const holeStr of Object.keys(lps)) {
+              const hole = Number(holeStr)
+              if (lps[hole] !== null && rps[hole] == null) {
+                mergedPlayer[hole] = lps[hole]
+                scoresDiffer = true
+              } else if (rps[hole] !== lps[hole]) {
+                scoresDiffer = true
+              }
+            }
+            mergedScores[pid] = mergedPlayer
+          }
+          if (scoresDiffer || remote.result !== local.result || remote.magicBall1 !== local.magicBall1) {
+            changed = true
+            return { ...remote, scores: mergedScores }
+          }
+          return local
         })
-        // Add any remote matches not in local state
         for (const r of remoteMatches) {
           if (!merged.find(m => m.id === r.id)) { merged.push(r); changed = true }
         }
