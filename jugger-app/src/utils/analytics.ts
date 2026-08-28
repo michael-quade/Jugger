@@ -632,6 +632,9 @@ export function computeRecords(
         continue
       }
 
+      // Skip Texas Scramble — players don't play their own ball
+      if (rc.format === 'texas_scramble') continue
+
       // ── Per-player individual round records ───────────────────────────────
       for (const [pid, holeScores] of Object.entries(match.scores)) {
         let gross = 0, net = 0, holes = 0
