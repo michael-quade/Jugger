@@ -1149,12 +1149,30 @@ export default function ScorecardView() {
                 )}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   {/* --- MOBILE SCORING FEATURE (remove this block + Smartphone import to revert) --- */}
-                  <Link
-                    to={`/scorecards/${match.id}/mobile?round=${activeRound}&hole=1`}
-                    className="flex items-center gap-1.5 text-xs bg-masters-green text-white border border-masters-green hover:bg-masters-dark rounded px-3 py-1.5 font-semibold transition-colors lg:hidden"
-                  >
-                    <Smartphone size={13} /> Score Hole-by-Hole
-                  </Link>
+                  {(() => {
+                    // Find the first hole where any player has no score yet
+                    let startHole = 1
+                    if (match) {
+                      if (config?.format === 'captains_choice' && match.teamHoleScores) {
+                        for (let h = 1; h <= 18; h++) {
+                          if (match.teamHoleScores[h] == null) { startHole = h; break }
+                        }
+                      } else {
+                        const pids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+                        for (let h = 1; h <= 18; h++) {
+                          if (!pids.every(pid => match.scores[pid]?.[h] != null)) { startHole = h; break }
+                        }
+                      }
+                    }
+                    return (
+                      <Link
+                        to={`/scorecards/${match.id}/mobile?round=${activeRound}&hole=${startHole}`}
+                        className="flex items-center gap-1.5 text-xs bg-masters-green text-white border border-masters-green hover:bg-masters-dark rounded px-3 py-1.5 font-semibold transition-colors lg:hidden"
+                      >
+                        <Smartphone size={13} /> Score Hole-by-Hole
+                      </Link>
+                    )
+                  })()}
                   {/* --- END MOBILE SCORING --- */}
                   {isAdmin && !match.isBlind && (
                     <div className="flex items-center gap-2 flex-wrap">
