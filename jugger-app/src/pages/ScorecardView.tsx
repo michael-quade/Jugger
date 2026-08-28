@@ -195,6 +195,7 @@ export default function ScorecardView() {
       }
     }
 
+    if (Object.values(teamPts).every(p => p === 0)) return
     const newScores = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
     if (newScores.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
     setTeamScoresBatch(newScores)
@@ -235,6 +236,7 @@ export default function ScorecardView() {
       }
     }
 
+    if (Object.values(teamPts).every(p => p === 0)) return
     const newScores2 = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
     if (newScores2.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
     setTeamScoresBatch(newScores2)
@@ -332,6 +334,7 @@ export default function ScorecardView() {
       }
     }
 
+    if (Object.values(teamPts).every(p => p === 0)) return
     const newScores5 = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
     if (newScores5.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
     setTeamScoresBatch(newScores5)
@@ -368,6 +371,7 @@ export default function ScorecardView() {
       else { teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2 }
     }
 
+    if (Object.values(teamPts).every(p => p === 0)) return
     const newScores6 = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
     if (newScores6.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
     setTeamScoresBatch(newScores6)

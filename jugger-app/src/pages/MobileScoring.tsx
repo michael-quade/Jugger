@@ -385,6 +385,7 @@ export default function MobileScoring() {
         else { teamPts[m.twosome1.teamId] += 0.5; teamPts[m.twosome2.teamId] += 0.5 }
       }
     })
+    if (Object.values(teamPts).every(p => p === 0)) return
     const ns1 = teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
     if (!scoresUnchanged(ns1)) setTeamScoresBatch(ns1)
   }
@@ -443,6 +444,7 @@ export default function MobileScoring() {
         if (m.magicBall2) teamPts[m.twosome2.teamId] += 1
       }
     })
+    if (Object.values(teamPts).every(p => p === 0)) return
     const ns4 = teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
     if (!scoresUnchanged(ns4)) setTeamScoresBatch(ns4)
   }
@@ -466,6 +468,7 @@ export default function MobileScoring() {
       else if (vRes.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
       else { teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2 }
     })
+    if (Object.values(teamPts).every(p => p === 0)) return
     const ns5 = teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
     if (!scoresUnchanged(ns5)) setTeamScoresBatch(ns5)
   }
