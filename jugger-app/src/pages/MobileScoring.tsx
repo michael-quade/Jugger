@@ -96,7 +96,7 @@ export default function MobileScoring() {
     matches, teams, courses, roundConfigs, year,
     ctpEntries, sideBets, lockedRounds, admins, gameConfig,
     ctpTeamIds, ctpMatchIds,
-    setMatchScore, updateMatch, setTeamScore, setCtpEntries, setShotStat,
+    setMatchScore, updateMatch, setTeamScore, setTeamScoresBatch, setCtpEntries, setShotStat,
   } = useTournamentStore()
 
   const gc = gameConfig ?? DEFAULT_GAME_CONFIG
@@ -356,6 +356,11 @@ export default function MobileScoring() {
     }
   }
 
+  function scoresUnchanged(newScores: { teamId: string; round: number; points: number }[]): boolean {
+    const cur = useTournamentStore.getState().teamScores
+    return newScores.every(ns => cur.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)
+  }
+
   function recomputeIndividual(updated: Match[]) {
     if (!course) return
     const teamPts: Record<string, number> = {}
@@ -380,7 +385,8 @@ export default function MobileScoring() {
         else { teamPts[m.twosome1.teamId] += 0.5; teamPts[m.twosome2.teamId] += 0.5 }
       }
     })
-    teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    const ns1 = teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    if (!scoresUnchanged(ns1)) setTeamScoresBatch(ns1)
   }
 
   function recomputeScramble(updated: Match[]) {
@@ -389,8 +395,9 @@ export default function MobileScoring() {
     const results = ms.map(m => ({ match: m, result: computeScramble(m, course.holes, localHdcps(m)) }))
     if (!results.every(r => r.result.isDone)) return
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
-    teams.forEach(t => setTeamScore({ teamId: t.id, round, points: 0 }))
-    ranked.forEach(({ match: m }, i) => setTeamScore({ teamId: m.twosome1.teamId, round, points: [4, 2, 1][i] ?? 1 }))
+    const PTS = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
+    const ns2 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: PTS[i] ?? 1 }))
+    if (!scoresUnchanged(ns2)) setTeamScoresBatch(ns2)
   }
 
   function recomputeCaptainsChoice(updated: Match[]) {
@@ -409,8 +416,9 @@ export default function MobileScoring() {
     })
     if (!results.every(r => r.result.isDone)) return
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
-    teams.forEach(t => setTeamScore({ teamId: t.id, round, points: 0 }))
-    ranked.forEach(({ match: m }, i) => setTeamScore({ teamId: m.twosome1.teamId, round, points: [4, 2, 1][i] ?? 1 }))
+    const PTSC = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
+    const ns3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: PTSC[i] ?? 1 }))
+    if (!scoresUnchanged(ns3)) setTeamScoresBatch(ns3)
   }
 
   function recomputePointsRound(updated: Match[]) {
@@ -435,7 +443,8 @@ export default function MobileScoring() {
         if (m.magicBall2) teamPts[m.twosome2.teamId] += 1
       }
     })
-    teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    const ns4 = teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    if (!scoresUnchanged(ns4)) setTeamScoresBatch(ns4)
   }
 
   function recomputeVegas(updated: Match[]) {
@@ -457,7 +466,8 @@ export default function MobileScoring() {
       else if (vRes.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
       else { teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2 }
     })
-    teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    const ns5 = teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+    if (!scoresUnchanged(ns5)) setTeamScoresBatch(ns5)
   }
 
   // ── CTP save ─────────────────────────────────────────────────────────────────

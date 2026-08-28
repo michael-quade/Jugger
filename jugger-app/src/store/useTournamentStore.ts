@@ -36,6 +36,7 @@ interface Actions {
   setShotStat: (matchId: string, playerId: string, hole: number, stat: Partial<HoleShotStat>) => void
 
   setTeamScore: (score: TeamRoundScore) => void
+  setTeamScoresBatch: (scores: TeamRoundScore[]) => void
 
   addHoleInOne: (entry: HoleInOneEntry) => void
   updateHoleInOne: (id: string, updates: Partial<HoleInOneEntry>) => void
@@ -486,6 +487,17 @@ export const useTournamentStore = create<TournamentState & Actions>()(
             return { teamScores: updated }
           }
           return { teamScores: [...state.teamScores, score] }
+        }),
+
+      setTeamScoresBatch: (scores) =>
+        set(state => {
+          let updated = [...state.teamScores]
+          for (const score of scores) {
+            const idx = updated.findIndex(s => s.teamId === score.teamId && s.round === score.round)
+            if (idx >= 0) updated[idx] = score
+            else updated.push(score)
+          }
+          return { teamScores: updated }
         }),
 
       addHoleInOne: (entry) =>

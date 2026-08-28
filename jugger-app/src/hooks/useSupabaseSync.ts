@@ -271,11 +271,14 @@ export function useSupabaseSync() {
     })
 
     // ── Initial fetch: pull current Supabase state on load ─────────────────
-    // IMPORTANT: remoteDepth is only held during synchronous setState calls,
-    // NOT across the async fetch — otherwise local score entries during the
-    // fetch window are blocked from being pushed to Supabase.
+    // remoteDepth is held for the ENTIRE async fetch so no stale localStorage
+    // state can be pushed to Supabase while the fetch is in flight. This is safe
+    // because the match merge below preserves any local scores entered in the
+    // window — those won't be pushed until the lock releases, but they won't
+    // be lost either (merge keeps local non-null values where remote has null).
 
     ;(async () => {
+      remoteDepth++
       try {
         const [appStateRes, matchesRes, teamScoresRes] = await Promise.all([
           db.from('app_state').select('state').eq('id', APP_STATE_ID).maybeSingle(),
@@ -290,22 +293,18 @@ export function useSupabaseSync() {
 
         // App state: Supabase wins if a row exists, else keep localStorage
         if (appStateRes.data?.state) {
-          remoteDepth++
           const updates: Partial<TournamentState> = {}
           for (const key of APP_STATE_KEYS) {
             if ((appStateRes.data.state as any)[key] !== undefined)
               (updates as any)[key] = (appStateRes.data.state as any)[key]
           }
           useTournamentStore.setState(updates)
-          prevState = useTournamentStore.getState()
-          remoteDepth--
         }
 
-        // Matches: merge Supabase wins per-hole so any local scores entered during
-        // the fetch window are preserved rather than overwritten.
+        // Matches: merge per-hole — Supabase wins, but local non-null scores
+        // entered during the fetch window are preserved.
         if (matchesRes.data && matchesRes.data.length > 0) {
           const remoteMatches: Match[] = matchesRes.data.map((r: any) => r.match_json)
-          remoteDepth++
           useTournamentStore.setState(state => {
             const merged = state.matches.map(local => {
               const remote = remoteMatches.find(r => r.id === local.id)
@@ -317,23 +316,21 @@ export function useSupabaseSync() {
             }
             return { matches: merged }
           })
-          prevState = useTournamentStore.getState()
-          remoteDepth--
         }
 
         // Team scores: Supabase wins if rows exist
         if (teamScoresRes.data && teamScoresRes.data.length > 0) {
-          remoteDepth++
           useTournamentStore.setState({
             teamScores: teamScoresRes.data.map((r: any) => ({
               teamId: r.team_id, round: r.round, points: r.points, notes: r.notes ?? undefined,
             })),
           })
-          prevState = useTournamentStore.getState()
-          remoteDepth--
         }
       } catch (err) {
         console.error('[supabase] initial fetch failed:', err)
+      } finally {
+        prevState = useTournamentStore.getState()
+        remoteDepth--
       }
     })()
 

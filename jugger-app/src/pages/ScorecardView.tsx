@@ -53,7 +53,7 @@ function getRoundName(round: number, configs: RoundConfig[]): string {
 }
 
 export default function ScorecardView() {
-  const { teams, matches, courses, roundConfigs, year, admins, setMatchScore, setMatchScoresBatch, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound, sideBets = [] } = useTournamentStore()
+  const { teams, matches, courses, roundConfigs, year, admins, setMatchScore, setMatchScoresBatch, updateMatch, clearMatchScores, clearAllMatchScores, teamScores, setTeamScore, setTeamScoresBatch, clearAllTeamScores, clearTeamScoresForRound, setTeamHoleScore, setTeeShot, ctpEntries, updateCtpEntry, setCtpEntries, archivedYears, lockedRounds, lockRound, unlockRound, sideBets = [] } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const isPlayer = useIsPlayer()
   const canEnterScores = useCanEnterScores()
@@ -195,9 +195,9 @@ export default function ScorecardView() {
       }
     }
 
-    teams.forEach(t => {
-      setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
-    })
+    const newScores = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
+    if (newScores.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
+    setTeamScoresBatch(newScores)
   }
 
   function recomputePointsRoundTeamScores(updatedMatches: typeof matches) {
@@ -235,9 +235,9 @@ export default function ScorecardView() {
       }
     }
 
-    teams.forEach(t => {
-      setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
-    })
+    const newScores2 = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
+    if (newScores2.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
+    setTeamScoresBatch(newScores2)
   }
 
   function recomputeScrambleTeamScores(currentMatches: typeof matches) {
@@ -259,11 +259,11 @@ export default function ScorecardView() {
     if (!results.every(r => r.result.isDone)) return
 
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
-    const POINTS = [4, 2, 1]
-    teams.forEach(t => setTeamScore({ teamId: t.id, round: config.round, points: 0 }))
-    ranked.forEach(({ match: m }, i) => {
-      setTeamScore({ teamId: m.twosome1.teamId, round: config.round, points: POINTS[i] ?? 1 })
-    })
+    const gc3 = useTournamentStore.getState().gameConfig
+    const POINTS = [gc3.teamFinish1stPts ?? 4, gc3.teamFinish2ndPts ?? 2, gc3.teamFinish3rdPts ?? 1]
+    const newScores3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: POINTS[i] ?? 1 }))
+    if (newScores3.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
+    setTeamScoresBatch(newScores3)
   }
 
   function recomputeCaptainsChoiceTeamScores(currentMatches: typeof matches) {
@@ -287,11 +287,11 @@ export default function ScorecardView() {
     if (!results.every(r => r.ccRes.isDone)) return
 
     const ranked = [...results].sort((a, b) => a.ccRes.total - b.ccRes.total)
-    const POINTS = [4, 2, 1]
-    teams.forEach(t => setTeamScore({ teamId: t.id, round: config.round, points: 0 }))
-    ranked.forEach(({ match: m }, i) => {
-      setTeamScore({ teamId: m.twosome1.teamId, round: config.round, points: POINTS[i] ?? 1 })
-    })
+    const gc4 = useTournamentStore.getState().gameConfig
+    const POINTS4 = [gc4.teamFinish1stPts ?? 4, gc4.teamFinish2ndPts ?? 2, gc4.teamFinish3rdPts ?? 1]
+    const newScores4 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: POINTS4[i] ?? 1 }))
+    if (newScores4.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
+    setTeamScoresBatch(newScores4)
   }
 
   function recomputeIndividualMatchTeamScores(currentMatches: typeof matches) {
@@ -332,9 +332,9 @@ export default function ScorecardView() {
       }
     }
 
-    teams.forEach(t => {
-      setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
-    })
+    const newScores5 = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
+    if (newScores5.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
+    setTeamScoresBatch(newScores5)
   }
 
   function recomputeVegasTeamScores(currentMatches: typeof matches) {
@@ -368,9 +368,9 @@ export default function ScorecardView() {
       else { teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2 }
     }
 
-    teams.forEach(t => {
-      setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
-    })
+    const newScores6 = teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 }))
+    if (newScores6.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
+    setTeamScoresBatch(newScores6)
   }
 
   // Reactive recompute: when matches change from a remote sync, update team scores.
@@ -621,9 +621,7 @@ export default function ScorecardView() {
         }
       }
 
-      teams.forEach(t => {
-        setTeamScore({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })
-      })
+      setTeamScoresBatch(teams.map(t => ({ teamId: t.id, round: config.round, points: teamPts[t.id] ?? 0 })))
     }
 
     checkAndShowChampion()
@@ -729,8 +727,9 @@ export default function ScorecardView() {
       })
       if (results.every(r => r.result.isDone)) {
         const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
-        teams.forEach(t => setTeamScore({ teamId: t.id, round, points: 0 }))
-        ranked.forEach(({ match: m }, i) => setTeamScore({ teamId: m.twosome1.teamId, round, points: [4, 2, 1][i] ?? 1 }))
+        const simGc = useTournamentStore.getState().gameConfig
+        const SIMPTS = [simGc.teamFinish1stPts ?? 4, simGc.teamFinish2ndPts ?? 2, simGc.teamFinish3rdPts ?? 1]
+        setTeamScoresBatch(ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: SIMPTS[i] ?? 1 })))
       }
     } else if (rc.format === 'captains_choice') {
       const results = roundMatchesAll.map(m => {
@@ -745,8 +744,9 @@ export default function ScorecardView() {
       })
       if (results.every(r => r.ccRes.isDone)) {
         const ranked = [...results].sort((a, b) => a.ccRes.total - b.ccRes.total)
-        teams.forEach(t => setTeamScore({ teamId: t.id, round, points: 0 }))
-        ranked.forEach(({ match: m }, i) => setTeamScore({ teamId: m.twosome1.teamId, round, points: [4, 2, 1][i] ?? 1 }))
+        const simGc2 = useTournamentStore.getState().gameConfig
+        const SIMPTS2 = [simGc2.teamFinish1stPts ?? 4, simGc2.teamFinish2ndPts ?? 2, simGc2.teamFinish3rdPts ?? 1]
+        setTeamScoresBatch(ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: SIMPTS2[i] ?? 1 })))
       }
     } else if (rc.format === 'individual_match') {
       const teamPts: Record<string, number> = {}
@@ -776,7 +776,7 @@ export default function ScorecardView() {
           else { teamPts[m.twosome1.teamId] += 0.5; teamPts[m.twosome2.teamId] += 0.5 }
         }
       }
-      teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+      setTeamScoresBatch(teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 })))
     } else if (rc.format === 'vegas') {
       const roundGc = useTournamentStore.getState().gameConfig ?? DEFAULT_GAME_CONFIG
       const teamPts: Record<string, number> = {}
@@ -801,7 +801,7 @@ export default function ScorecardView() {
         else if (vRes.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
         else { teamPts[m.twosome1.teamId] += pts / 2; teamPts[m.twosome2.teamId] += pts / 2 }
       }
-      teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+      setTeamScoresBatch(teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 })))
     } else {
       // team_match_play or points_round
       const teamPts: Record<string, number> = {}
@@ -829,7 +829,7 @@ export default function ScorecardView() {
           if (m.magicBall2) teamPts[m.twosome2.teamId] += 1
         }
       }
-      teams.forEach(t => setTeamScore({ teamId: t.id, round, points: teamPts[t.id] ?? 0 }))
+      setTeamScoresBatch(teams.map(t => ({ teamId: t.id, round, points: teamPts[t.id] ?? 0 })))
     }
   }
 
