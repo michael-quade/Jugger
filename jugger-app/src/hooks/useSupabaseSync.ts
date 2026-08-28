@@ -42,25 +42,51 @@ export function useSupabaseSync() {
       remoteDepth--
     }
 
+    // Merge remote scores onto local: remote wins per hole, but keep local value
+    // if remote has null for that hole (prevents stale Supabase push from wiping
+    // a score that was just entered locally but not yet confirmed).
+    function mergeScores(local: Match['scores'], remote: Match['scores']): Match['scores'] {
+      const merged: Match['scores'] = { ...remote }
+      for (const pid of Object.keys(local)) {
+        const lps = local[pid] ?? {}
+        const rps = remote[pid] ?? {}
+        const mergedPlayer: Record<number, number | null> = { ...rps }
+        for (const holeStr of Object.keys(lps)) {
+          const hole = Number(holeStr)
+          if (lps[hole] !== null && rps[hole] == null) {
+            mergedPlayer[hole] = lps[hole]
+          }
+        }
+        merged[pid] = mergedPlayer
+      }
+      return merged
+    }
+
     function applyMatch(match: Match) {
       if (useTournamentStore.getState().isViewingHistory) return
       remoteDepth++
       useTournamentStore.setState(state => {
-        const updatedMatches = state.matches.some(m => m.id === match.id)
-          ? state.matches.map(m => m.id === match.id ? match : m)
-          : [...state.matches, match]
+        const localMatch = state.matches.find(m => m.id === match.id)
+        // Always merge scores (never replace) so two devices entering scores into
+        // two different regular matches don't overwrite each other's blind propagation.
+        const mergedMatch: Match = localMatch
+          ? { ...match, scores: mergeScores(localMatch.scores, match.scores) }
+          : match
+        const updatedMatches = localMatch
+          ? state.matches.map(m => m.id === match.id ? mergedMatch : m)
+          : [...state.matches, mergedMatch]
 
         // Propagate scores from a non-blind match to blind matches in the same round
         if (!match.isBlind) {
-          const sourcePids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+          const sourcePids = [...mergedMatch.twosome1.playerIds, ...mergedMatch.twosome2.playerIds]
           return {
             matches: updatedMatches.map(m => {
               if (!m.isBlind || m.round !== match.round) return m
               const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
               const overlay: Match['scores'] = {}
               for (const pid of sourcePids) {
-                if (blindPids.includes(pid) && match.scores[pid]) {
-                  overlay[pid] = { ...(m.scores[pid] ?? {}), ...match.scores[pid] }
+                if (blindPids.includes(pid) && mergedMatch.scores[pid]) {
+                  overlay[pid] = { ...(m.scores[pid] ?? {}), ...mergedMatch.scores[pid] }
                 }
               }
               return Object.keys(overlay).length > 0 ? { ...m, scores: { ...m.scores, ...overlay } } : m
@@ -164,20 +190,8 @@ export function useSupabaseSync() {
           const old = prevState.matches.find(pm => pm.id === m.id)
           return old !== m
         })
-        // Track which rounds had a non-blind match change so we can also push
-        // the corresponding blind matches (safety net in case identity check misses them)
-        const roundsWithRegularChange = new Set<number>()
         for (const match of changedOrNew) {
           upsertMatch(match)
-          if (!match.isBlind) roundsWithRegularChange.add(match.round)
-        }
-        // Explicitly push blind matches for any round where a regular match changed
-        for (const round of roundsWithRegularChange) {
-          for (const blindMatch of newState.matches.filter(m => m.isBlind && m.round === round)) {
-            if (!changedOrNew.find(m => m.id === blindMatch.id)) {
-              upsertMatch(blindMatch)
-            }
-          }
         }
 
         // Delete removed matches (e.g. pairings reset)
