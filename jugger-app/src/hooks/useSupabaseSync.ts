@@ -235,10 +235,10 @@ export function useSupabaseSync() {
           const old = prevState.teamScores.find(ps => ps.teamId === s.teamId && ps.round === s.round)
           return old !== s
         })
-        for (const score of changed) {
+        if (changed.length > 0) {
           db.from('team_scores').upsert(
-            { tournament_year: YEAR, team_id: score.teamId, round: score.round,
-              points: score.points, notes: score.notes ?? null },
+            changed.map(s => ({ tournament_year: YEAR, team_id: s.teamId, round: s.round,
+              points: s.points, notes: s.notes ?? null })),
             { onConflict: 'tournament_year,team_id,round' },
           ).then(({ error }) => { if (error) console.error('[supabase] team_score upsert:', error.message) })
         }

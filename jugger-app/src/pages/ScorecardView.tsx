@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useReactToPrint } from 'react-to-print'
 import { useTournamentStore } from '../store/useTournamentStore'
@@ -377,23 +377,6 @@ export default function ScorecardView() {
     setTeamScoresBatch(newScores6)
   }
 
-  // Reactive recompute: when matches change from a remote sync, update team scores.
-  // Uses a ref so the first render (stale localStorage state) doesn't accidentally
-  // zero out team scores before Supabase data loads.
-  const prevMatchesRef = useRef(matches)
-  useEffect(() => {
-    if (matches === prevMatchesRef.current) return
-    prevMatchesRef.current = matches
-    if (!course || !config) return
-    const fmt = config.format
-    if (fmt === 'team_match_play') recomputeMatchPlayTeamScores(matches)
-    else if (fmt === 'points_round') recomputePointsRoundTeamScores(matches)
-    else if (fmt === 'texas_scramble') recomputeScrambleTeamScores(matches)
-    else if (fmt === 'individual_match') recomputeIndividualMatchTeamScores(matches)
-    else if (fmt === 'captains_choice') recomputeCaptainsChoiceTeamScores(matches)
-    else if (fmt === 'vegas') recomputeVegasTeamScores(matches)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matches])
 
   function autoUpdateMatchResult(currentMatch: Match) {
     if (!course || !config) return
