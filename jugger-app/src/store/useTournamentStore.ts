@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { TournamentState, ArchivedYear, Team, Player, Course, RoundConfig, Match, TeamRoundScore, HoleInOneEntry, CtpEntry, CtpDonation, CourseHistoryEntry, AdminCredential, HioDonation, SkidmoreScore, GameConfig, LodgingConfig, SideBet, SideBetHoleEntry, HoleShotStat } from '../types'
 import { computeChampion } from '../utils/champion'
-import { configureHdcpSettings } from '../utils/handicap'
+import { configureHdcpSettings, getPlayerCourseHdcp } from '../utils/handicap'
+import { computeMatchPlay, computeIndividualMatch } from '../utils/matchplay'
 import { INITIAL_TEAMS, INITIAL_COURSE_HISTORY, INITIAL_HIO_DONATIONS, INITIAL_CTP_HIO_HISTORY, INITIAL_SKIDMORE_SCORES } from '../data/initialData'
 import { COURSES, ROUND_CONFIGS } from '../data/courseData'
 
@@ -174,6 +175,64 @@ const DEFAULT_STATE: TournamentState = {
   location: 'Pinehurst, NC',
   lodgingConfig: DEFAULT_LODGING_CONFIG,
   sideBets: [],
+}
+
+// Compute and stamp result strings onto blind matches in a given round.
+// Called after score propagation so blind results are always stored and
+// appear correctly in emails and analytics regardless of which UI scored.
+function applyBlindResults(
+  matches: Match[],
+  round: number,
+  roundConfigs: RoundConfig[],
+  courses: Course[],
+  teams: Team[],
+): Match[] {
+  const rc = roundConfigs.find(r => r.round === round)
+  if (!rc || (rc.format !== 'team_match_play' && rc.format !== 'individual_match')) return matches
+  const course = courses.find(c => c.id === rc.courseId)
+  if (!course) return matches
+  const allPlayers = teams.flatMap(t => t.players)
+
+  return matches.map(m => {
+    if (!m.isBlind || m.round !== round) return m
+    const pids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+    const hdcps: Record<string, number> = {}
+    for (const pid of pids) {
+      const player = allPlayers.find(p => p.id === pid)
+      if (player) hdcps[pid] = getPlayerCourseHdcp(player, course, rc.tee, rc.round, allPlayers, rc.format)
+    }
+
+    if (rc.format === 'team_match_play') {
+      const res = computeMatchPlay(m, course.holes, hdcps)
+      if (!res.winner) return m
+      const t1 = teams.find(t => t.id === m.twosome1.teamId)
+      const t2 = teams.find(t => t.id === m.twosome2.teamId)
+      const result = res.winner === 'all_square'
+        ? 'All Square'
+        : `${(res.winner === 'twosome1' ? t1 : t2)?.name ?? 'Team'} wins ${res.winLabel}`
+      return result !== m.result ? { ...m, result } : m
+    }
+
+    if (rc.format === 'individual_match') {
+      const imRes = computeIndividualMatch(m, course.holes, hdcps)
+      const parts: string[] = []
+      for (const { res, p1Id, p2Id, label } of [
+        { res: imRes.matchA, p1Id: m.twosome1.playerIds[0], p2Id: m.twosome2.playerIds[0], label: 'A' },
+        { res: imRes.matchB, p1Id: m.twosome1.playerIds[1], p2Id: m.twosome2.playerIds[1], label: 'B' },
+      ]) {
+        if (!res.winner) continue
+        const p1Last = allPlayers.find(p => p.id === p1Id)?.name.split(' ').slice(-1)[0] ?? '?'
+        const p2Last = allPlayers.find(p => p.id === p2Id)?.name.split(' ').slice(-1)[0] ?? '?'
+        if (res.winner === 'all_square') parts.push(`${label}: AS`)
+        else if (res.winner === 'p1') parts.push(`${label}: ${p1Last} ${res.winLabel}`)
+        else parts.push(`${label}: ${p2Last} ${res.winLabel}`)
+      }
+      const result = parts.join(' · ')
+      return result && result !== m.result ? { ...m, result } : m
+    }
+
+    return m
+  })
 }
 
 export const useTournamentStore = create<TournamentState & Actions>()(
@@ -358,41 +417,41 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         set(state => {
           const sourceMatch = state.matches.find(m => m.id === matchId)
           const propagate = sourceMatch && !sourceMatch.isBlind
-          return {
-            matches: state.matches.map(m => {
-              const applyScore = (match: Match) => {
-                const playerScores = { ...(match.scores[playerId] ?? {}), [hole]: score }
-                return { ...match, scores: { ...match.scores, [playerId]: playerScores } }
-              }
-              if (m.id === matchId) return applyScore(m)
-              if (propagate && m.isBlind && m.round === sourceMatch!.round) {
-                const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
-                if (blindPids.includes(playerId)) return applyScore(m)
-              }
-              return m
-            }),
-          }
+          const round = sourceMatch?.round ?? 0
+          const updated = state.matches.map(m => {
+            const applyScore = (match: Match) => {
+              const playerScores = { ...(match.scores[playerId] ?? {}), [hole]: score }
+              return { ...match, scores: { ...match.scores, [playerId]: playerScores } }
+            }
+            if (m.id === matchId) return applyScore(m)
+            if (propagate && m.isBlind && m.round === round) {
+              const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+              if (blindPids.includes(playerId)) return applyScore(m)
+            }
+            return m
+          })
+          return { matches: applyBlindResults(updated, round, state.roundConfigs, state.courses, state.teams) }
         }),
 
       setMatchScoresBatch: (matchId, scores) =>
         set(state => {
           const sourceMatch = state.matches.find(m => m.id === matchId)
           const propagate = sourceMatch && !sourceMatch.isBlind
-          return {
-            matches: state.matches.map(m => {
-              if (m.id === matchId) return { ...m, scores: { ...m.scores, ...scores } }
-              if (propagate && m.isBlind && m.round === sourceMatch!.round) {
-                const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
-                const overlayScores: Match['scores'] = {}
-                for (const pid of blindPids) {
-                  if (scores[pid]) overlayScores[pid] = { ...(m.scores[pid] ?? {}), ...scores[pid] }
-                }
-                if (Object.keys(overlayScores).length > 0)
-                  return { ...m, scores: { ...m.scores, ...overlayScores } }
+          const round = sourceMatch?.round ?? 0
+          const updated = state.matches.map(m => {
+            if (m.id === matchId) return { ...m, scores: { ...m.scores, ...scores } }
+            if (propagate && m.isBlind && m.round === round) {
+              const blindPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+              const overlayScores: Match['scores'] = {}
+              for (const pid of blindPids) {
+                if (scores[pid]) overlayScores[pid] = { ...(m.scores[pid] ?? {}), ...scores[pid] }
               }
-              return m
-            }),
-          }
+              if (Object.keys(overlayScores).length > 0)
+                return { ...m, scores: { ...m.scores, ...overlayScores } }
+            }
+            return m
+          })
+          return { matches: applyBlindResults(updated, round, state.roundConfigs, state.courses, state.teams) }
         }),
 
       setShotStat: (matchId, playerId, hole, stat) =>
