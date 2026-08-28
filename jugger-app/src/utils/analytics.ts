@@ -440,7 +440,11 @@ export function computeTeamResults(
     }
 
     const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1])
-    const champion = sorted[0]?.[0]
+    // Only declare a champion when every round has team scores (tournament complete)
+    const totalRounds = bundle.roundConfigs.length
+    const roundsScored = new Set(bundle.teamScores.map(ts => ts.round)).size
+    const isComplete = roundsScored >= totalRounds && totalRounds > 0
+    const champion = isComplete ? sorted[0]?.[0] : undefined
 
     sorted.forEach(([teamId, pts], idx) => {
       if (!out[teamId]) out[teamId] = []
