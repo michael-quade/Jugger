@@ -862,6 +862,11 @@ export default function ScorecardView() {
       }
       updateMatch(blind.id, { scores: merged })
     }
+    // Recompute results for blind matches after scores are refreshed
+    const refreshed = useTournamentStore.getState().matches
+    for (const bm of refreshed.filter(m => m.round === round && m.isBlind)) {
+      autoUpdateMatchResult(bm)
+    }
   }
 
   return (
@@ -1268,6 +1273,10 @@ export default function ScorecardView() {
                       if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas') {
                         const cur = latestMatches.find(m => m.id === match.id)
                         if (cur) autoUpdateMatchResult(cur)
+                        // Also update result for blind matches in this round (scores just propagated)
+                        for (const bm of latestMatches.filter(m => m.round === activeRound && m.isBlind)) {
+                          autoUpdateMatchResult(bm)
+                        }
                       }
                     }}
                     onTeamHoleScoreChange={(hole, val) => {
