@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useReactToPrint } from 'react-to-print'
 import { useTournamentStore } from '../store/useTournamentStore'
@@ -387,6 +387,21 @@ export default function ScorecardView() {
     setTeamScoresBatch(newScores6)
   }
 
+  // On tab change: update result strings for completed matches, and recompute team
+  // scores for team-format rounds so standings reflect current match data.
+  // Fires only on explicit tab navigation — not on remote match updates.
+  useEffect(() => {
+    if (!course || !config) return
+    if (config.format === 'texas_scramble') {
+      recomputeScrambleTeamScores(matches)
+    } else if (config.format === 'captains_choice') {
+      recomputeCaptainsChoiceTeamScores(matches)
+    } else {
+      const roundMatches = matches.filter(m => m.round === config.round)
+      for (const m of roundMatches) autoUpdateMatchResult(m)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRound])
 
   function autoUpdateMatchResult(currentMatch: Match) {
     if (!course || !config) return
@@ -631,7 +646,7 @@ export default function ScorecardView() {
 
     checkAndShowChampion()
 
-    if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas') {
+    if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas' || config.format === 'points_round') {
       const cur = useTournamentStore.getState().matches.find(m => m.id === match.id)
       if (cur) autoUpdateMatchResult(cur)
     }
@@ -1275,7 +1290,7 @@ export default function ScorecardView() {
                       if (config.format === 'vegas') {
                         recomputeVegasTeamScores(latestMatches)
                       }
-                      if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas') {
+                      if (config.format === 'team_match_play' || config.format === 'individual_match' || config.format === 'vegas' || config.format === 'points_round') {
                         const cur = latestMatches.find(m => m.id === match.id)
                         if (cur) autoUpdateMatchResult(cur)
                         // Also update result for blind matches in this round (scores just propagated)
