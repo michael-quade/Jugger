@@ -912,6 +912,19 @@ export default function ScorecardView() {
                 <Trash2 size={12} /> Clear Team Pts
               </button>
             )}
+            {matches.some(m => m.round === activeRound && [...m.twosome1.playerIds, ...m.twosome2.playerIds].some(pid => Object.values(m.scores[pid] ?? {}).some(v => v != null))) && (
+              <button
+                onClick={() => {
+                  if (confirm(`Clear ALL match scores for Round ${activeRound}? Team points for this round will also be cleared.`)) {
+                    matches.filter(m => m.round === activeRound).forEach(m => clearMatchScores(m.id))
+                    clearTeamScoresForRound(activeRound)
+                  }
+                }}
+                className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded px-3 py-1.5 transition-colors"
+              >
+                <Trash2 size={12} /> Clear Round {activeRound} Scores
+              </button>
+            )}
             <button
               onClick={handleSimulateAll}
               className="flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 rounded px-3 py-1.5 font-semibold transition-colors"
