@@ -422,6 +422,11 @@ export default function MobileScoring() {
     const results = ms.map(m => ({ match: m, result: computeScramble(m, course.holes, localHdcps(m)) }))
     if (!results.every(r => r.result.isDone)) return
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
+    const RANK_LABELS = ['1st', '2nd', '3rd']
+    ranked.forEach(({ match: m, result: r }, i) => {
+      const label = `${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
+      if (m.result !== label) updateMatch(m.id, { result: label })
+    })
     const PTS = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
     const ns2 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: PTS[i] ?? 1 }))
     if (!scoresUnchanged(ns2)) setTeamScoresBatch(ns2)
@@ -443,6 +448,11 @@ export default function MobileScoring() {
     })
     if (!results.every(r => r.result.isDone)) return
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
+    const RANK_LABELSC = ['1st', '2nd', '3rd']
+    ranked.forEach(({ match: m, result: r }, i) => {
+      const label = `${RANK_LABELSC[i]} · Net ${Math.round(r.total)}`
+      if (m.result !== label) updateMatch(m.id, { result: label })
+    })
     const PTSC = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
     const ns3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: PTSC[i] ?? 1 }))
     if (!scoresUnchanged(ns3)) setTeamScoresBatch(ns3)
@@ -457,6 +467,9 @@ export default function MobileScoring() {
       const allDone = pids.every(pid => course.holes.every(h => m.scores[pid]?.[h.number] != null))
       if (allDone) {
         const res = computePointsRound(m, course.holes, localHdcps(m))
+        const fmtD = (d: number) => d >= 0 ? `+${d}` : `${d}`
+        const label = `${fmtD(res.total1 - res.quota1)} / ${fmtD(res.total2 - res.quota2)}`
+        if (m.result !== label) updateMatch(m.id, { result: label })
         const pts = m.isBlind ? 1 : 2
         if (res.winner === 'twosome1')      teamPts[m.twosome1.teamId] += pts
         else if (res.winner === 'twosome2') teamPts[m.twosome2.teamId] += pts

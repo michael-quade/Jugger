@@ -261,6 +261,11 @@ export default function ScorecardView() {
     if (!results.every(r => r.result.isDone)) return
 
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
+    const RANK_LABELS = ['1st', '2nd', '3rd']
+    ranked.forEach(({ match: m, result: r }, i) => {
+      const label = `${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
+      if (m.result !== label) updateMatch(m.id, { result: label })
+    })
     const gc3 = useTournamentStore.getState().gameConfig
     const POINTS = [gc3.teamFinish1stPts ?? 4, gc3.teamFinish2ndPts ?? 2, gc3.teamFinish3rdPts ?? 1]
     const newScores3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: POINTS[i] ?? 1 }))
@@ -289,6 +294,11 @@ export default function ScorecardView() {
     if (!results.every(r => r.ccRes.isDone)) return
 
     const ranked = [...results].sort((a, b) => a.ccRes.total - b.ccRes.total)
+    const RANK_LABELS4 = ['1st', '2nd', '3rd']
+    ranked.forEach(({ match: m, ccRes }, i) => {
+      const label = `${RANK_LABELS4[i]} · Net ${Math.round(ccRes.total)}`
+      if (m.result !== label) updateMatch(m.id, { result: label })
+    })
     const gc4 = useTournamentStore.getState().gameConfig
     const POINTS4 = [gc4.teamFinish1stPts ?? 4, gc4.teamFinish2ndPts ?? 2, gc4.teamFinish3rdPts ?? 1]
     const newScores4 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: POINTS4[i] ?? 1 }))
@@ -380,7 +390,7 @@ export default function ScorecardView() {
 
   function autoUpdateMatchResult(currentMatch: Match) {
     if (!course || !config) return
-    if (config.format !== 'team_match_play' && config.format !== 'individual_match' && config.format !== 'vegas') return
+    if (config.format !== 'team_match_play' && config.format !== 'individual_match' && config.format !== 'vegas' && config.format !== 'points_round') return
 
     const allPlayers = teams.flatMap(t => t.players)
     const allPids = [...currentMatch.twosome1.playerIds, ...currentMatch.twosome2.playerIds]
@@ -446,6 +456,14 @@ export default function ScorecardView() {
         ? `All Square — ${vRes.total1} pts each`
         : `${(vRes.winner === 'twosome1' ? t1 : t2)?.name ?? 'Team'} wins ${vRes.winLabel}`
       updateMatch(currentMatch.id, { result })
+
+    } else if (config.format === 'points_round') {
+      const prRes = computePointsRound(currentMatch, course.holes, localHdcps)
+      if (!prRes.winner) return
+      const fmtDelta = (d: number) => d >= 0 ? `+${d}` : `${d}`
+      const d1 = prRes.total1 - prRes.quota1
+      const d2 = prRes.total2 - prRes.quota2
+      updateMatch(currentMatch.id, { result: `${fmtDelta(d1)} / ${fmtDelta(d2)}` })
     }
   }
 
