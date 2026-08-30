@@ -489,6 +489,7 @@ export function buildTournamentSummaryEmail(
   courses: Course[],
   ctpEntries: CtpEntry[],
   hioDonations: HioDonation[],
+  ctpHioHistory: { year: number; amount: number }[],
   sandbaggerPlayerId?: string,
   toiletAwardPlayerId?: string,
   championTeamId?: string,
@@ -612,16 +613,28 @@ export function buildTournamentSummaryEmail(
     </table>
   ` : ''
 
-  // ── HIO pot ───────────────────────────────────────────────────────────────
-  const yearDonations = hioDonations.filter(d => d.year === year && d.paid)
-  const potTotal = yearDonations.reduce((s, d) => s + d.amount, 0)
+  // ── HIO pot — mirrors HoleInOne page: all unclaimed paid donations + CTP→HIO ──
+  const ctpHioTotal =
+    ctpHioHistory.reduce((s, h) => s + h.amount, 0) +
+    ctpEntries.filter(e => e.donatedToHio).reduce((s, e) => s + (e.hioDonationAmount ?? 0), 0)
+  const paidUnclaimed = hioDonations.filter(d => d.paid && !d.claimedByHioId)
+  const potTotal = paidUnclaimed.reduce((s, d) => s + d.amount, 0) + ctpHioTotal
   const hioSection = potTotal > 0 ? `
     ${sectionHeader('Hole-in-One Pot')}
     <p style="font-size:13px;color:${C.gray};margin:0 0 4px;">
       Current pot: <strong style="font-size:16px;color:${C.dark};">$${potTotal}</strong>
-      <span style="font-size:12px;margin-left:6px;">(${yearDonations.length} paid contribution${yearDonations.length !== 1 ? 's' : ''})</span>
     </p>
-    <p style="font-size:11px;color:${C.gray};margin:0;">Rolls over to next year if unclaimed.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;">
+      <tr>
+        <td style="font-size:12px;color:${C.gray};padding:3px 0;">Player donations (all years, unclaimed)</td>
+        <td style="font-size:12px;color:${C.dark};text-align:right;padding:3px 0;">$${paidUnclaimed.reduce((s, d) => s + d.amount, 0)}</td>
+      </tr>
+      ${ctpHioTotal > 0 ? `<tr>
+        <td style="font-size:12px;color:${C.gray};padding:3px 0;">CTP → HIO transfers</td>
+        <td style="font-size:12px;color:${C.dark};text-align:right;padding:3px 0;">$${ctpHioTotal}</td>
+      </tr>` : ''}
+    </table>
+    <p style="font-size:11px;color:${C.gray};margin:6px 0 0;">Rolls over to next year if unclaimed.</p>
   ` : ''
 
   const body = `

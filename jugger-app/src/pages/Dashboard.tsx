@@ -25,7 +25,7 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion, ctpEntries, hioDonations } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion, ctpEntries, hioDonations, ctpHioHistory } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
@@ -54,7 +54,7 @@ export default function Dashboard() {
     const championId = champion?.id ?? defendingChampionTeamId
     const result = buildTournamentSummaryEmail(
       year, teams, matches, teamScores, roundConfigs, courses,
-      ctpEntries, hioDonations ?? [],
+      ctpEntries, hioDonations ?? [], ctpHioHistory ?? [],
       sandId ?? sandbaggerPlayerId,
       toiletId ?? toiletAwardPlayerId,
       championId,
