@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Match, Team, Course, RoundConfig, TeamRoundScore, CtpEntry } from '../types'
+import type { Match, Team, Course, RoundConfig, TeamRoundScore, CtpEntry, HioDonation } from '../types'
 
 // ── Masters color palette (inline-style safe) ────────────────────────────────
 const C = {
@@ -476,4 +476,167 @@ export function getAllRecipients(teams: Team[]): string[] {
     }
   }
   return [...new Set(emails)]
+}
+
+// ── Tournament Summary Email ──────────────────────────────────────────────────
+
+export function buildTournamentSummaryEmail(
+  year: number,
+  teams: Team[],
+  matches: Match[],
+  teamScores: TeamRoundScore[],
+  roundConfigs: RoundConfig[],
+  courses: Course[],
+  ctpEntries: CtpEntry[],
+  hioDonations: HioDonation[],
+  sandbaggerPlayerId?: string,
+  toiletAwardPlayerId?: string,
+  championTeamId?: string,
+): { subject: string; html: string } {
+  const sortedConfigs = [...roundConfigs].sort((a, b) => a.round - b.round)
+
+  // ── Standings ──────────────────────────────────────────────────────────────
+  const standing = teams.map(t => ({
+    team: t,
+    byRound: [1, 2, 3, 4, 5].map(r => teamScores.find(s => s.teamId === t.id && s.round === r)?.points ?? 0),
+    total: teamScores.filter(s => s.teamId === t.id).reduce((s, r) => s + r.points, 0),
+  })).sort((a, b) => b.total - a.total)
+
+  const champion = teams.find(t => t.id === championTeamId) ?? standing[0]?.team
+
+  // ── Champion banner ────────────────────────────────────────────────────────
+  const championSection = champion ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-radius:10px;overflow:hidden;margin-bottom:20px;border:2px solid ${champion.color};">
+      <tr><td style="background:linear-gradient(180deg,#060d08 0%,#0b1610 100%);padding:28px;text-align:center;">
+        <div style="height:3px;background:linear-gradient(90deg,transparent,${champion.color},transparent);margin-bottom:18px;"></div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;">${year} Juggerknocker Invitational Champions</div>
+        <div style="font-size:52px;line-height:1;margin:8px 0;">🏆</div>
+        <div style="font-size:28px;font-weight:bold;color:${champion.color};margin:8px 0;">${champion.name}</div>
+        <div style="font-size:14px;color:rgba(255,255,255,0.6);">
+          ${champion.players.map(p => p.name).join(' · ')}
+        </div>
+        <div style="margin-top:14px;font-size:20px;font-weight:bold;color:${C.gold};">
+          ${standing.find(s => s.team.id === champion.id)?.total ?? '—'} pts
+        </div>
+      </td></tr>
+    </table>
+  ` : ''
+
+  // ── Final Standings table ─────────────────────────────────────────────────
+  const standingRows = standing.map((row, i) => {
+    const isWinner = row.team.id === champion?.id
+    const bg = isWinner ? '#fefce8' : (i % 2 === 0 ? C.white : C.cream)
+    return `<tr style="background:${bg};">
+      <td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;">
+        ${isWinner ? '🏆 ' : ''}<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${row.team.color};margin-right:6px;vertical-align:middle;"></span>
+        <strong>${row.team.name}</strong>
+      </td>
+      ${row.byRound.map(pts => `<td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px;color:${C.gray};">${pts || '—'}</td>`).join('')}
+      <td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:15px;font-weight:bold;color:${C.dark};">${row.total}</td>
+    </tr>`
+  }).join('')
+
+  const standingsSection = `
+    ${sectionHeader('Final Standings')}
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #d1d5db;border-radius:6px;overflow:hidden;">
+      <tr style="background:${C.dark};">
+        <th style="color:${C.white};font-size:11px;padding:7px 10px;text-align:left;">Team</th>
+        ${[1,2,3,4,5].map(r => `<th style="color:${C.gold};font-size:11px;padding:7px 10px;text-align:center;">R${r}</th>`).join('')}
+        <th style="color:${C.gold};font-size:11px;padding:7px 10px;text-align:right;">Total</th>
+      </tr>
+      ${standingRows}
+    </table>
+  `
+
+  // ── Round-by-round recap ──────────────────────────────────────────────────
+  const roundSections = sortedConfigs.map(rc => {
+    const course = courses.find(c => c.id === rc.courseId)
+    const regularMatches = matches.filter(m => m.round === rc.round && !m.isBlind)
+    const blindMatches = matches.filter(m => m.round === rc.round && m.isBlind)
+    const roundPts = teamScores.filter(s => s.round === rc.round)
+    const roundCtp = ctpEntries.filter(e => e.year === year && e.round === rc.round && e.winnerName)
+
+    const matchRows = [
+      ...regularMatches.map(m => matchResultRow(m, teams)),
+      ...(blindMatches.length ? [blindDividerRow(), ...blindMatches.map(m => matchResultRow(m, teams, true))] : []),
+    ].join('')
+
+    const ptsRow = [...roundPts].sort((a, b) => b.points - a.points).map(s => {
+      const t = teams.find(t => t.id === s.teamId)
+      return `<span style="display:inline-block;margin-right:14px;font-size:12px;color:${t?.color ?? C.dark};font-weight:bold;">${t?.name ?? s.teamId}: ${s.points} pts</span>`
+    }).join('')
+
+    const ctpSnippet = roundCtp.length ? roundCtp.map(e =>
+      `<span style="margin-right:14px;font-size:12px;color:${C.gray};">Hole ${e.hole}: <strong style="color:${C.dark};">${e.winnerName}</strong></span>`
+    ).join('') : ''
+
+    return `
+      <div style="margin:0 0 4px;">
+        <div style="font-size:13px;font-weight:bold;color:${C.green};margin:18px 0 4px;">
+          Round ${rc.round} · ${FORMAT_LABELS[rc.format] ?? rc.format}
+          <span style="font-size:11px;color:${C.gray};font-weight:normal;margin-left:8px;">${course?.name ?? rc.courseId}${rc.date ? ` · ${fmtDate(rc.date)}` : ''}</span>
+        </div>
+        ${(regularMatches.length || blindMatches.length) ? `<table width="100%" cellpadding="0" cellspacing="0">${matchRows}</table>` : ''}
+        ${ptsRow ? `<div style="margin-top:6px;">${ptsRow}</div>` : ''}
+        ${ctpSnippet ? `<div style="margin-top:4px;">${ctpSnippet}</div>` : ''}
+      </div>
+    `
+  }).join('<div style="border-top:1px solid #e5e7eb;margin:8px 0;"></div>')
+
+  // ── CTP summary ───────────────────────────────────────────────────────────
+  const allCtp = ctpEntries.filter(e => e.year === year && e.winnerName)
+  const ctpSection = allCtp.length ? `
+    ${sectionHeader('Par 3 CTP Winners')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${allCtp.sort((a,b) => a.round - b.round || a.hole - b.hole).map(e => `<tr>
+        <td style="font-size:12px;padding:5px 0;color:${C.gray};border-bottom:1px solid #f5f5f5;">R${e.round} · Hole ${e.hole}${e.yardage ? ` (${e.yardage} yds)` : ''}</td>
+        <td style="font-size:12px;padding:5px 0;font-weight:bold;color:${C.dark};border-bottom:1px solid #f5f5f5;text-align:right;">${e.winnerName}${e.donatedToHio ? ' <span style="color:#6b7280;font-weight:normal;">(→ HIO pot)</span>' : ''}</td>
+      </tr>`).join('')}
+    </table>
+  ` : ''
+
+  // ── End-of-year awards ────────────────────────────────────────────────────
+  const sandbagger = sandbaggerPlayerId ? teams.flatMap(t => t.players).find(p => p.id === sandbaggerPlayerId) : null
+  const toilet = toiletAwardPlayerId ? teams.flatMap(t => t.players).find(p => p.id === toiletAwardPlayerId) : null
+  const awardsSection = (sandbagger || toilet) ? `
+    ${sectionHeader('End-of-Year Awards')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${sandbagger ? `<tr>
+        <td style="font-size:13px;padding:8px 0;border-bottom:1px solid #f5f5f5;">🏅 <strong>Sandbagger Award</strong></td>
+        <td style="font-size:13px;padding:8px 0;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:bold;color:${C.dark};">${sandbagger.name}</td>
+      </tr>` : ''}
+      ${toilet ? `<tr>
+        <td style="font-size:13px;padding:8px 0;">🚽 <strong>Toilet Award</strong></td>
+        <td style="font-size:13px;padding:8px 0;text-align:right;font-weight:bold;color:${C.dark};">${toilet.name}</td>
+      </tr>` : ''}
+    </table>
+  ` : ''
+
+  // ── HIO pot ───────────────────────────────────────────────────────────────
+  const yearDonations = hioDonations.filter(d => d.year === year && d.paid)
+  const potTotal = yearDonations.reduce((s, d) => s + d.amount, 0)
+  const hioSection = potTotal > 0 ? `
+    ${sectionHeader('Hole-in-One Pot')}
+    <p style="font-size:13px;color:${C.gray};margin:0 0 4px;">
+      Current pot: <strong style="font-size:16px;color:${C.dark};">$${potTotal}</strong>
+      <span style="font-size:12px;margin-left:6px;">(${yearDonations.length} paid contribution${yearDonations.length !== 1 ? 's' : ''})</span>
+    </p>
+    <p style="font-size:11px;color:${C.gray};margin:0;">Rolls over to next year if unclaimed.</p>
+  ` : ''
+
+  const body = `
+    ${championSection}
+    ${standingsSection}
+    ${sectionHeader('Round-by-Round Recap')}
+    ${roundSections}
+    ${ctpSection}
+    ${awardsSection}
+    ${hioSection}
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:${C.gray};">
+      See you next year. 🏌️ &nbsp;·&nbsp; <a href="https://juggerknockerinvitational.com" style="color:${C.green};">juggerknockerinvitational.com</a>
+    </div>
+  `
+
+  const subject = `[Jugger ${year}] Tournament Summary — ${champion?.name ?? 'Final Results'} Wins!`
+  return { subject, html: shell(year, body) }
 }

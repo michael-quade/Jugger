@@ -5,7 +5,8 @@ import { useIsAdmin } from '../store/useAuthStore'
 import { Lock, Unlock, CheckCircle, AlertTriangle, X, Trophy, Mail } from 'lucide-react'
 import type { Match, Team } from '../types'
 import { computeChampion, getDefendingChampionId } from '../utils/champion'
-import { sendEmail, buildDayEmail, getAllRecipients } from '../lib/email'
+import { buildDayEmail, buildTournamentSummaryEmail, sendEmail, getAllRecipients } from '../lib/email'
+import TournamentSummaryModal from '../components/TournamentSummaryModal'
 
 const MAX_PTS: Record<number, number> = { 1: 9, 2: 15, 3: 7, 4: 12, 5: 7 }
 
@@ -24,7 +25,7 @@ const ROUND_FORMATS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion, ctpEntries } = useTournamentStore()
+  const { year, liveYear, isViewingHistory, setYear, teams, courses, roundConfigs, matches, teamScores, hdcpLocked, lockHandicaps, finalizeYear, archivedYears, sandbaggerPlayerId, toiletAwardPlayerId, setSandbaggerPlayer, setToiletAwardPlayer, defendingChampionTeamId, setDefendingChampion, ctpEntries, hioDonations } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [showFinalize, setShowFinalize] = useState(false)
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [pendingToilet, setPendingToilet] = useState<string>(toiletAwardPlayerId ?? '')
   const [sendingDay, setSendingDay] = useState<string | null>(null)
   const [dayEmailStatus, setDayEmailStatus] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [summaryEmailPreview, setSummaryEmailPreview] = useState<{ subject: string; html: string } | null>(null)
 
   // Group rounds by date → day label
   const dayGroups: { label: string; rounds: number[] }[] = []
@@ -46,6 +48,16 @@ export default function Dashboard() {
     const dt = new Date(date + 'T12:00:00')
     const label = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
     dayGroups.push({ label, rounds })
+  }
+
+  function handlePreviewSummaryEmail() {
+    const championId = champion?.id ?? defendingChampionTeamId
+    const result = buildTournamentSummaryEmail(
+      year, teams, matches, teamScores, roundConfigs, courses,
+      ctpEntries, hioDonations ?? [],
+      sandbaggerPlayerId, toiletAwardPlayerId, championId,
+    )
+    setSummaryEmailPreview(result)
   }
 
   async function handleSendDayEmail(label: string, rounds: number[]) {
@@ -157,25 +169,36 @@ export default function Dashboard() {
         </table>
       </div>
 
-      {/* Admin: send day recap emails */}
-      {isAdmin && !isViewingHistory && dayGroups.length > 0 && (
+      {/* Admin: send day recap emails + tournament summary */}
+      {isAdmin && !isViewingHistory && (dayGroups.length > 0 || tournamentComplete) && (
         <div className="flex items-center gap-2 flex-wrap mt-1">
-          <span className="text-xs text-gray-400 flex items-center gap-1"><Mail size={11} /> Email Day Recap:</span>
-          {dayGroups.map(({ label, rounds }) => (
-            <button
-              key={label}
-              disabled={!!sendingDay}
-              onClick={() => handleSendDayEmail(label, rounds)}
-              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded px-2.5 py-1 transition-colors disabled:opacity-50"
-            >
-              {sendingDay === label ? '…' : label}
-            </button>
-          ))}
-          {dayEmailStatus && (
-            <span className={`text-xs px-2 py-1 rounded ${dayEmailStatus.ok ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`}>
-              {dayEmailStatus.msg}
-            </span>
+          {dayGroups.length > 0 && (
+            <>
+              <span className="text-xs text-gray-400 flex items-center gap-1"><Mail size={11} /> Email Day Recap:</span>
+              {dayGroups.map(({ label, rounds }) => (
+                <button
+                  key={label}
+                  disabled={!!sendingDay}
+                  onClick={() => handleSendDayEmail(label, rounds)}
+                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded px-2.5 py-1 transition-colors disabled:opacity-50"
+                >
+                  {sendingDay === label ? '…' : label}
+                </button>
+              ))}
+              {dayEmailStatus && (
+                <span className={`text-xs px-2 py-1 rounded ${dayEmailStatus.ok ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`}>
+                  {dayEmailStatus.msg}
+                </span>
+              )}
+              <span className="text-gray-200">|</span>
+            </>
           )}
+          <button
+            onClick={handlePreviewSummaryEmail}
+            className="flex items-center gap-1.5 text-xs text-masters-green hover:text-masters-dark border border-masters-green/40 hover:border-masters-green rounded px-2.5 py-1 transition-colors font-semibold"
+          >
+            <Mail size={11} /> Tournament Summary…
+          </button>
         </div>
       )}
 
@@ -347,6 +370,15 @@ export default function Dashboard() {
               <CheckCircle size={14} /> Finalize {year}…
             </button>
           </div>
+
+      {summaryEmailPreview && (
+        <TournamentSummaryModal
+          subject={summaryEmailPreview.subject}
+          html={summaryEmailPreview.html}
+          teams={teams}
+          onClose={() => setSummaryEmailPreview(null)}
+        />
+      )}
 
           {showFinalize && (
             <div className="mt-4 space-y-4">
