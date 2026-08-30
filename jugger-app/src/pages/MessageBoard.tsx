@@ -45,6 +45,7 @@ export default function MessageBoard() {
   const [search,     setSearch]     = useState('')
   const [showNew,    setShowNew]    = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [yearFilter, setYearFilter] = useState<number | null>(null)
 
   // New thread form
   const [newTitle,    setNewTitle]    = useState('')
@@ -65,7 +66,6 @@ export default function MessageBoard() {
     const { data, error: err } = await supabase
       .from('mb_threads')
       .select('*')
-      .eq('year', year)
       .order('is_pinned', { ascending: false })
       .order('last_reply_at', { ascending: false })
     if (err) setError(err.message)
@@ -76,7 +76,7 @@ export default function MessageBoard() {
     }
     setLoading(false)
     setRefreshing(false)
-  }, [year, currentAdmin, setUnreadCount])
+  }, [currentAdmin, setUnreadCount])
 
   useEffect(() => { fetchThreads() }, [fetchThreads])
 
@@ -176,14 +176,20 @@ export default function MessageBoard() {
     setThreads(ts => ts.map(t => t.id === thread.id ? { ...t, is_locked: !t.is_locked } : t))
   }
 
+  const boardYears = useMemo(() => {
+    const ys = [...new Set(threads.map(t => t.year))].filter(Boolean).sort((a, b) => b - a)
+    return ys as number[]
+  }, [threads])
+
   const visible = useMemo(() => {
     let list = tab === ALL_TAB ? threads : threads.filter(t => t.category === tab)
+    if (yearFilter !== null) list = list.filter(t => t.year === yearFilter)
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(t => t.title.toLowerCase().includes(q))
     }
     return list
-  }, [threads, tab, search])
+  }, [threads, tab, yearFilter, search])
 
   if (!canAccess) {
     return (
@@ -305,15 +311,27 @@ export default function MessageBoard() {
         </div>
       )}
 
-      {/* Category tabs */}
-      <div className="flex gap-1 overflow-x-auto no-scrollbar mb-4">
-        {[ALL_TAB, ...MB_CATEGORIES].map(c => (
-          <button key={c} onClick={() => setTab(c)}
-            className={`shrink-0 px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
-              tab === c ? 'bg-masters-green text-white' : 'bg-masters-light text-masters-dark hover:bg-masters-green/10'
-            }`}
-          >{c}</button>
-        ))}
+      {/* Category tabs + year filter */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar flex-1">
+          {[ALL_TAB, ...MB_CATEGORIES].map(c => (
+            <button key={c} onClick={() => setTab(c)}
+              className={`shrink-0 px-3 py-1.5 rounded text-sm font-semibold transition-colors ${
+                tab === c ? 'bg-masters-green text-white' : 'bg-masters-light text-masters-dark hover:bg-masters-green/10'
+              }`}
+            >{c}</button>
+          ))}
+        </div>
+        {boardYears.length > 1 && (
+          <select
+            className="input text-xs py-1 shrink-0"
+            value={yearFilter ?? ''}
+            onChange={e => setYearFilter(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">All Years</option>
+            {boardYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        )}
       </div>
 
       {/* Thread list */}
@@ -350,6 +368,11 @@ export default function MessageBoard() {
                     <span className="text-[10px] font-semibold bg-masters-light text-masters-dark px-2 py-0.5 rounded shrink-0">
                       {t.category}
                     </span>
+                    {t.year && t.year !== year && (
+                      <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded shrink-0">
+                        {t.year}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-400">
                     by {displayName(t.author)} · {timeAgo(t.created_at)}
