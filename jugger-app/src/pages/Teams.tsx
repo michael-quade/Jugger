@@ -480,11 +480,7 @@ function PlayerRow({
       ? 'border-amber-300 bg-amber-50/50'
       : 'border-gray-200'
 
-  const awardImg = isSandbagger
-    ? { src: `${import.meta.env.BASE_URL}sandbagger.jpg`, alt: 'Sandbagger Award', label: 'Sandbagger' }
-    : isToilet
-      ? { src: `${import.meta.env.BASE_URL}toilet_award.webp`, alt: 'Toilet Award', label: 'Toilet Award' }
-      : null
+  const maxImgW = isSandbagger && isToilet ? 'max-w-[40px]' : 'max-w-[56px]'
 
   return (
     <div className={`border rounded p-2 space-y-1 ${borderClass}`}>
@@ -593,37 +589,57 @@ function PlayerRow({
             )}
           </div>
 
-          {/* Award assignment buttons (admin, no award currently) */}
-          {isAdmin && !awardImg && (
+          {/* Award assignment buttons — shown independently per unassigned award */}
+          {isAdmin && (!isSandbagger || !isToilet) && (
             <div className="flex gap-1.5 pt-0.5">
-              <button
-                onClick={onSetSandbagger}
-                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-amber-700 border border-gray-200 hover:border-amber-300 rounded px-1.5 py-0.5 transition-colors"
-              >
-                <img src={`${import.meta.env.BASE_URL}sandbagger.jpg`} alt="" className="h-3.5 w-3.5 object-cover rounded-full" />
-                Sandbagger
-              </button>
-              <button
-                onClick={onSetToilet}
-                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-700 border border-gray-200 hover:border-blue-300 rounded px-1.5 py-0.5 transition-colors"
-              >
-                <img src={`${import.meta.env.BASE_URL}toilet_award.webp`} alt="" className="h-3.5 w-3.5 object-cover rounded-full" />
-                Toilet
-              </button>
+              {!isSandbagger && (
+                <button
+                  onClick={onSetSandbagger}
+                  className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-amber-700 border border-gray-200 hover:border-amber-300 rounded px-1.5 py-0.5 transition-colors"
+                >
+                  <img src={`${import.meta.env.BASE_URL}sandbagger.jpg`} alt="" className="h-3.5 w-3.5 object-cover rounded-full" />
+                  Sandbagger
+                </button>
+              )}
+              {!isToilet && (
+                <button
+                  onClick={onSetToilet}
+                  className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-700 border border-gray-200 hover:border-blue-300 rounded px-1.5 py-0.5 transition-colors"
+                >
+                  <img src={`${import.meta.env.BASE_URL}toilet_award.webp`} alt="" className="h-3.5 w-3.5 object-cover rounded-full" />
+                  Toilet
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Right: award image — self-stretch + h-full keeps it bounded by left column height */}
-        {awardImg && (
-          <div className="shrink-0 self-stretch relative flex items-center">
-            <img src={awardImg.src} alt={awardImg.alt} title={awardImg.label} className="h-full w-auto max-w-[56px] object-contain rounded-lg" />
-            {isAdmin && (
-              <button
-                onClick={isSandbagger ? onSetSandbagger : onSetToilet}
-                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 text-gray-400 hover:text-red-500 flex items-center justify-center text-[9px] leading-none transition-colors shadow-sm"
-                title="Remove award"
-              >✕</button>
+        {/* Right: award images — each shown independently with its own remove button */}
+        {(isSandbagger || isToilet) && (
+          <div className="shrink-0 self-stretch flex items-center gap-1">
+            {isSandbagger && (
+              <div className="relative h-full flex items-center">
+                <img src={`${import.meta.env.BASE_URL}sandbagger.jpg`} alt="Sandbagger Award" title="Sandbagger Award" className={`h-full w-auto ${maxImgW} object-contain rounded-lg`} />
+                {isAdmin && (
+                  <button
+                    onClick={onSetSandbagger}
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 text-gray-400 hover:text-red-500 flex items-center justify-center text-[9px] leading-none transition-colors shadow-sm"
+                    title="Remove Sandbagger Award"
+                  >✕</button>
+                )}
+              </div>
+            )}
+            {isToilet && (
+              <div className="relative h-full flex items-center">
+                <img src={`${import.meta.env.BASE_URL}toilet_award.webp`} alt="Toilet Award" title="Toilet Award" className={`h-full w-auto ${maxImgW} object-contain rounded-lg`} />
+                {isAdmin && (
+                  <button
+                    onClick={onSetToilet}
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 text-gray-400 hover:text-red-500 flex items-center justify-center text-[9px] leading-none transition-colors shadow-sm"
+                    title="Remove Toilet Award"
+                  >✕</button>
+                )}
+              </div>
             )}
           </div>
         )}
