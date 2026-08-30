@@ -55,6 +55,11 @@ export function getPlayerCourseHdcp(
 
   const isScramble = format === 'texas_scramble'
 
+  // Points Round quota uses gross course HDCP — no netting against the field minimum
+  if (format === 'points_round') {
+    return courseHandicap(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par)
+  }
+
   if (allTournamentPlayers.length === 0) {
     // Legacy fallback: raw course HDCP (used when netting players not available)
     const raw = courseHandicap(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par)
