@@ -1,5 +1,5 @@
 import type { Match, Team, Course, RoundConfig, Player } from '../types'
-import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp } from '../utils/handicap'
+import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp, getPlayOrderHoles } from '../utils/handicap'
 import { getPlayerName } from '../utils/pairings'
 import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas, type MatchPlayResult, type PointsRoundResult, type ScrambleResult, type CaptainsChoiceResult, type IndividualMatch1v1Result, type IndividualMatchResult, type VegasResult } from '../utils/matchplay'
 import { useTournamentStore, DEFAULT_GAME_CONFIG } from '../store/useTournamentStore'
@@ -63,8 +63,14 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
     allPlayerIds.forEach(pid => { playerHdcps[pid] = teamHdcp })
   }
 
-  const front = course.holes.slice(0, 9)
-  const back  = course.holes.slice(9, 18)
+  // Holes in play order — for split-tee starts (startingHole=10) this reorders
+  // the array so computations and table columns both follow the actual play sequence.
+  const playHoles = getPlayOrderHoles(course.holes, match.startingHole ?? 1)
+  // Sub-components receive a course with holes in play order so they inherit the same sequence.
+  const playCourse = playHoles === course.holes ? course : { ...course, holes: playHoles }
+
+  const front = playHoles.slice(0, 9)
+  const back  = playHoles.slice(9, 18)
   const frontPar = front.reduce((s, h) => s + h.par, 0)
   const backPar  = back.reduce((s, h) => s + h.par, 0)
   const frontYds = front.reduce((s, h) => s + (h.yardages[config.tee] ?? 0), 0)
@@ -76,14 +82,14 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   const isIndividualMatch = config.format === 'individual_match'
   const isCaptainsChoice  = config.format === 'captains_choice'
   const isVegas           = config.format === 'vegas'
-  const mpResult = isMatchPlay        ? computeMatchPlay(match, course.holes, playerHdcps)       : null
-  const prResult = isPointsRound      ? computePointsRound(match, course.holes, playerHdcps)     : null
-  const srResult = isScramble         ? computeScramble(match, course.holes, playerHdcps)        : null
-  const imResult = isIndividualMatch  ? computeIndividualMatch(match, course.holes, playerHdcps) : null
+  const mpResult = isMatchPlay        ? computeMatchPlay(match, playHoles, playerHdcps)       : null
+  const prResult = isPointsRound      ? computePointsRound(match, playHoles, playerHdcps)     : null
+  const srResult = isScramble         ? computeScramble(match, playHoles, playerHdcps)        : null
+  const imResult = isIndividualMatch  ? computeIndividualMatch(match, playHoles, playerHdcps) : null
   // For Captain's Choice the shared teamHdcp is the value stored for any player (all same)
   const ccTeamHdcp = isCaptainsChoice ? (playerHdcps[allPlayerIds[0]] ?? 0) : 0
-  const ccResult   = isCaptainsChoice ? computeCaptainsChoice(match.teamHoleScores, course.holes, ccTeamHdcp) : null
-  const vegasResult = isVegas ? computeVegas(match, course.holes, playerHdcps, {
+  const ccResult   = isCaptainsChoice ? computeCaptainsChoice(match.teamHoleScores, playHoles, ccTeamHdcp) : null
+  const vegasResult = isVegas ? computeVegas(match, playHoles, playerHdcps, {
     birdieMultiplier: gc.vegasBirdieMultiplier,
     eagleMultiplier: gc.vegasEagleMultiplier,
     albatrossMultiplier: gc.vegasAlbatrossMultiplier,
@@ -136,8 +142,8 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
         <thead>
           <tr>
             <th className="player-name">Hole</th>
-            {course.holes.map(h => (
-              <th key={h.number} className={h.number === 9 || h.number === 18 ? 'hole-out' : ''}>
+            {playHoles.map((h, i) => (
+              <th key={h.number} className={i === 8 || i === 17 ? 'hole-out' : ''}>
                 {h.number}
               </th>
             ))}
@@ -150,7 +156,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           {/* Par row */}
           <tr className="row-par">
             <td className="player-name text-gray-500">Par</td>
-            {course.holes.map(h => <td key={h.number}>{h.par}</td>)}
+            {playHoles.map(h => <td key={h.number}>{h.par}</td>)}
             <td className="hole-out">{frontPar}</td>
             <td className="hole-in">{backPar}</td>
             <td className="hole-total">{frontPar + backPar}</td>
@@ -159,7 +165,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           {/* Yardage row */}
           <tr>
             <td className="player-name text-gray-400">{teeData.name} {teeData.rating}/{teeData.slope}</td>
-            {course.holes.map(h => <td key={h.number} className="text-gray-500">{h.yardages[config.tee] ?? '–'}</td>)}
+            {playHoles.map(h => <td key={h.number} className="text-gray-500">{h.yardages[config.tee] ?? '–'}</td>)}
             <td className="hole-out text-gray-500">{frontYds || '–'}</td>
             <td className="hole-in text-gray-500">{backYds || '–'}</td>
             <td className="hole-total text-gray-500">{frontYds + backYds || '–'}</td>
@@ -168,7 +174,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           {/* HDCP order row */}
           <tr className="row-hdcp">
             <td className="player-name">HDCP</td>
-            {course.holes.map(h => <td key={h.number}>{h.hdcpOrder}</td>)}
+            {playHoles.map(h => <td key={h.number}>{h.hdcpOrder}</td>)}
             <td /><td /><td />
           </tr>
 
@@ -182,7 +188,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
                 <CaptainsChoicePlayerRow
                   key={twosome.playerIds[idx]}
                   twosome={twosome} index={idx}
-                  teams={teams} course={course} match={match}
+                  teams={teams} course={playCourse} match={match}
                   interactive={!!interactive}
                   onTeeShotChange={onTeeShotChange}
                 />
@@ -190,7 +196,7 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
               {/* Team score row */}
               {ccResult && (
                 <CaptainsChoiceTeamRow
-                  result={ccResult} course={course} match={match} teams={teams}
+                  result={ccResult} course={playCourse} match={match} teams={teams}
                   teamHdcp={ccTeamHdcp}
                   interactive={!!interactive}
                   onTeamHoleScoreChange={onTeamHoleScoreChange}
@@ -200,81 +206,81 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           ) : isScramble ? (
             <>
               {/* All 4 players in sequence — no result rows */}
-              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
               {/* Ball count indicator */}
-              <ScrambleBallCountRow holes={course.holes} />
+              <ScrambleBallCountRow holes={playHoles} />
               {/* Team score row */}
-              {srResult && <ScrambleTeamRow result={srResult} course={course} match={match} teams={teams} />}
+              {srResult && <ScrambleTeamRow result={srResult} course={playCourse} match={match} teams={teams} />}
             </>
           ) : isIndividualMatch && imResult ? (
             <>
               {/* Match A: twosome1[0] vs twosome2[0] */}
-              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <IndividualMatch1v1ResultRow result={imResult.matchA} p1Id={match.twosome1.playerIds[0]} p2Id={match.twosome2.playerIds[0]} course={course} teams={teams} />
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <IndividualMatch1v1ResultRow result={imResult.matchA} p1Id={match.twosome1.playerIds[0]} p2Id={match.twosome2.playerIds[0]} course={playCourse} teams={teams} />
               {/* Match B: twosome1[1] vs twosome2[1] */}
-              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <IndividualMatch1v1ResultRow result={imResult.matchB} p1Id={match.twosome1.playerIds[1]} p2Id={match.twosome2.playerIds[1]} course={course} teams={teams} />
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <IndividualMatch1v1ResultRow result={imResult.matchB} p1Id={match.twosome1.playerIds[1]} p2Id={match.twosome2.playerIds[1]} course={playCourse} teams={teams} />
               {/* 2v2 best-ball section — regular matches only */}
               {!match.isBlind && imResult.match2v2 && (
                 <>
                   <tr className="row-par">
                     <td className="player-name text-gray-500 text-[9px] font-semibold">Team 2v2</td>
-                    {course.holes.map(h => <td key={h.number} />)}
+                    {playHoles.map(h => <td key={h.number} />)}
                     <td /><td /><td />
                   </tr>
-                  <Individual2v2ResultRow result={imResult.match2v2} match={match} course={course} teams={teams} />
+                  <Individual2v2ResultRow result={imResult.match2v2} match={match} course={playCourse} teams={teams} />
                 </>
               )}
             </>
           ) : isVegas && vegasResult ? (
             <>
               {/* Twosome 1 players */}
-              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <VegasResultRow perspective="twosome1" result={vegasResult} course={course} twosome={match.twosome1} teams={teams} />
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <VegasResultRow perspective="twosome1" result={vegasResult} course={playCourse} twosome={match.twosome1} teams={teams} />
 
               {/* Twosome 2 players */}
-              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <VegasResultRow perspective="twosome2" result={vegasResult} course={course} twosome={match.twosome2} teams={teams} />
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <VegasResultRow perspective="twosome2" result={vegasResult} course={playCourse} twosome={match.twosome2} teams={teams} />
             </>
           ) : (
             <>
               {/* Twosome 1 players */}
-              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome1} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
 
               {/* Result row — twosome1 perspective */}
               {isMatchPlay && mpResult ? (
-                <MatchPlayResultRow perspective="twosome1" result={mpResult} course={course} twosome={match.twosome1} teams={teams} />
+                <MatchPlayResultRow perspective="twosome1" result={mpResult} course={playCourse} twosome={match.twosome1} teams={teams} />
               ) : isPointsRound && prResult ? (
-                <PointsRoundRow perspective="twosome1" result={prResult} course={course} twosome={match.twosome1} teams={teams} hasMagicBall={match.magicBall1} />
+                <PointsRoundRow perspective="twosome1" result={prResult} course={playCourse} twosome={match.twosome1} teams={teams} hasMagicBall={match.magicBall1} />
               ) : (
                 <tr className="row-result">
                   <td className="player-name text-gray-400">+/− Holes</td>
-                  {course.holes.map(h => <td key={h.number} />)}
+                  {playHoles.map(h => <td key={h.number} />)}
                   <td /><td /><td />
                 </tr>
               )}
 
               {/* Twosome 2 players */}
-              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
-              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={course} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={0} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
+              <PlayerRow twosome={match.twosome2} index={1} playerHdcps={playerHdcps} course={playCourse} config={config} teams={teams} match={match} interactive={!!interactive} onScoreChange={onScoreChange} />
 
               {/* Result row — twosome2 perspective */}
               {isMatchPlay && mpResult ? (
-                <MatchPlayResultRow perspective="twosome2" result={mpResult} course={course} twosome={match.twosome2} teams={teams} />
+                <MatchPlayResultRow perspective="twosome2" result={mpResult} course={playCourse} twosome={match.twosome2} teams={teams} />
               ) : isPointsRound && prResult ? (
-                <PointsRoundRow perspective="twosome2" result={prResult} course={course} twosome={match.twosome2} teams={teams} hasMagicBall={match.magicBall2} />
+                <PointsRoundRow perspective="twosome2" result={prResult} course={playCourse} twosome={match.twosome2} teams={teams} hasMagicBall={match.magicBall2} />
               ) : (
                 <tr className="row-result">
                   <td className="player-name text-gray-400">+/− Holes</td>
-                  {course.holes.map(h => <td key={h.number} />)}
+                  {playHoles.map(h => <td key={h.number} />)}
                   <td /><td /><td />
                 </tr>
               )}

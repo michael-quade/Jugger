@@ -92,6 +92,7 @@ export interface Match {
   teeShotsUsed?: Record<number, string>        // hole# -> playerId (Round 5: whose tee shot was used)
   teamHoleScores?: Record<number, number | null> // hole# -> gross team score (Round 5)
   shotStats?: Record<string, Record<number, HoleShotStat>> // playerId -> hole# -> stat
+  startingHole?: number  // 1 (default) or 10 for split-tee starts
 }
 
 export interface TeamRoundScore {

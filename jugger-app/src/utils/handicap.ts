@@ -1,4 +1,14 @@
-import type { Player, Course, RoundConfig, GameConfig } from '../types'
+import type { Player, Course, RoundConfig, GameConfig, HoleData } from '../types'
+
+// Returns holes in play order for a split-tee start.
+// startingHole=1 (default) → natural order 1-18.
+// startingHole=10 → [10,11,...,18,1,2,...,9].
+export function getPlayOrderHoles(holes: HoleData[], startingHole = 1): HoleData[] {
+  if (!startingHole || startingHole <= 1) return holes
+  const idx = holes.findIndex(h => h.number === startingHole)
+  if (idx < 0) return holes
+  return [...holes.slice(idx), ...holes.slice(0, idx)]
+}
 
 // Module-level config updated via configureHdcpSettings (called by store on load + every change)
 let _scramblePct = 0.6

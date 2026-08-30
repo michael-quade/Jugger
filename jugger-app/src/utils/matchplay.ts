@@ -1,6 +1,23 @@
 import type { Match, Course } from '../types'
 import { getStrokeDots, stablefordPoints } from './handicap'
 
+// Given an array of net totals (already sorted ascending = best first) and the
+// configured finish points [1stPts, 2ndPts, 3rdPts], returns the points each
+// position earns after splitting tied positions equally.
+// e.g. totals=[68,68,71], pts=[4,2,1] → [3, 3, 1]  (positions 0+1 split 4+2)
+export function splitFinishPoints(totals: number[], pts: number[]): number[] {
+  const result = new Array(totals.length).fill(0)
+  let i = 0
+  while (i < totals.length) {
+    let j = i
+    while (j < totals.length && totals[j] === totals[i]) j++
+    const avg = pts.slice(i, j).reduce((s, p) => s + p, 0) / (j - i)
+    for (let k = i; k < j; k++) result[k] = avg
+    i = j
+  }
+  return result
+}
+
 // ─── Texas Scramble ──────────────────────────────────────────────────────────
 
 export function scrambleBallCount(holeNumber: number): number {

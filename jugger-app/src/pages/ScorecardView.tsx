@@ -6,8 +6,8 @@ import { useIsAdmin, useIsPlayer, useCanEnterScores, useAuthStore } from '../sto
 import ScorecardCard from '../components/ScorecardCard'
 import { CtpPanel, getPar3Holes } from '../components/CtpPanel'
 import { getMatchesForRound } from '../utils/pairings'
-import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots } from '../utils/handicap'
-import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas } from '../utils/matchplay'
+import { getPlayerCourseHdcp, tournamentHdcp, stablefordPoints, getStrokeDots, getPlayOrderHoles } from '../utils/handicap'
+import { computeMatchPlay, computePointsRound, computeScramble, computeCaptainsChoice, computeIndividualMatch, computeVegas, splitFinishPoints } from '../utils/matchplay'
 import { computeSideBet, FORMAT_DISPLAY_NAMES as SIDE_BET_FORMAT_NAMES } from '../utils/sideBets'
 import { Printer, Dices, Trash2, Flag, Trophy, Lock, LockOpen, ChevronDown, Smartphone, Mail, RefreshCw } from 'lucide-react'
 import { sendEmail, buildMatchEmail, buildRoundEmail, getMatchRecipients, getRoundRecipients } from '../lib/email'
@@ -174,6 +174,7 @@ export default function ScorecardView() {
     teams.forEach(t => { teamPts[t.id] = 0 })
 
     for (const m of roundMatchesList) {
+      const playHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
       const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
       const allFullyScored = allPids.every(pid =>
         course.holes.every(h => m.scores[pid]?.[h.number] != null)
@@ -184,7 +185,7 @@ export default function ScorecardView() {
         const player = allPlayers.find(p => p.id === pid)
         if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
       })
-      const mpRes = computeMatchPlay(m, course.holes, localHdcps)
+      const mpRes = computeMatchPlay(m, playHoles, localHdcps)
       const pts = m.isBlind ? (useTournamentStore.getState().gameConfig?.blindMatchPts ?? 1)
                             : (useTournamentStore.getState().gameConfig?.regularMatchPts ?? 2)
       if (mpRes.winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
@@ -209,6 +210,7 @@ export default function ScorecardView() {
     teams.forEach(t => { teamPts[t.id] = 0 })
 
     for (const m of roundMatchesList) {
+      const playHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
       const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
       const allFullyScored = allPids.every(pid =>
         course.holes.every(h => m.scores[pid]?.[h.number] != null)
@@ -219,7 +221,7 @@ export default function ScorecardView() {
           const player = allPlayers.find(p => p.id === pid)
           if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
         })
-        const prRes = computePointsRound(m, course.holes, localHdcps)
+        const prRes = computePointsRound(m, playHoles, localHdcps)
         const pts = m.isBlind ? (useTournamentStore.getState().gameConfig?.blindMatchPts ?? 1)
                               : (useTournamentStore.getState().gameConfig?.regularMatchPts ?? 2)
         if (prRes.winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
@@ -248,27 +250,30 @@ export default function ScorecardView() {
     const scrambleMatches = currentMatches.filter(m => m.round === config.round)
 
     const results = scrambleMatches.map(m => {
+      const playHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
       const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
       const hdcps: Record<string, number> = {}
       allPids.forEach(pid => {
         const player = allPlayers.find(p => p.id === pid)
         if (player) hdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
       })
-      return { match: m, result: computeScramble(m, course.holes, hdcps) }
+      return { match: m, result: computeScramble(m, playHoles, hdcps) }
     })
 
     // Only award points once all 3 teams are done
     if (!results.every(r => r.result.isDone)) return
 
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
-    const RANK_LABELS = ['1st', '2nd', '3rd']
-    ranked.forEach(({ match: m, result: r }, i) => {
-      const label = `${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
-      if (m.result !== label) updateMatch(m.id, { result: label })
-    })
     const gc3 = useTournamentStore.getState().gameConfig
     const POINTS = [gc3.teamFinish1stPts ?? 4, gc3.teamFinish2ndPts ?? 2, gc3.teamFinish3rdPts ?? 1]
-    const newScores3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: POINTS[i] ?? 1 }))
+    const splitPts = splitFinishPoints(ranked.map(r => r.result.total), POINTS)
+    const RANK_LABELS = ['1st', '2nd', '3rd']
+    ranked.forEach(({ match: m, result: r }, i) => {
+      const isTied = ranked.some((o, j) => j !== i && o.result.total === r.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
+      if (m.result !== label) updateMatch(m.id, { result: label })
+    })
+    const newScores3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: splitPts[i] }))
     if (newScores3.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
     setTeamScoresBatch(newScores3)
   }
@@ -279,6 +284,7 @@ export default function ScorecardView() {
     const ccMatches = currentMatches.filter(m => m.round === config.round)
 
     const results = ccMatches.map(m => {
+      const playHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
       const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
       const teeData = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
       const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
@@ -287,21 +293,23 @@ export default function ScorecardView() {
         return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false) : 0)
       }, 0)
       const teamHdcp = Math.round(r5Sum * 0.15)
-      const ccRes = computeCaptainsChoice(m.teamHoleScores, course.holes, teamHdcp)
+      const ccRes = computeCaptainsChoice(m.teamHoleScores, playHoles, teamHdcp)
       return { match: m, ccRes, teamHdcp }
     })
 
     if (!results.every(r => r.ccRes.isDone)) return
 
     const ranked = [...results].sort((a, b) => a.ccRes.total - b.ccRes.total)
-    const RANK_LABELS4 = ['1st', '2nd', '3rd']
-    ranked.forEach(({ match: m, ccRes }, i) => {
-      const label = `${RANK_LABELS4[i]} · Net ${Math.round(ccRes.total)}`
-      if (m.result !== label) updateMatch(m.id, { result: label })
-    })
     const gc4 = useTournamentStore.getState().gameConfig
     const POINTS4 = [gc4.teamFinish1stPts ?? 4, gc4.teamFinish2ndPts ?? 2, gc4.teamFinish3rdPts ?? 1]
-    const newScores4 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: POINTS4[i] ?? 1 }))
+    const splitPts4 = splitFinishPoints(ranked.map(r => r.ccRes.total), POINTS4)
+    const RANK_LABELS4 = ['1st', '2nd', '3rd']
+    ranked.forEach(({ match: m, ccRes }, i) => {
+      const isTied = ranked.some((o, j) => j !== i && o.ccRes.total === ccRes.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELS4[i]} · Net ${Math.round(ccRes.total)}`
+      if (m.result !== label) updateMatch(m.id, { result: label })
+    })
+    const newScores4 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: splitPts4[i] }))
     if (newScores4.every(ns => teamScores.find(ts => ts.teamId === ns.teamId && ts.round === ns.round)?.points === ns.points)) return
     setTeamScoresBatch(newScores4)
   }
@@ -314,6 +322,7 @@ export default function ScorecardView() {
     teams.forEach(t => { teamPts[t.id] = 0 })
 
     for (const m of r4Matches) {
+      const playHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
       const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
       const localHdcps: Record<string, number> = {}
       allPids.forEach(pid => {
@@ -321,7 +330,7 @@ export default function ScorecardView() {
         if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
       })
 
-      const imRes = computeIndividualMatch(m, course.holes, localHdcps)
+      const imRes = computeIndividualMatch(m, playHoles, localHdcps)
 
       // 1v1 points: 1pt per win (regular) or 0.5pt (blind)
       for (const { result, p1TeamId, p2TeamId } of [
@@ -358,6 +367,7 @@ export default function ScorecardView() {
     teams.forEach(t => { teamPts[t.id] = 0 })
 
     for (const m of vegasMatches) {
+      const playHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
       const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
       const allFullyScored = allPids.every(pid =>
         course.holes.every(h => m.scores[pid]?.[h.number] != null)
@@ -369,7 +379,7 @@ export default function ScorecardView() {
         if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
       })
       const gc = useTournamentStore.getState().gameConfig ?? DEFAULT_GAME_CONFIG
-      const vRes = computeVegas(m, course.holes, localHdcps, {
+      const vRes = computeVegas(m, playHoles, localHdcps, {
         birdieMultiplier: gc.vegasBirdieMultiplier,
         eagleMultiplier: gc.vegasEagleMultiplier,
         albatrossMultiplier: gc.vegasAlbatrossMultiplier,
@@ -415,8 +425,10 @@ export default function ScorecardView() {
       if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
     })
 
+    const playHoles = getPlayOrderHoles(course.holes, currentMatch.startingHole ?? 1)
+
     if (config.format === 'team_match_play') {
-      const mpRes = computeMatchPlay(currentMatch, course.holes, localHdcps)
+      const mpRes = computeMatchPlay(currentMatch, playHoles, localHdcps)
       if (!mpRes.winner) return
       const t1 = teams.find(t => t.id === currentMatch.twosome1.teamId)
       const t2 = teams.find(t => t.id === currentMatch.twosome2.teamId)
@@ -426,7 +438,7 @@ export default function ScorecardView() {
       updateMatch(currentMatch.id, { result })
 
     } else if (config.format === 'individual_match') {
-      const imRes = computeIndividualMatch(currentMatch, course.holes, localHdcps)
+      const imRes = computeIndividualMatch(currentMatch, playHoles, localHdcps)
       const parts: string[] = []
 
       for (const { res, p1Id, p2Id, label } of [
@@ -459,7 +471,7 @@ export default function ScorecardView() {
         if (player) localHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
       })
       const gc = useTournamentStore.getState().gameConfig ?? DEFAULT_GAME_CONFIG
-      const vRes = computeVegas(currentMatch, course.holes, localHdcps, {
+      const vRes = computeVegas(currentMatch, playHoles, localHdcps, {
         birdieMultiplier: gc.vegasBirdieMultiplier,
         eagleMultiplier: gc.vegasEagleMultiplier,
         albatrossMultiplier: gc.vegasAlbatrossMultiplier,
@@ -473,7 +485,7 @@ export default function ScorecardView() {
       updateMatch(currentMatch.id, { result })
 
     } else if (config.format === 'points_round') {
-      const prRes = computePointsRound(currentMatch, course.holes, localHdcps)
+      const prRes = computePointsRound(currentMatch, playHoles, localHdcps)
       if (!prRes.winner) return
       const fmtDelta = (d: number) => d >= 0 ? `+${d}` : `${d}`
       const d1 = prRes.total1 - prRes.quota1
@@ -608,6 +620,7 @@ export default function ScorecardView() {
         }
 
         const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const mPlayHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
         const allFullyScored = allPids.every(pid =>
           course.holes.every(h => effectiveScores[pid]?.[h.number] != null)
         )
@@ -621,8 +634,8 @@ export default function ScorecardView() {
 
         const tempM = { ...m, scores: effectiveScores }
         const winner = config.format === 'points_round'
-          ? computePointsRound(tempM, course.holes, localHdcps).winner
-          : computeMatchPlay(tempM, course.holes, localHdcps).winner
+          ? computePointsRound(tempM, mPlayHoles, localHdcps).winner
+          : computeMatchPlay(tempM, mPlayHoles, localHdcps).winner
         const pts = m.isBlind ? 1 : 2
 
         if (winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
@@ -737,19 +750,21 @@ export default function ScorecardView() {
 
     if (rc.format === 'texas_scramble') {
       const results = roundMatchesAll.map(m => {
+        const playHoles = getPlayOrderHoles(crs.holes, m.startingHole ?? 1)
         const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
         const hdcps: Record<string, number> = {}
         allPids.forEach(pid => {
           const player = allPlayers.find(p => p.id === pid)
           if (player) hdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
         })
-        return { match: m, result: computeScramble(m, crs.holes, hdcps) }
+        return { match: m, result: computeScramble(m, playHoles, hdcps) }
       })
       if (results.every(r => r.result.isDone)) {
         const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
         const simGc = useTournamentStore.getState().gameConfig
         const SIMPTS = [simGc.teamFinish1stPts ?? 4, simGc.teamFinish2ndPts ?? 2, simGc.teamFinish3rdPts ?? 1]
-        setTeamScoresBatch(ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: SIMPTS[i] ?? 1 })))
+        const simSplit = splitFinishPoints(ranked.map(r => r.result.total), SIMPTS)
+        setTeamScoresBatch(ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: simSplit[i] })))
       }
     } else if (rc.format === 'captains_choice') {
       const results = roundMatchesAll.map(m => {
@@ -760,25 +775,28 @@ export default function ScorecardView() {
           const player = allPlayers.find(p => p.id === pid)
           return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? crs.par, crs.par, minIdx, false) : 0)
         }, 0)
-        return { match: m, ccRes: computeCaptainsChoice(m.teamHoleScores, crs.holes, Math.round(r5Sum * 0.15)) }
+        const playHoles = getPlayOrderHoles(crs.holes, m.startingHole ?? 1)
+        return { match: m, ccRes: computeCaptainsChoice(m.teamHoleScores, playHoles, Math.round(r5Sum * 0.15)) }
       })
       if (results.every(r => r.ccRes.isDone)) {
         const ranked = [...results].sort((a, b) => a.ccRes.total - b.ccRes.total)
         const simGc2 = useTournamentStore.getState().gameConfig
         const SIMPTS2 = [simGc2.teamFinish1stPts ?? 4, simGc2.teamFinish2ndPts ?? 2, simGc2.teamFinish3rdPts ?? 1]
-        setTeamScoresBatch(ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: SIMPTS2[i] ?? 1 })))
+        const simSplit2 = splitFinishPoints(ranked.map(r => r.ccRes.total), SIMPTS2)
+        setTeamScoresBatch(ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: simSplit2[i] })))
       }
     } else if (rc.format === 'individual_match') {
       const teamPts: Record<string, number> = {}
       teams.forEach(t => { teamPts[t.id] = 0 })
       for (const m of roundMatchesAll) {
+        const playHoles = getPlayOrderHoles(crs.holes, m.startingHole ?? 1)
         const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
         const localHdcps: Record<string, number> = {}
         allPids.forEach(pid => {
           const player = allPlayers.find(p => p.id === pid)
           if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
         })
-        const imRes = computeIndividualMatch(m, crs.holes, localHdcps)
+        const imRes = computeIndividualMatch(m, playHoles, localHdcps)
         for (const { result, p1TeamId, p2TeamId } of [
           { result: imRes.matchA, p1TeamId: m.twosome1.teamId, p2TeamId: m.twosome2.teamId },
           { result: imRes.matchB, p1TeamId: m.twosome1.teamId, p2TeamId: m.twosome2.teamId },
@@ -803,6 +821,7 @@ export default function ScorecardView() {
       teams.forEach(t => { teamPts[t.id] = 0 })
       for (const m of roundMatchesAll) {
         const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const mPlayHoles = getPlayOrderHoles(crs.holes, m.startingHole ?? 1)
         const allFullyScored = allPids.every(pid => crs.holes.every(h => m.scores[pid]?.[h.number] != null))
         if (!allFullyScored) continue
         const localHdcps: Record<string, number> = {}
@@ -810,7 +829,7 @@ export default function ScorecardView() {
           const player = allPlayers.find(p => p.id === pid)
           if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
         })
-        const vRes = computeVegas(m, crs.holes, localHdcps, {
+        const vRes = computeVegas(m, mPlayHoles, localHdcps, {
           birdieMultiplier: roundGc.vegasBirdieMultiplier,
           eagleMultiplier: roundGc.vegasEagleMultiplier,
           albatrossMultiplier: roundGc.vegasAlbatrossMultiplier,
@@ -828,6 +847,7 @@ export default function ScorecardView() {
       teams.forEach(t => { teamPts[t.id] = 0 })
       for (const m of roundMatchesAll) {
         const allPids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+        const mPlayHoles2 = getPlayOrderHoles(crs.holes, m.startingHole ?? 1)
         const allFullyScored = allPids.every(pid => crs.holes.every(h => m.scores[pid]?.[h.number] != null))
         if (!allFullyScored) continue
         const localHdcps: Record<string, number> = {}
@@ -836,8 +856,8 @@ export default function ScorecardView() {
           if (player) localHdcps[pid] = getPlayerCourseHdcp(player, crs, rc.tee, rc.round, allPlayers, rc.format)
         })
         const winner = rc.format === 'points_round'
-          ? computePointsRound(m, crs.holes, localHdcps).winner
-          : computeMatchPlay(m, crs.holes, localHdcps).winner
+          ? computePointsRound(m, mPlayHoles2, localHdcps).winner
+          : computeMatchPlay(m, mPlayHoles2, localHdcps).winner
         const pts = m.isBlind ? 1 : 2
         if (winner === 'twosome1') teamPts[m.twosome1.teamId] += pts
         else if (winner === 'twosome2') teamPts[m.twosome2.teamId] += pts
@@ -1372,6 +1392,47 @@ export default function ScorecardView() {
 
                 <ScoreSummary match={match} teams={teams} course={course} config={config} />
 
+                {/* Starting hole — admin only */}
+                {isAdmin && !match.isBlind && (
+                  <div className="card">
+                    <label className="label">Starting Hole</label>
+                    <p className="text-xs text-gray-500 mb-2">Set when the course starts on hole 10 (split tees). Also applies to this match's blind.</p>
+                    <select
+                      className="input w-32"
+                      value={match.startingHole ?? 1}
+                      onChange={e => {
+                        const sh = Number(e.target.value)
+                        updateMatch(match.id, { startingHole: sh })
+                        // Propagate to blind matches sharing any player in this round
+                        const blindsInRound = matches.filter(m => m.round === match.round && m.isBlind)
+                        const thisPids = new Set([...match.twosome1.playerIds, ...match.twosome2.playerIds])
+                        for (const bm of blindsInRound) {
+                          const bmPids = [...bm.twosome1.playerIds, ...bm.twosome2.playerIds]
+                          if (bmPids.some(pid => thisPids.has(pid))) {
+                            updateMatch(bm.id, { startingHole: sh })
+                          }
+                        }
+                        // Recompute results/team scores with the new play order
+                        const latest = useTournamentStore.getState().matches
+                        if (config?.format === 'texas_scramble') recomputeScrambleTeamScores(latest)
+                        else if (config?.format === 'captains_choice') recomputeCaptainsChoiceTeamScores(latest)
+                        else if (config?.format === 'individual_match') recomputeIndividualMatchTeamScores(latest)
+                        else if (config?.format === 'vegas') recomputeVegasTeamScores(latest)
+                        else if (config?.format === 'points_round') recomputePointsRoundTeamScores(latest)
+                        else if (config?.format === 'team_match_play') recomputeMatchPlayTeamScores(latest)
+                        // Also refresh the result string for the current match and its blinds
+                        for (const m of latest.filter(m => m.round === match.round)) autoUpdateMatchResult(m)
+                      }}
+                    >
+                      <option value={1}>Hole 1 (default)</option>
+                      <option value={10}>Hole 10</option>
+                    </select>
+                    {(match.startingHole ?? 1) !== 1 && (
+                      <p className="mt-1.5 text-xs font-semibold text-amber-700">⚠ Play order: 10–18, then 1–9</p>
+                    )}
+                  </div>
+                )}
+
                 {canEditMatch(activeRound, match) ? (
                   <div className="card">
                     <label className="label">
@@ -1497,6 +1558,8 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
     ...match.twosome2.playerIds,
   ]
 
+  const playHoles = getPlayOrderHoles(course.holes, match.startingHole ?? 1)
+
   // Build HDCPs using full tournament netting (same logic as ScorecardCard)
   const playerHdcps: Record<string, number> = {}
   allPlayerIds.forEach((pid: string) => {
@@ -1517,7 +1580,7 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
   // Individual Match Play: show per-player HDCP/gross/net + 1v1 and 2v2 match results
   if (config.format === 'individual_match') {
     const allPlayers = teams.flatMap((t: any) => t.players)
-    const imRes = computeIndividualMatch(match, course.holes, playerHdcps)
+    const imRes = computeIndividualMatch(match, playHoles, playerHdcps)
 
     function get1v1Status(result: ReturnType<typeof computeIndividualMatch>['matchA'], p1Id: string, p2Id: string): { text: string; color: string } {
       const p1Last = allPlayers.find((p: any) => p.id === p1Id)?.name.split(' ').slice(-1)[0] ?? '?'
@@ -1614,7 +1677,7 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
       return s + (player ? tournamentHdcp(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false) : 0)
     }, 0)
     const teamHdcp = Math.round(r5Sum * 0.15)
-    const ccResult = computeCaptainsChoice(match.teamHoleScores, course.holes, teamHdcp)
+    const ccResult = computeCaptainsChoice(match.teamHoleScores, playHoles, teamHdcp)
     const teeShotsUsed = match.teeShotsUsed ?? {}
 
     return (
@@ -1666,7 +1729,7 @@ function ScoreSummary({ match, teams, course, config }: { match: any, teams: any
 
   // Scramble: show team total and per-player gross
   if (config.format === 'texas_scramble') {
-    const srResult = computeScramble(match, course.holes, playerHdcps)
+    const srResult = computeScramble(match, playHoles, playerHdcps)
     return (
       <div className="card space-y-3">
         <h3 className="section-header text-base">Score Summary</h3>

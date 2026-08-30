@@ -14,6 +14,7 @@ import {
   computeAllCourseHdcps,
   getStrokeDots,
   tournamentHdcp,
+  getPlayOrderHoles,
 } from '../utils/handicap'
 import {
   computeMatchPlay,
@@ -23,6 +24,7 @@ import {
   computeCaptainsChoice,
   computeVegas,
   scrambleBallCount,
+  splitFinishPoints,
 } from '../utils/matchplay'
 import { computeSideBet } from '../utils/sideBets'
 import type { Match, Player, Team, CtpEntry, HoleShotStat, ShotDirection } from '../types'
@@ -107,7 +109,12 @@ export default function MobileScoring() {
   const holeParam  = parseInt(searchParams.get('hole')  ?? '1')
 
   // ── Local state
-  const [currentHole, setCurrentHole] = useState(() => Math.max(1, Math.min(18, holeParam || 1)))
+  const [currentHole, setCurrentHole] = useState(() => {
+    // If no hole param given (or param === 1), default to match's starting hole
+    if (holeParam && holeParam !== 1) return Math.max(1, Math.min(18, holeParam))
+    const m = useTournamentStore.getState().matches.find(m => m.id === matchId)
+    return m?.startingHole ?? 1
+  })
   const [showNumpad,    setShowNumpad]    = useState(false)
   const [activePid,     setActivePid]     = useState<string | null>(null)
   const [numpadVal,     setNumpadVal]     = useState<number | null>(null)
@@ -157,6 +164,12 @@ export default function MobileScoring() {
   const teamOf = useCallback((pid: string): Team | undefined =>
     teams.find(t => t.players.some(p => p.id === pid)),
     [teams]
+  )
+
+  // ── Holes in play order (split-tee support)
+  const playOrder = useMemo(() =>
+    course ? getPlayOrderHoles(course.holes, match?.startingHole ?? 1) : [],
+    [course, match?.startingHole]
   )
 
   // ── HDCPs for match players
@@ -211,7 +224,7 @@ export default function MobileScoring() {
   // ── Auto-show CTP picker when all 4 enter scores on a par 3 (designated CTP match only)
   const prevAllScored = useRef(false)
   useEffect(() => {
-    if (isPar3 && allScored && !prevAllScored.current && !ctpEntry?.winnerName && isCtpMatch) {
+    if (isPar3 && allScored && !prevAllScored.current && !ctpEntry?.winnerName && !ctpEntry?.donatedToHio && isCtpMatch) {
       setShowCtp(true)
       setCtpSelected(null)
     }
@@ -227,6 +240,11 @@ export default function MobileScoring() {
     }, { replace: true })
   }, [currentHole, setSearchParams])
 
+  // ── Play-order navigation helpers
+  const playIdx   = useMemo(() => playOrder.findIndex(h => h.number === currentHole), [playOrder, currentHole])
+  const prevHole  = playIdx > 0 ? playOrder[playIdx - 1]?.number ?? null : null
+  const nextHole  = playIdx >= 0 && playIdx < playOrder.length - 1 ? playOrder[playIdx + 1]?.number ?? null : null
+
   // ── Swipe navigation
   const touchX = useRef<number | null>(null)
   function onTouchStart(e: React.TouchEvent) { touchX.current = e.touches[0].clientX }
@@ -235,8 +253,8 @@ export default function MobileScoring() {
     const dx = e.changedTouches[0].clientX - touchX.current
     touchX.current = null
     if (Math.abs(dx) < 50) return
-    if (dx < 0 && currentHole < 18) goHole(currentHole + 1)
-    if (dx > 0 && currentHole > 1)  goHole(currentHole - 1)
+    if (dx < 0 && nextHole !== null) goHole(nextHole)
+    if (dx > 0 && prevHole !== null) goHole(prevHole)
   }
 
   function goHole(n: number) { setShowNumpad(false); setShowCtp(false); setCurrentHole(n) }
@@ -279,7 +297,7 @@ export default function MobileScoring() {
       setShowNumpad(false)
       setActivePid(null)
       afterScoreChange()
-      if (isPar3 && !ctpEntry?.winnerName && isCtpMatch) {
+      if (isPar3 && !ctpEntry?.winnerName && !ctpEntry?.donatedToHio && isCtpMatch) {
         setShowCtp(true)
         setCtpSelected(null)
       }
@@ -347,9 +365,10 @@ export default function MobileScoring() {
 
   function autoUpdateResult(m: Match) {
     if (!course) return
+    const mHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
     const lh = localHdcps(m)
     if (format === 'team_match_play') {
-      const res = computeMatchPlay(m, course.holes, lh)
+      const res = computeMatchPlay(m, mHoles, lh)
       if (!res.winner) return
       const t1 = teams.find(t => t.id === m.twosome1.teamId)
       const t2 = teams.find(t => t.id === m.twosome2.teamId)
@@ -358,7 +377,7 @@ export default function MobileScoring() {
         : `${(res.winner === 'twosome1' ? t1 : t2)?.name ?? 'Team'} wins ${res.winLabel}`
       updateMatch(m.id, { result })
     } else if (format === 'individual_match') {
-      const imRes = computeIndividualMatch(m, course.holes, lh)
+      const imRes = computeIndividualMatch(m, mHoles, lh)
       const parts: string[] = []
       for (const { res, p1Id, p2Id } of [
         { res: imRes.matchA, p1Id: m.twosome1.playerIds[0], p2Id: m.twosome2.playerIds[0] },
@@ -393,7 +412,7 @@ export default function MobileScoring() {
     teams.forEach(t => { teamPts[t.id] = 0 })
     updated.filter(m => m.round === round).forEach(m => {
       const lh = localHdcps(m)
-      const im = computeIndividualMatch(m, course.holes, lh)
+      const im = computeIndividualMatch(m, getPlayOrderHoles(course.holes, m.startingHole ?? 1), lh)
       for (const { res, t1, t2 } of [
         { res: im.matchA, t1: m.twosome1.teamId, t2: m.twosome2.teamId },
         { res: im.matchB, t1: m.twosome1.teamId, t2: m.twosome2.teamId },
@@ -419,16 +438,18 @@ export default function MobileScoring() {
   function recomputeScramble(updated: Match[]) {
     if (!course) return
     const ms = updated.filter(m => m.round === round)
-    const results = ms.map(m => ({ match: m, result: computeScramble(m, course.holes, localHdcps(m)) }))
+    const results = ms.map(m => ({ match: m, result: computeScramble(m, getPlayOrderHoles(course.holes, m.startingHole ?? 1), localHdcps(m)) }))
     if (!results.every(r => r.result.isDone)) return
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
+    const PTS = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
+    const split2 = splitFinishPoints(ranked.map(r => r.result.total), PTS)
     const RANK_LABELS = ['1st', '2nd', '3rd']
     ranked.forEach(({ match: m, result: r }, i) => {
-      const label = `${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
+      const isTied = ranked.some((o, j) => j !== i && o.result.total === r.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
       if (m.result !== label) updateMatch(m.id, { result: label })
     })
-    const PTS = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
-    const ns2 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: PTS[i] ?? 1 }))
+    const ns2 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: split2[i] }))
     if (!scoresUnchanged(ns2)) setTeamScoresBatch(ns2)
   }
 
@@ -444,17 +465,19 @@ export default function MobileScoring() {
         return s + (p ? tournamentHdcp(p.handicapIndex, teeData?.slope ?? 113, teeData?.rating ?? course.par, course.par, minIdx, false) : 0)
       }, 0)
       const teamHdcp = Math.round(sum * (gc.captainsChoiceHdcpPct ?? 0.15))
-      return { match: m, result: computeCaptainsChoice(m.teamHoleScores, course.holes, teamHdcp) }
+      return { match: m, result: computeCaptainsChoice(m.teamHoleScores, getPlayOrderHoles(course.holes, m.startingHole ?? 1), teamHdcp) }
     })
     if (!results.every(r => r.result.isDone)) return
     const ranked = [...results].sort((a, b) => a.result.total - b.result.total)
+    const PTSC = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
+    const splitC = splitFinishPoints(ranked.map(r => r.result.total), PTSC)
     const RANK_LABELSC = ['1st', '2nd', '3rd']
     ranked.forEach(({ match: m, result: r }, i) => {
-      const label = `${RANK_LABELSC[i]} · Net ${Math.round(r.total)}`
+      const isTied = ranked.some((o, j) => j !== i && o.result.total === r.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELSC[i]} · Net ${Math.round(r.total)}`
       if (m.result !== label) updateMatch(m.id, { result: label })
     })
-    const PTSC = [gc.teamFinish1stPts ?? 4, gc.teamFinish2ndPts ?? 2, gc.teamFinish3rdPts ?? 1]
-    const ns3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: PTSC[i] ?? 1 }))
+    const ns3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: splitC[i] }))
     if (!scoresUnchanged(ns3)) setTeamScoresBatch(ns3)
   }
 
@@ -464,9 +487,10 @@ export default function MobileScoring() {
     teams.forEach(t => { teamPts[t.id] = 0 })
     updated.filter(m => m.round === round).forEach(m => {
       const pids = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
+      const mHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
       const allDone = pids.every(pid => course.holes.every(h => m.scores[pid]?.[h.number] != null))
       if (allDone) {
-        const res = computePointsRound(m, course.holes, localHdcps(m))
+        const res = computePointsRound(m, mHoles, localHdcps(m))
         const fmtD = (d: number) => d >= 0 ? `+${d}` : `${d}`
         const label = `${fmtD(res.total1 - res.quota1)} / ${fmtD(res.total2 - res.quota2)}`
         if (m.result !== label) updateMatch(m.id, { result: label })
@@ -496,7 +520,7 @@ export default function MobileScoring() {
       const pids    = [...m.twosome1.playerIds, ...m.twosome2.playerIds]
       const allDone = pids.every(pid => course.holes.every(h => m.scores[pid]?.[h.number] != null))
       if (!allDone) return
-      const vRes = computeVegas(m, course.holes, localHdcps(m), {
+      const vRes = computeVegas(m, getPlayOrderHoles(course.holes, m.startingHole ?? 1), localHdcps(m), {
         birdieMultiplier:    gc.vegasBirdieMultiplier,
         eagleMultiplier:     gc.vegasEagleMultiplier,
         albatrossMultiplier: gc.vegasAlbatrossMultiplier,
@@ -513,6 +537,8 @@ export default function MobileScoring() {
   }
 
   // ── CTP save ─────────────────────────────────────────────────────────────────
+  const DONATE_SENTINEL = '__donate_hio__'
+
   function saveCtp() {
     if (!ctpSelected || !course) { setShowCtp(false); return }
     const base: CtpEntry = ctpEntry ?? {
@@ -520,14 +546,19 @@ export default function MobileScoring() {
       year, round, hole: currentHole, courseName: course.name,
     }
     const rest = ctpEntries.filter(e => !(e.round === round && e.hole === currentHole && e.year === year))
-    setCtpEntries([...rest, { ...base, winnerName: ctpSelected }])
+    if (ctpSelected === DONATE_SENTINEL) {
+      const prizePerHole = allPlayers.length
+      setCtpEntries([...rest, { ...base, donatedToHio: true, winnerName: undefined, winnerPaid: undefined, hioDonationAmount: prizePerHole }])
+    } else {
+      setCtpEntries([...rest, { ...base, winnerName: ctpSelected, donatedToHio: false, hioDonationAmount: undefined }])
+    }
     setShowCtp(false)
   }
 
   // ── Result bar computation ────────────────────────────────────────────────────
   const resultData = useMemo((): ResultData | null => {
     if (!match || !course || !holeData) return null
-    const holes  = course.holes
+    const holes  = playOrder.length > 0 ? playOrder : course.holes
     const GRAY   = '#6b7280'
 
     function runningStatus(
@@ -638,13 +669,14 @@ export default function MobileScoring() {
         let relToPar: number | null = null
         let holesPlayed = 0
 
+        const mHoles = getPlayOrderHoles(course.holes, m.startingHole ?? 1)
         if (format === 'texas_scramble') {
-          const res = computeScramble(m, holes, lh)
+          const res = computeScramble(m, mHoles, lh)
           holesPlayed = res.holesPlayed
           if (holesPlayed > 0) {
             // Effective par = hole par × ball count (1/2/3/4 by range) since
             // res.total sums best-N scores per hole, not just 1 score per hole
-            const parThru = holes.slice(0, holesPlayed).reduce((s, h) => s + h.par * scrambleBallCount(h.number), 0)
+            const parThru = mHoles.slice(0, holesPlayed).reduce((s, h) => s + h.par * scrambleBallCount(h.number), 0)
             relToPar = res.total - parThru
           }
         } else {
@@ -653,7 +685,7 @@ export default function MobileScoring() {
             return s + (p ? tournamentHdcp(p.handicapIndex, teeData?.slope ?? 113, teeData?.rating ?? course.par, course.par, minIdx, false) : 0)
           }, 0)
           const teamHdcp = Math.round(sum * (gc.captainsChoiceHdcpPct ?? 0.15))
-          const res = computeCaptainsChoice(m.teamHoleScores, holes, teamHdcp)
+          const res = computeCaptainsChoice(m.teamHoleScores, mHoles, teamHdcp)
           holesPlayed = res.holesPlayed
           if (holesPlayed > 0) {
             const parThru = holes.slice(0, holesPlayed).reduce((s, h) => s + h.par, 0)
@@ -1005,6 +1037,22 @@ export default function MobileScoring() {
               </div>
             </div>
             <div className="max-h-60 overflow-y-auto">
+              {/* No winner — donate to HIO option */}
+              {(() => {
+                const selected = ctpSelected === DONATE_SENTINEL
+                return (
+                  <button
+                    onClick={() => setCtpSelected(n => n === DONATE_SENTINEL ? null : DONATE_SENTINEL)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-left border-b border-blue-100 transition-colors ${selected ? 'bg-red-50' : 'hover:bg-blue-50'}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-red-600 bg-red-600' : 'border-gray-300'}`}>
+                      {selected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                    <span className="flex-1 text-sm font-bold text-red-700">No winner — Donate to HIO pot</span>
+                    <span className="text-xs text-red-400 font-semibold">${allPlayers.length}</span>
+                  </button>
+                )
+              })()}
               {ctpGroups.map(({ team, players }) => (
                 <div key={team.id}>
                   <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: team.color }}>
@@ -1034,7 +1082,7 @@ export default function MobileScoring() {
             </div>
             <div className="flex gap-2 p-3 border-t border-blue-200">
               <button onClick={saveCtp} disabled={!ctpSelected} className="flex-1 py-2 bg-blue-700 text-white rounded-lg text-sm font-bold disabled:opacity-40">
-                Save CTP Winner
+                {ctpSelected === DONATE_SENTINEL ? 'Donate to HIO' : 'Save CTP Winner'}
               </button>
               <button onClick={() => setShowCtp(false)} className="flex-1 py-2 bg-white text-gray-500 border border-gray-200 rounded-lg text-sm font-bold">
                 Skip
@@ -1044,13 +1092,23 @@ export default function MobileScoring() {
         )}
 
         {/* CTP already set — show chip + tap to change */}
-        {!showCtp && isPar3 && ctpEntry?.winnerName && (
+        {!showCtp && isPar3 && (ctpEntry?.winnerName || ctpEntry?.donatedToHio) && (
           <button
-            onClick={() => { setShowCtp(true); setCtpSelected(ctpEntry.winnerName ?? null) }}
-            className="mx-3 mt-2 w-[calc(100%-24px)] flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-3 py-2"
+            onClick={() => {
+              setShowCtp(true)
+              setCtpSelected(ctpEntry.donatedToHio ? DONATE_SENTINEL : (ctpEntry.winnerName ?? null))
+            }}
+            className={`mx-3 mt-2 w-[calc(100%-24px)] flex items-center justify-between border rounded-xl px-3 py-2 ${ctpEntry.donatedToHio ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}
           >
-            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">📍 CTP Winner</span>
-            <span className="text-sm font-bold text-blue-900">{ctpEntry.winnerName} <span className="text-[10px] text-blue-400 font-normal">· tap to change</span></span>
+            <span className={`text-[10px] font-bold uppercase tracking-wide ${ctpEntry.donatedToHio ? 'text-red-600' : 'text-blue-700'}`}>
+              {ctpEntry.donatedToHio ? '❤️ Donated to HIO' : '📍 CTP Winner'}
+            </span>
+            <span className={`text-sm font-bold ${ctpEntry.donatedToHio ? 'text-red-800' : 'text-blue-900'}`}>
+              {ctpEntry.donatedToHio
+                ? `$${ctpEntry.hioDonationAmount ?? allPlayers.length} → HIO pot`
+                : ctpEntry.winnerName}
+              {' '}<span className="text-[10px] text-gray-400 font-normal">· tap to change</span>
+            </span>
           </button>
         )}
 
@@ -1175,14 +1233,14 @@ export default function MobileScoring() {
 
       {/* ── Fixed hole nav ─────────────────────────────────────────── */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 flex items-center justify-between px-4 py-3">
-        <button onClick={() => goHole(currentHole - 1)} disabled={currentHole <= 1}
+        <button onClick={() => prevHole !== null && goHole(prevHole)} disabled={prevHole === null}
           className="flex items-center gap-1 px-4 py-2 bg-gray-100 rounded-lg text-sm font-bold text-masters-dark disabled:opacity-30">
-          <ChevronLeft size={16} /> H{Math.max(1, currentHole - 1)}
+          <ChevronLeft size={16} /> H{prevHole ?? currentHole}
         </button>
-        <div className="text-xs text-gray-400 font-semibold">{currentHole} / 18</div>
-        <button onClick={() => goHole(currentHole + 1)} disabled={currentHole >= 18}
+        <div className="text-xs text-gray-400 font-semibold">{playIdx + 1} / 18</div>
+        <button onClick={() => nextHole !== null && goHole(nextHole)} disabled={nextHole === null}
           className="flex items-center gap-1 px-4 py-2 bg-masters-green text-white rounded-lg text-sm font-bold disabled:opacity-30">
-          H{Math.min(18, currentHole + 1)} <ChevronRight size={16} />
+          H{nextHole ?? currentHole} <ChevronRight size={16} />
         </button>
       </div>
     </div>
