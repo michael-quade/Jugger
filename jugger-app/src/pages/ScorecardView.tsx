@@ -104,6 +104,7 @@ export default function ScorecardView() {
   const [championModal, setChampionModal] = useState<{ team: Team; isComplete: boolean } | null>(null)
 
   const defaultCtpTeamId = teams[teams.length - 1]?.id ?? ''
+  const gameConfig = useTournamentStore(s => s.gameConfig)
   const ctpTeamIds = useTournamentStore(s => s.ctpTeamIds ?? {})
   const setCtpTeamIdStore = useTournamentStore(s => s.setCtpTeamId)
   const ctpMatchIds = useTournamentStore(s => s.ctpMatchIds ?? {})
@@ -1236,7 +1237,12 @@ export default function ScorecardView() {
                   <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-700 flex items-center gap-2">
                     <span className="font-semibold">Blind Match</span>
                     <span className="text-blue-500">—</span>
-                    <span>Scores sync automatically from the corresponding regular matches. Worth <strong>1 pt</strong> (or ½ each if tied).</span>
+                    <span>Scores sync automatically from the corresponding regular matches.{' '}
+                      {config?.format === 'individual_match'
+                        ? <>Worth <strong>½ pt</strong> (or ¼ each if tied).</>
+                        : <>Worth <strong>{gameConfig.blindMatchPts} pt</strong> (or {gameConfig.blindMatchPts / 2} each if tied).</>
+                      }
+                    </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1894,7 +1900,7 @@ function getFormatInfo(gc: GameConfig): Record<string, FormatInfo> {
       points: [
         { label: 'Individual match', value: '1 pt' },
         { label: 'Twosome best-ball', value: '1 pt' },
-        { label: 'Blind match', value: `${gc.blindMatchPts} pt` },
+        { label: 'Blind match', value: '½ pt' },
       ],
     },
     captains_choice: {
