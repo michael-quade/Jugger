@@ -50,12 +50,14 @@ export default function Dashboard() {
     dayGroups.push({ label, rounds })
   }
 
-  function handlePreviewSummaryEmail() {
+  function handlePreviewSummaryEmail(sandId?: string, toiletId?: string) {
     const championId = champion?.id ?? defendingChampionTeamId
     const result = buildTournamentSummaryEmail(
       year, teams, matches, teamScores, roundConfigs, courses,
       ctpEntries, hioDonations ?? [],
-      sandbaggerPlayerId, toiletAwardPlayerId, championId,
+      sandId ?? sandbaggerPlayerId,
+      toiletId ?? toiletAwardPlayerId,
+      championId,
     )
     setSummaryEmailPreview(result)
   }
@@ -194,7 +196,7 @@ export default function Dashboard() {
             </>
           )}
           <button
-            onClick={handlePreviewSummaryEmail}
+            onClick={() => handlePreviewSummaryEmail()}
             className="flex items-center gap-1.5 text-xs text-masters-green hover:text-masters-dark border border-masters-green/40 hover:border-masters-green rounded px-2.5 py-1 transition-colors font-semibold"
           >
             <Mail size={11} /> Tournament Summary…
@@ -371,15 +373,6 @@ export default function Dashboard() {
             </button>
           </div>
 
-      {summaryEmailPreview && (
-        <TournamentSummaryModal
-          subject={summaryEmailPreview.subject}
-          html={summaryEmailPreview.html}
-          teams={teams}
-          onClose={() => setSummaryEmailPreview(null)}
-        />
-      )}
-
           {showFinalize && (
             <div className="mt-4 space-y-4">
               {/* Step 1: Award selection */}
@@ -425,12 +418,24 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Step 2: Confirmation */}
+              {/* Step 2: Tournament summary email */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                <p className="font-semibold text-blue-800 text-sm">Step 2 — Send Tournament Summary Email <span className="font-normal text-blue-500">(optional)</span></p>
+                <p className="text-xs text-blue-700">Preview and send the {year} summary to all players — includes final standings, round recaps, CTP winners, and the awards you just selected above. Send now while match data is still live; after finalizing the data moves to the archive.</p>
+                <button
+                  onClick={() => handlePreviewSummaryEmail(pendingSandbagger || undefined, pendingToilet || undefined)}
+                  className="flex items-center gap-1.5 text-xs text-blue-700 hover:text-blue-900 border border-blue-300 hover:border-blue-500 bg-white rounded px-3 py-1.5 transition-colors font-semibold"
+                >
+                  <Mail size={12} /> Preview &amp; Send Summary Email…
+                </button>
+              </div>
+
+              {/* Step 3: Confirmation */}
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-red-800 text-sm">Step 2 — Finalize {year} Juggerknocker Invitational?</p>
+                    <p className="font-semibold text-red-800 text-sm">Step 3 — Finalize {year} Juggerknocker Invitational?</p>
                     <ul className="text-xs text-red-700 mt-1.5 space-y-0.5 list-disc list-inside">
                       <li>All {year} data (pairings, scores, results) will be archived</li>
                       <li>The site will advance to {year + 1}</li>
@@ -460,6 +465,14 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      )}
+      {summaryEmailPreview && (
+        <TournamentSummaryModal
+          subject={summaryEmailPreview.subject}
+          html={summaryEmailPreview.html}
+          teams={teams}
+          onClose={() => setSummaryEmailPreview(null)}
+        />
       )}
     </div>
   )
