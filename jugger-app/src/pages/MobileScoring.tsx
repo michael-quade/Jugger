@@ -446,7 +446,8 @@ export default function MobileScoring() {
     const RANK_LABELS = ['1st', '2nd', '3rd']
     ranked.forEach(({ match: m, result: r }, i) => {
       const isTied = ranked.some((o, j) => j !== i && o.result.total === r.total)
-      const label = `${isTied ? 'T-' : ''}${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
+      const rankIdx = ranked.findIndex(o => o.result.total === r.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELS[rankIdx]} · Net ${Math.round(r.total)}`
       if (m.result !== label) updateMatch(m.id, { result: label })
     })
     const ns2 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: split2[i] }))
@@ -474,7 +475,8 @@ export default function MobileScoring() {
     const RANK_LABELSC = ['1st', '2nd', '3rd']
     ranked.forEach(({ match: m, result: r }, i) => {
       const isTied = ranked.some((o, j) => j !== i && o.result.total === r.total)
-      const label = `${isTied ? 'T-' : ''}${RANK_LABELSC[i]} · Net ${Math.round(r.total)}`
+      const rankIdx = ranked.findIndex(o => o.result.total === r.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELSC[rankIdx]} · Net ${Math.round(r.total)}`
       if (m.result !== label) updateMatch(m.id, { result: label })
     })
     const ns3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round, points: splitC[i] }))

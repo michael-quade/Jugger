@@ -270,7 +270,8 @@ export default function ScorecardView() {
     const RANK_LABELS = ['1st', '2nd', '3rd']
     ranked.forEach(({ match: m, result: r }, i) => {
       const isTied = ranked.some((o, j) => j !== i && o.result.total === r.total)
-      const label = `${isTied ? 'T-' : ''}${RANK_LABELS[i]} · Net ${Math.round(r.total)}`
+      const rankIdx = ranked.findIndex(o => o.result.total === r.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELS[rankIdx]} · Net ${Math.round(r.total)}`
       if (m.result !== label) updateMatch(m.id, { result: label })
     })
     const newScores3 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: splitPts[i] }))
@@ -306,7 +307,8 @@ export default function ScorecardView() {
     const RANK_LABELS4 = ['1st', '2nd', '3rd']
     ranked.forEach(({ match: m, ccRes }, i) => {
       const isTied = ranked.some((o, j) => j !== i && o.ccRes.total === ccRes.total)
-      const label = `${isTied ? 'T-' : ''}${RANK_LABELS4[i]} · Net ${Math.round(ccRes.total)}`
+      const rankIdx = ranked.findIndex(o => o.ccRes.total === ccRes.total)
+      const label = `${isTied ? 'T-' : ''}${RANK_LABELS4[rankIdx]} · Net ${Math.round(ccRes.total)}`
       if (m.result !== label) updateMatch(m.id, { result: label })
     })
     const newScores4 = ranked.map(({ match: m }, i) => ({ teamId: m.twosome1.teamId, round: config.round, points: splitPts4[i] }))
