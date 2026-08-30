@@ -1059,6 +1059,38 @@ export default function ScorecardView() {
         </div>
       )}
 
+      {/* Starting hole — round level, admin only */}
+      {isAdmin && roundMatches.length > 0 && (
+        <div className="flex items-center gap-2 text-xs bg-gray-50 border border-dashed border-gray-200 rounded p-2">
+          <span className="text-gray-500 shrink-0">Starting hole:</span>
+          <select
+            className="border border-gray-200 rounded px-1.5 py-0.5 text-xs bg-white"
+            value={roundMatches[0]?.startingHole ?? 1}
+            onChange={e => {
+              const sh = Number(e.target.value)
+              for (const m of roundMatches) {
+                updateMatch(m.id, { startingHole: sh })
+              }
+              const latest = useTournamentStore.getState().matches
+              const fmt = config?.format
+              if (fmt === 'texas_scramble') recomputeScrambleTeamScores(latest)
+              else if (fmt === 'captains_choice') recomputeCaptainsChoiceTeamScores(latest)
+              else if (fmt === 'individual_match') recomputeIndividualMatchTeamScores(latest)
+              else if (fmt === 'vegas') recomputeVegasTeamScores(latest)
+              else if (fmt === 'points_round') recomputePointsRoundTeamScores(latest)
+              else if (fmt === 'team_match_play') recomputeMatchPlayTeamScores(latest)
+              for (const m of latest.filter(m => m.round === activeRound)) autoUpdateMatchResult(m)
+            }}
+          >
+            <option value={1}>Hole 1 (default)</option>
+            <option value={10}>Hole 10 (split tees)</option>
+          </select>
+          {(roundMatches[0]?.startingHole ?? 1) !== 1 && (
+            <span className="font-semibold text-amber-700">⚠ Play order: 10–18, then 1–9</span>
+          )}
+        </div>
+      )}
+
       <RoundInfoBanner round={activeRound} />
 
       {isRoundLocked(activeRound) && (
@@ -1391,47 +1423,6 @@ export default function ScorecardView() {
                 )}
 
                 <ScoreSummary match={match} teams={teams} course={course} config={config} />
-
-                {/* Starting hole — admin only */}
-                {isAdmin && !match.isBlind && (
-                  <div className="card">
-                    <label className="label">Starting Hole</label>
-                    <p className="text-xs text-gray-500 mb-2">Set when the course starts on hole 10 (split tees). Also applies to this match's blind.</p>
-                    <select
-                      className="input w-32"
-                      value={match.startingHole ?? 1}
-                      onChange={e => {
-                        const sh = Number(e.target.value)
-                        updateMatch(match.id, { startingHole: sh })
-                        // Propagate to blind matches sharing any player in this round
-                        const blindsInRound = matches.filter(m => m.round === match.round && m.isBlind)
-                        const thisPids = new Set([...match.twosome1.playerIds, ...match.twosome2.playerIds])
-                        for (const bm of blindsInRound) {
-                          const bmPids = [...bm.twosome1.playerIds, ...bm.twosome2.playerIds]
-                          if (bmPids.some(pid => thisPids.has(pid))) {
-                            updateMatch(bm.id, { startingHole: sh })
-                          }
-                        }
-                        // Recompute results/team scores with the new play order
-                        const latest = useTournamentStore.getState().matches
-                        if (config?.format === 'texas_scramble') recomputeScrambleTeamScores(latest)
-                        else if (config?.format === 'captains_choice') recomputeCaptainsChoiceTeamScores(latest)
-                        else if (config?.format === 'individual_match') recomputeIndividualMatchTeamScores(latest)
-                        else if (config?.format === 'vegas') recomputeVegasTeamScores(latest)
-                        else if (config?.format === 'points_round') recomputePointsRoundTeamScores(latest)
-                        else if (config?.format === 'team_match_play') recomputeMatchPlayTeamScores(latest)
-                        // Also refresh the result string for the current match and its blinds
-                        for (const m of latest.filter(m => m.round === match.round)) autoUpdateMatchResult(m)
-                      }}
-                    >
-                      <option value={1}>Hole 1 (default)</option>
-                      <option value={10}>Hole 10</option>
-                    </select>
-                    {(match.startingHole ?? 1) !== 1 && (
-                      <p className="mt-1.5 text-xs font-semibold text-amber-700">⚠ Play order: 10–18, then 1–9</p>
-                    )}
-                  </div>
-                )}
 
                 {canEditMatch(activeRound, match) ? (
                   <div className="card">
