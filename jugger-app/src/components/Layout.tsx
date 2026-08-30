@@ -269,8 +269,8 @@ export default function Layout() {
               </div>
             </Link>
 
-            {/* Admin year selector (stays near title) */}
-            {isAdmin && archivedYears.length > 0 && (
+            {/* Year selector — admin + logged-in players (read-only nav) */}
+            {(isAdmin || isPlayer) && archivedYears.length > 0 && (
               <div className="flex items-center gap-1.5 text-xs shrink-0">
                 <History size={13} className="text-white/50 shrink-0" />
                 <select
