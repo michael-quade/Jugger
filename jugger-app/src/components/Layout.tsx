@@ -278,9 +278,9 @@ export default function Layout() {
                   value={isViewingHistory ? year : liveYear}
                   onChange={e => switchToYear(parseInt(e.target.value))}
                 >
-                  <option value={liveYear}>{liveYear} (Live)</option>
+                  <option value={liveYear} style={{ background: '#1a3a2f', color: '#fff' }}>{liveYear} (Live)</option>
                   {[...archivedYears].sort((a, b) => b.year - a.year).map(a => (
-                    <option key={a.year} value={a.year}>{a.year}</option>
+                    <option key={a.year} value={a.year} style={{ background: '#1a3a2f', color: '#fff' }}>{a.year}</option>
                   ))}
                 </select>
               </div>
