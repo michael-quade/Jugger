@@ -317,7 +317,11 @@ export function useSupabaseSync() {
 
         // Matches: merge per-hole — Supabase wins, but local non-null scores
         // entered during the fetch window are preserved.
-        if (matchesRes.data && matchesRes.data.length > 0) {
+        // Guard: if app_state told us the real year is different from YEAR (fresh
+        // browser after finalization), the fetched rows belong to the old year and
+        // must NOT be applied to the new live state.
+        const actualYear = useTournamentStore.getState().year
+        if (YEAR === actualYear && matchesRes.data && matchesRes.data.length > 0) {
           const remoteMatches: Match[] = matchesRes.data.map((r: any) => r.match_json)
           useTournamentStore.setState(state => {
             const merged = state.matches.map(local => {
@@ -332,8 +336,8 @@ export function useSupabaseSync() {
           })
         }
 
-        // Team scores: Supabase wins if rows exist
-        if (teamScoresRes.data && teamScoresRes.data.length > 0) {
+        // Team scores: Supabase wins if rows exist (same year guard as matches)
+        if (YEAR === actualYear && teamScoresRes.data && teamScoresRes.data.length > 0) {
           useTournamentStore.setState({
             teamScores: teamScoresRes.data.map((r: any) => ({
               teamId: r.team_id, round: r.round, points: r.points, notes: r.notes ?? undefined,
