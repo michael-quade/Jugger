@@ -315,34 +315,44 @@ export function useSupabaseSync() {
           useTournamentStore.setState(updates)
         }
 
-        // Matches: merge per-hole — Supabase wins, but local non-null scores
-        // entered during the fetch window are preserved.
-        // Guard: if app_state told us the real year is different from YEAR (fresh
-        // browser after finalization), the fetched rows belong to the old year and
-        // must NOT be applied to the new live state.
+        // Matches and team scores: Supabase is fully authoritative on initial load.
+        // If the query succeeded (no error), apply whatever it returned — including
+        // an empty result, which clears stale localStorage data from a prior year.
+        // Guard: if app_state updated year to a different value than YEAR, the rows
+        // were fetched for the wrong year — discard them and clear local state.
         const actualYear = useTournamentStore.getState().year
-        if (YEAR === actualYear && matchesRes.data && matchesRes.data.length > 0) {
-          const remoteMatches: Match[] = matchesRes.data.map((r: any) => r.match_json)
-          useTournamentStore.setState(state => {
-            const merged = state.matches.map(local => {
-              const remote = remoteMatches.find(r => r.id === local.id)
-              if (!remote) return local
-              return mergeMatch(local, remote)
+
+        if (!matchesRes.error) {
+          if (YEAR === actualYear && matchesRes.data && matchesRes.data.length > 0) {
+            const remoteMatches: Match[] = matchesRes.data.map((r: any) => r.match_json)
+            useTournamentStore.setState(state => {
+              const merged = state.matches.map(local => {
+                const remote = remoteMatches.find(r => r.id === local.id)
+                if (!remote) return local
+                return mergeMatch(local, remote)
+              })
+              for (const r of remoteMatches) {
+                if (!merged.find(m => m.id === r.id)) merged.push(r)
+              }
+              return { matches: merged }
             })
-            for (const r of remoteMatches) {
-              if (!merged.find(m => m.id === r.id)) merged.push(r)
-            }
-            return { matches: merged }
-          })
+          } else {
+            // Either year mismatch (wrong year fetched) or Supabase returned 0 rows
+            // for the current year — both mean local matches should be empty.
+            useTournamentStore.setState({ matches: [] })
+          }
         }
 
-        // Team scores: Supabase wins if rows exist (same year guard as matches)
-        if (YEAR === actualYear && teamScoresRes.data && teamScoresRes.data.length > 0) {
-          useTournamentStore.setState({
-            teamScores: teamScoresRes.data.map((r: any) => ({
-              teamId: r.team_id, round: r.round, points: r.points, notes: r.notes ?? undefined,
-            })),
-          })
+        if (!teamScoresRes.error) {
+          if (YEAR === actualYear && teamScoresRes.data && teamScoresRes.data.length > 0) {
+            useTournamentStore.setState({
+              teamScores: teamScoresRes.data.map((r: any) => ({
+                teamId: r.team_id, round: r.round, points: r.points, notes: r.notes ?? undefined,
+              })),
+            })
+          } else {
+            useTournamentStore.setState({ teamScores: [] })
+          }
         }
       } catch (err) {
         console.error('[supabase] initial fetch failed:', err)
