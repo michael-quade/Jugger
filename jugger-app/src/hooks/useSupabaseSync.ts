@@ -38,6 +38,11 @@ export function useSupabaseSync() {
       for (const key of APP_STATE_KEYS) {
         if ((state as any)[key] !== undefined) (updates as any)[key] = (state as any)[key]
       }
+      // If the remote row has year but no liveYear (written before liveYear was added
+      // to APP_STATE_KEYS), derive liveYear = year so the header dropdown is correct.
+      if (updates.year !== undefined && (state as any).liveYear === undefined) {
+        updates.liveYear = updates.year
+      }
       useTournamentStore.setState(updates)
       prevState = useTournamentStore.getState()
       remoteDepth--
