@@ -924,7 +924,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 29,
+      version: 30,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -1074,6 +1074,17 @@ export const useTournamentStore = create<TournamentState & Actions>()(
         if (fromVersion < 29) {
           const b = base as any
           if (!b.ctpMatchIds) b.ctpMatchIds = {}
+        }
+        if (fromVersion < 30) {
+          // After year finalization (2026→2027), stale match/score data from the
+          // prior year may persist in localStorage on devices that hadn't loaded
+          // the new year yet. Clear it synchronously at init so fresh 2027 state
+          // starts empty rather than showing 2026 pairings/scorecards.
+          const b = base as any
+          if ((b.year ?? 2026) > 2026) {
+            b.matches = []
+            b.teamScores = []
+          }
         }
         if (fromVersion < 27) {
           // Reset any active side bets with missing acceptances back to pending
