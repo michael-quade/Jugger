@@ -406,9 +406,9 @@ export default function Layout() {
       <main className="relative flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 lg:pb-6">
         <Outlet />
         {showPlanningBanner && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-lg"
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-start rounded-lg"
                style={{ background: 'rgba(245,245,240,0.88)', backdropFilter: 'blur(4px)' }}>
-            <div className="text-center px-6 py-10 max-w-sm">
+            <div className="text-center px-6 pt-8 pb-10 max-w-sm">
               <div className="text-5xl mb-4">⛳</div>
               <h2 className="font-serif text-2xl font-bold text-masters-dark mb-2">
                 Event Planning in Progress
