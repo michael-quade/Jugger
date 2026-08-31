@@ -37,41 +37,48 @@ export const useAuthStore = create<AuthState>()(
 
   login: async (username, password) => {
     set({ loggingIn: true, loginError: null })
-    const { admins } = useTournamentStore.getState()
-    if (admins.length === 0) {
-      set({ loggingIn: false, loginError: 'Account data not loaded yet — try refreshing, or check that your browser allows connections to supabase.co (Brave Shields may be blocking it).' })
+    try {
+      const { admins } = useTournamentStore.getState()
+      if (admins.length === 0) {
+        set({ loginError: 'Account data not loaded yet — try refreshing, or check that your browser allows connections to supabase.co (Brave Shields may be blocking it).' })
+        return false
+      }
+      const cred = admins.find(a => a.username.toLowerCase() === username.toLowerCase())
+      if (!cred) {
+        set({ loginError: 'Invalid username or password.' })
+        return false
+      }
+      const ok = await verifyPassword(password, cred.passwordHash)
+      if (ok) {
+        const role = cred.role ?? 'admin'
+        const canScore =
+          role === 'admin' ||
+          role === 'scorer' ||
+          (role === 'player' && cred.canScore === true)
+        const canTreasure =
+          role === 'admin' ||
+          role === 'treasurer' ||
+          (role === 'player' && cred.canTreasure === true)
+        set({
+          currentAdmin: cred.username,
+          currentRole: role,
+          canScore,
+          canTreasure,
+          mustChangePassword: cred.mustChangePassword === true,
+          loginError: null,
+          loginAt: Date.now(),
+        })
+      } else {
+        set({ loginError: 'Invalid username or password.' })
+      }
+      return ok
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      set({ loginError: `Sign-in error: ${msg}. Try refreshing the page.` })
       return false
+    } finally {
+      set({ loggingIn: false })
     }
-    const cred = admins.find(a => a.username.toLowerCase() === username.toLowerCase())
-    if (!cred) {
-      set({ loggingIn: false, loginError: 'Invalid username or password.' })
-      return false
-    }
-    const ok = await verifyPassword(password, cred.passwordHash)
-    if (ok) {
-      const role = cred.role ?? 'admin'
-      const canScore =
-        role === 'admin' ||
-        role === 'scorer' ||
-        (role === 'player' && cred.canScore === true)
-      const canTreasure =
-        role === 'admin' ||
-        role === 'treasurer' ||
-        (role === 'player' && cred.canTreasure === true)
-      set({
-        currentAdmin: cred.username,
-        currentRole: role,
-        canScore,
-        canTreasure,
-        mustChangePassword: cred.mustChangePassword === true,
-        loggingIn: false,
-        loginError: null,
-        loginAt: Date.now(),
-      })
-    } else {
-      set({ loggingIn: false, loginError: 'Invalid username or password.' })
-    }
-    return ok
   },
 
   logout: () => set({
