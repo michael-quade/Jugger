@@ -179,7 +179,6 @@ const NAV: { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; b
   { to: '/board',      label: 'Board',        icon: MessageSquare },
   { to: '/courses',      label: 'Courses',      icon: MapPin },
   { to: '/round-games',  label: 'Rules/Games',  icon: Gamepad2 },
-  { to: '/results',      label: 'Team Results', icon: Trophy,  adminOnly: true },
   { to: '/ctp',        label: 'Par 3 CTP',    icon: Crosshair },
   { to: '/hole-in-one',label: 'Hole in One',  icon: Aperture },
   { to: '/analytics',  label: 'Analytics',    icon: TrendingUp },
@@ -188,6 +187,7 @@ const NAV: { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; b
   { to: '/history',    label: 'Course History', icon: BookOpen },
   { to: '/print',           label: 'Print All',      icon: Printer,   adminOnly: true },
   { to: '/skidmore-hdcp',  label: 'Skidmore HDCP',  icon: Calculator, adminOnly: true },
+  { to: '/results',      label: 'Team Results', icon: Trophy,  adminOnly: true },
 ]
 
 // Five most-used pages pinned to the mobile bottom bar
@@ -196,7 +196,7 @@ const BOTTOM_NAV = [
   { to: '/scorecards', label: 'Scores',   icon: ClipboardList },
   { to: '/ctp',        label: 'Par 3',    icon: Crosshair },
   { to: '/schedule',   label: 'Schedule', icon: Calendar },
-  { to: '/results',    label: 'Results',  icon: Trophy },
+  { to: '/analytics',  label: 'Analytics', icon: TrendingUp },
 ]
 
 function formatDateRange(configs: { date?: string }[], year: number): string {
