@@ -1076,13 +1076,14 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           if (!b.ctpMatchIds) b.ctpMatchIds = {}
         }
         if (fromVersion < 30) {
-          // After year finalization (2026→2027), stale match/score data from the
-          // prior year may persist in localStorage on devices that hadn't loaded
-          // the new year yet. Clear it synchronously at init so fresh 2027 state
-          // starts empty rather than showing 2026 pairings/scorecards.
+          // Clear matches unconditionally — Supabase is authoritative and will
+          // re-populate the correct year's matches on initial fetch. Clears stale
+          // 2026 data from localStorage on any device that hadn't yet synced the
+          // finalized year, regardless of what 'year' is stored locally.
+          // teamScores: clear only when year > 2026 (post-finalization).
           const b = base as any
+          b.matches = []
           if ((b.year ?? 2026) > 2026) {
-            b.matches = []
             b.teamScores = []
           }
         }

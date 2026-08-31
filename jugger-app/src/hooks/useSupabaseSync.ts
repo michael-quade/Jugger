@@ -100,6 +100,9 @@ export function useSupabaseSync() {
 
     function applyMatch(match: Match) {
       if (useTournamentStore.getState().isViewingHistory) return
+      // Guard: if this session's YEAR drifted from the store's year (e.g. after
+      // finalization applied a new year via app_state), don't re-apply old rows.
+      if (YEAR !== useTournamentStore.getState().year) return
       remoteDepth++
       useTournamentStore.setState(state => {
         const localMatch = state.matches.find(m => m.id === match.id)
@@ -143,6 +146,7 @@ export function useSupabaseSync() {
 
     function applyTeamScore(row: { team_id: string; round: number; points: number; notes?: string | null }) {
       if (useTournamentStore.getState().isViewingHistory) return
+      if (YEAR !== useTournamentStore.getState().year) return
       const incoming: TeamRoundScore = {
         teamId: row.team_id, round: row.round, points: row.points, notes: row.notes ?? undefined,
       }
@@ -367,6 +371,9 @@ export function useSupabaseSync() {
     const POLL_MS = 10_000
     async function pollMatches() {
       if (useTournamentStore.getState().isViewingHistory) return
+      // Guard: if the store year advanced past this session's captured YEAR (e.g.
+      // after finalization), skip the poll — YEAR rows belong to the prior year.
+      if (YEAR !== useTournamentStore.getState().year) return
       const res = await db.from('matches').select('match_json').eq('tournament_year', YEAR)
       if (res.error || !res.data || res.data.length === 0) return
       const remoteMatches: Match[] = res.data.map((r: any) => r.match_json)
