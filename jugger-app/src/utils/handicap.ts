@@ -55,9 +55,11 @@ export function getPlayerCourseHdcp(
 
   const isScramble = format === 'texas_scramble'
 
-  // Points Round quota uses gross course HDCP — no netting against the field minimum
+  // Points Round quota uses gross course HDCP — no netting against the field minimum,
+  // but HDCPs above 18 are still compressed (18 + 50% of excess).
   if (format === 'points_round') {
-    return courseHandicap(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par)
+    const raw = courseHandicap(player.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par)
+    return apply18Cap(raw)
   }
 
   if (allTournamentPlayers.length === 0) {

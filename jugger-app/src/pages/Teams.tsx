@@ -295,10 +295,12 @@ function HdcpTable() {
       const rating = tee.rating ?? course.par
       const par = course.par
       const raw = rawCourseHdcpDisplay(index, slope, rating, par)
+      const rawInt = Math.round(raw)
+      const rawCappedInt = apply18Cap(rawInt)
       const nettedRaw = nettedCourseHdcpRaw(index, slope, rating, par, minIndex)
       const capped = apply18Cap(nettedRaw)
       const final = format === 'texas_scramble' ? Math.round(capped * scramblePct) : capped
-      return { raw, nettedRaw, capped, final }
+      return { raw, rawInt, rawCappedInt, nettedRaw, capped, final }
     })
   }
 
@@ -401,7 +403,14 @@ function HdcpTable() {
                       {calcs.map((rv, ri) => (
                         <Fragment key={ri}>
                           <td className={td + ' text-gray-400 border-l-2 border-l-masters-green/40'}>
-                            {rv?.raw.toFixed(1)}
+                            {rv && (
+                              <div className="flex flex-col items-center leading-none gap-[1px]">
+                                <span>{rv.raw.toFixed(1)}</span>
+                                {rv.rawInt !== rv.rawCappedInt && (
+                                  <span className="text-[8px] text-orange-400">{rv.rawInt}→{rv.rawCappedInt}</span>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className={td}>
                             {rv !== null && (
