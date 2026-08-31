@@ -732,7 +732,7 @@ function HeadToHead({ h2h, partners }: {
       {/* Partnership records */}
       {Object.keys(partners).length > 0 && (
         <div className="card">
-          <h2 className="section-header">Partnership Records <span className="text-xs font-normal text-gray-400">(best-ball twosome results)</span></h2>
+          <h2 className="section-header">Partnership Records</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse">
               <thead><tr className="bg-masters-light">

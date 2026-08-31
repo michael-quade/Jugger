@@ -303,11 +303,10 @@ export function computeH2H(
 
   for (const bundle of bundles) {
     for (const match of bundle.matches) {
-      if (match.isBlind) continue
       const rc = bundle.roundConfigs.find(r => r.round === match.round)
       if (!rc) continue
       const fmt = rc.format as RndFormat
-      if (fmt !== 'individual_match' && fmt !== 'team_match_play') continue
+      if (fmt !== 'individual_match' && fmt !== 'team_match_play' && fmt !== 'points_round') continue
 
       const course = findCourse(rc.courseId, courses, courseHistory)
       if (!course?.holes?.length) continue
@@ -324,7 +323,7 @@ export function computeH2H(
         if (res2) record(t1p2, t2p2, res2, fmt)
       }
 
-      if (fmt === 'team_match_play') {
+      if (fmt === 'team_match_play' || fmt === 'points_round') {
         // Best-ball twosome result — record for all four cross-team pairs
         let score = 0, played = 0
         for (const hole of course.holes) {
@@ -371,11 +370,10 @@ export function computePartnerRecords(
 
   for (const bundle of bundles) {
     for (const match of bundle.matches) {
-      if (match.isBlind) continue
       const rc = bundle.roundConfigs.find(r => r.round === match.round)
       if (!rc) continue
       const fmt = rc.format as RndFormat
-      if (fmt === 'captains_choice' || fmt === 'points_round') continue
+      if (fmt === 'captains_choice' || fmt === 'texas_scramble') continue
 
       const course = findCourse(rc.courseId, courses, courseHistory)
       if (!course?.holes?.length) continue
