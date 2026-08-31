@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Outlet, NavLink, Link } from 'react-router-dom'
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom'
 import { useTournamentStore } from '../store/useTournamentStore'
 import {
   LayoutDashboard, Users, MapPin, Calendar, Shuffle,
@@ -213,13 +213,23 @@ function formatDateRange(configs: { date?: string }[], year: number): string {
 }
 
 export default function Layout() {
-  const { year, liveYear, archivedYears, isViewingHistory, switchToYear, returnToLive, roundConfigs, location } = useTournamentStore()
+  const { year, liveYear, archivedYears, isViewingHistory, switchToYear, returnToLive, roundConfigs, location, matches } = useTournamentStore()
   const { connected } = useSyncStatus()
   const dateRange   = formatDateRange(roundConfigs, year)
   const isAdmin     = useIsAdmin()
   const isPlayer    = useIsPlayer()
   const canBoard    = useCanAccessBoard()
   const unreadCount = useBoardStore(s => s.unreadCount)
+  const routerLocation = useLocation()
+
+  // Show "planning in progress" overlay for non-admins on the live year when
+  // no pairings exist yet. Analytics remains accessible; history view unaffected.
+  const showPlanningBanner =
+    !isAdmin &&
+    !isViewingHistory &&
+    year === liveYear &&
+    matches.length === 0 &&
+    !routerLocation.pathname.startsWith('/analytics')
 
   // Weather: derive unique event dates from roundConfigs, fetch forecast or historical avg
   const [weather, setWeather] = useState<WxCache | null>(null)
@@ -393,8 +403,23 @@ export default function Layout() {
       </div>
 
       {/* Main content — extra bottom padding on mobile to clear the fixed bottom nav */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 lg:pb-6">
+      <main className="relative flex-1 max-w-7xl mx-auto w-full px-4 py-6 pb-24 lg:pb-6">
         <Outlet />
+        {showPlanningBanner && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-lg"
+               style={{ background: 'rgba(245,245,240,0.88)', backdropFilter: 'blur(4px)' }}>
+            <div className="text-center px-6 py-10 max-w-sm">
+              <div className="text-5xl mb-4">⛳</div>
+              <h2 className="font-serif text-2xl font-bold text-masters-dark mb-2">
+                Event Planning in Progress
+              </h2>
+              <p className="text-masters-green text-sm font-medium">
+                The {year} tournament is being organized.
+                Check back soon for pairings and schedules.
+              </p>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
