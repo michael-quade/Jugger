@@ -8,7 +8,7 @@ export const useSyncStatus = create<{ connected: boolean }>(() => ({ connected: 
 
 // Keys synced via the app_state table (everything except matches and teamScores)
 const APP_STATE_KEYS: (keyof TournamentState)[] = [
-  'year', 'teams', 'courses', 'roundConfigs', 'holeInOnes',
+  'year', 'liveYear', 'teams', 'courses', 'roundConfigs', 'holeInOnes',
   'ctpEntries', 'ctpDonations', 'ctpHioHistory', 'hdcpLocked',
   'courseHistory', 'admins', 'pairingsLocked', 'lockedRounds', 'hioDonations', 'skidmoreScores',
   'sandbaggerPlayerId', 'toiletAwardPlayerId', 'defendingChampionTeamId', 'gameConfig', 'location', 'lodgingConfig', 'sideBets', 'ctpTeamIds', 'ctpMatchIds',
