@@ -15,7 +15,7 @@ const FORMAT_LABELS: Record<string, string> = {
 }
 
 export default function Pairings() {
-  const { teams, matches, roundConfigs, courses, pairingsLocked, setMatches, updateMatch, setPairingsLocked } = useTournamentStore()
+  const { teams, matches, roundConfigs, courses, pairingsLocked, setMatches, updateMatch, setPairingsLocked, clearAllTeamScores } = useTournamentStore()
   const isAdmin = useIsAdmin()
   const navigate = useNavigate()
   const [editMatch, setEditMatch] = useState<string | null>(null)
@@ -62,6 +62,20 @@ export default function Pairings() {
               >
                 {pairingsLocked ? <Lock size={14} /> : <Unlock size={14} />}
                 {pairingsLocked ? 'Pairings Locked' : 'Lock Pairings'}
+              </button>
+            )}
+            {!pairingsLocked && matches.length > 0 && (
+              <button
+                className="btn-danger flex items-center gap-2"
+                onClick={() => {
+                  if (!confirm('Clear ALL pairings and team scores? This cannot be undone.')) return
+                  setMatches([])
+                  clearAllTeamScores()
+                  setPairingsLocked(false)
+                }}
+              >
+                <X size={16} />
+                Clear All Pairings
               </button>
             )}
             {!pairingsLocked && (
