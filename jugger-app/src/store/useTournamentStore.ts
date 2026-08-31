@@ -924,7 +924,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 30,
+      version: 31,
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -1075,17 +1075,14 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           const b = base as any
           if (!b.ctpMatchIds) b.ctpMatchIds = {}
         }
-        if (fromVersion < 30) {
-          // Clear matches unconditionally — Supabase is authoritative and will
-          // re-populate the correct year's matches on initial fetch. Clears stale
-          // 2026 data from localStorage on any device that hadn't yet synced the
-          // finalized year, regardless of what 'year' is stored locally.
-          // teamScores: clear only when year > 2026 (post-finalization).
+        if (fromVersion < 31) {
+          // Clear matches + teamScores unconditionally — Supabase is authoritative
+          // and will re-populate the correct year's data on initial fetch. This
+          // runs for any device still on v29 OR v30 (which only cleared when year
+          // > 2026, missing the default year:2026 case).
           const b = base as any
           b.matches = []
-          if ((b.year ?? 2026) > 2026) {
-            b.teamScores = []
-          }
+          b.teamScores = []
         }
         if (fromVersion < 27) {
           // Reset any active side bets with missing acceptances back to pending
