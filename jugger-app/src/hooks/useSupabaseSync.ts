@@ -38,9 +38,10 @@ export function useSupabaseSync() {
       for (const key of APP_STATE_KEYS) {
         if ((state as any)[key] !== undefined) (updates as any)[key] = (state as any)[key]
       }
-      // If the remote row has year but no liveYear (written before liveYear was added
-      // to APP_STATE_KEYS), derive liveYear = year so the header dropdown is correct.
-      if (updates.year !== undefined && (state as any).liveYear === undefined) {
+      // liveYear must equal year when not viewing history. Rows written before
+      // liveYear was synced (or written pre-finalization) may be missing or stale.
+      if (updates.year !== undefined &&
+          ((state as any).liveYear === undefined || (state as any).liveYear < updates.year)) {
         updates.liveYear = updates.year
       }
       useTournamentStore.setState(updates)
@@ -299,10 +300,17 @@ export function useSupabaseSync() {
 
         // App state: Supabase wins if a row exists, else keep localStorage
         if (appStateRes.data?.state) {
+          const remoteState = appStateRes.data.state as any
           const updates: Partial<TournamentState> = {}
           for (const key of APP_STATE_KEYS) {
-            if ((appStateRes.data.state as any)[key] !== undefined)
-              (updates as any)[key] = (appStateRes.data.state as any)[key]
+            if (remoteState[key] !== undefined)
+              (updates as any)[key] = remoteState[key]
+          }
+          // liveYear must equal year on initial load. Rows written before liveYear
+          // was synced (or written pre-finalization) may have a stale/missing value.
+          if (updates.year !== undefined &&
+              (remoteState.liveYear === undefined || remoteState.liveYear < updates.year)) {
+            updates.liveYear = updates.year
           }
           useTournamentStore.setState(updates)
         }
