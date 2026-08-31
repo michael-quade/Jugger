@@ -291,18 +291,12 @@ export function useSupabaseSync() {
     ;(async () => {
       remoteDepth++
       try {
-        const [appStateRes, matchesRes, teamScoresRes] = await Promise.all([
-          db.from('app_state').select('state').eq('id', APP_STATE_ID).maybeSingle(),
-          db.from('matches').select('match_json').eq('tournament_year', YEAR),
-          db.from('team_scores')
-            .select('team_id, round, points, notes').eq('tournament_year', YEAR),
-        ])
-
+        // ── Phase 1: fetch app_state FIRST (sequential) so we know the true live
+        // year before deciding which tournament_year to fetch for matches/scores.
+        const appStateRes = await db.from('app_state')
+          .select('state').eq('id', APP_STATE_ID).maybeSingle()
         if (appStateRes.error) console.error('[supabase] fetch app_state:', appStateRes.error.message)
-        if (matchesRes.error)  console.error('[supabase] fetch matches:',   matchesRes.error.message)
-        if (teamScoresRes.error) console.error('[supabase] fetch team_scores:', teamScoresRes.error.message)
 
-        // App state: Supabase wins if a row exists, else keep localStorage
         if (appStateRes.data?.state) {
           const remoteState = appStateRes.data.state as any
           const updates: Partial<TournamentState> = {}
@@ -319,15 +313,37 @@ export function useSupabaseSync() {
           useTournamentStore.setState(updates)
         }
 
-        // Matches and team scores: Supabase is fully authoritative on initial load.
-        // If the query succeeded (no error), apply whatever it returned — including
-        // an empty result, which clears stale localStorage data from a prior year.
-        // Guard: if app_state updated year to a different value than YEAR, the rows
-        // were fetched for the wrong year — discard them and clear local state.
-        const actualYear = useTournamentStore.getState().year
+        // ── Phase 2: determine whether YEAR (this session's captured year) is stale.
+        // Check both what's now in the store (post-app_state) and what was in
+        // localStorage before the fetch (archivedYears may already be there).
+        const { liveYear: syncedLive, year: syncedYear, archivedYears: syncedArchived } =
+          useTournamentStore.getState()
+        const liveYear = syncedLive ?? syncedYear
+        const yearIsStale = YEAR < liveYear ||
+          (syncedArchived ?? []).some(a => a.year === YEAR)
+
+        if (yearIsStale) {
+          // YEAR belongs to an archived tournament. Clear local state immediately
+          // and delete the stale rows from Supabase so every device stops seeing them.
+          useTournamentStore.setState({ matches: [], teamScores: [] })
+          db.from('matches').delete().eq('tournament_year', YEAR)
+            .then(({ error }) => { if (error) console.error('[supabase] stale match cleanup:', error.message) })
+          db.from('team_scores').delete().eq('tournament_year', YEAR)
+            .then(({ error }) => { if (error) console.error('[supabase] stale score cleanup:', error.message) })
+          return
+        }
+
+        // ── Phase 3: fetch matches/scores for the correct (current) year
+        const [matchesRes, teamScoresRes] = await Promise.all([
+          db.from('matches').select('match_json').eq('tournament_year', YEAR),
+          db.from('team_scores')
+            .select('team_id, round, points, notes').eq('tournament_year', YEAR),
+        ])
+        if (matchesRes.error)    console.error('[supabase] fetch matches:',     matchesRes.error.message)
+        if (teamScoresRes.error) console.error('[supabase] fetch team_scores:', teamScoresRes.error.message)
 
         if (!matchesRes.error) {
-          if (YEAR === actualYear && matchesRes.data && matchesRes.data.length > 0) {
+          if (matchesRes.data && matchesRes.data.length > 0) {
             const remoteMatches: Match[] = matchesRes.data.map((r: any) => r.match_json)
             useTournamentStore.setState(state => {
               const merged = state.matches.map(local => {
@@ -341,14 +357,12 @@ export function useSupabaseSync() {
               return { matches: merged }
             })
           } else {
-            // Either year mismatch (wrong year fetched) or Supabase returned 0 rows
-            // for the current year — both mean local matches should be empty.
             useTournamentStore.setState({ matches: [] })
           }
         }
 
         if (!teamScoresRes.error) {
-          if (YEAR === actualYear && teamScoresRes.data && teamScoresRes.data.length > 0) {
+          if (teamScoresRes.data && teamScoresRes.data.length > 0) {
             useTournamentStore.setState({
               teamScores: teamScoresRes.data.map((r: any) => ({
                 teamId: r.team_id, round: r.round, points: r.points, notes: r.notes ?? undefined,
