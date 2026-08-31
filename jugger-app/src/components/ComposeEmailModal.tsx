@@ -48,6 +48,7 @@ export default function ComposeEmailModal({ teams, onClose }: Props) {
   const [loadingFiles, setLoadingFiles] = useState(false)
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [pasteFlash, setPasteFlash] = useState(false)
 
   const toggleRecipient = (email: string) => {
     setSelected(prev => {
@@ -92,6 +93,30 @@ export default function ComposeEmailModal({ teams, onClose }: Props) {
     setAttachments(prev => prev.filter((_, i) => i !== idx))
   }
 
+  async function handlePaste(e: React.ClipboardEvent) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItems = items.filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+    if (!imageItems.length) return
+    e.preventDefault()
+    const files = imageItems.map(item => item.getAsFile()).filter(Boolean) as File[]
+    setLoadingFiles(true)
+    try {
+      const newAttachments = await Promise.all(
+        files.map(async (file, i) => {
+          const ext = file.type.split('/')[1] ?? 'png'
+          const filename = `pasted-image-${Date.now()}${files.length > 1 ? `-${i + 1}` : ''}.${ext}`
+          return { filename, content: await readFileAsBase64(file), size: file.size }
+        })
+      )
+      setAttachments(prev => [...prev, ...newAttachments])
+      setPasteFlash(true)
+      setTimeout(() => setPasteFlash(false), 2000)
+    } catch {
+      alert('Failed to read pasted image.')
+    }
+    setLoadingFiles(false)
+  }
+
   const totalAttachmentBytes = attachments.reduce((s, a) => s + a.size, 0)
   const attachmentWarning = totalAttachmentBytes > 10 * 1024 * 1024
 
@@ -118,7 +143,7 @@ export default function ComposeEmailModal({ teams, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onPaste={handlePaste}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col">
 
         {/* Header */}
@@ -251,10 +276,10 @@ export default function ComposeEmailModal({ teams, onClose }: Props) {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={loadingFiles}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-masters-dark border border-dashed border-gray-300 hover:border-gray-400 rounded-lg px-3 py-2 w-full justify-center transition-colors disabled:opacity-50"
+              className={`flex items-center gap-1.5 text-xs border border-dashed rounded-lg px-3 py-2 w-full justify-center transition-colors disabled:opacity-50 ${pasteFlash ? 'border-masters-green text-masters-green bg-green-50' : 'text-gray-500 hover:text-masters-dark border-gray-300 hover:border-gray-400'}`}
             >
               <Paperclip size={12} />
-              {loadingFiles ? 'Reading files…' : 'Attach files'}
+              {loadingFiles ? 'Reading files…' : pasteFlash ? 'Image added!' : 'Attach files · or paste image (Ctrl+V)'}
             </button>
           </div>
 
