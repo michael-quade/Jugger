@@ -38,6 +38,10 @@ export const useAuthStore = create<AuthState>()(
   login: async (username, password) => {
     set({ loggingIn: true, loginError: null })
     const { admins } = useTournamentStore.getState()
+    if (admins.length === 0) {
+      set({ loggingIn: false, loginError: 'Account data not loaded yet — try refreshing, or check that your browser allows connections to supabase.co (Brave Shields may be blocking it).' })
+      return false
+    }
     const cred = admins.find(a => a.username.toLowerCase() === username.toLowerCase())
     if (!cred) {
       set({ loggingIn: false, loginError: 'Invalid username or password.' })
