@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import HeaderAdminWidget from './HeaderAdminWidget'
+import PwaInstallBanner from './PwaInstallBanner'
 import { useSyncStatus } from '../hooks/useSupabaseSync'
 import { isSupabaseEnabled } from '../lib/supabase'
 import { useIsAdmin, useIsPlayer, useCanAccessBoard } from '../store/useAuthStore'
@@ -254,6 +255,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <PwaInstallBanner />
       {/* Sticky chrome: header + nav + optional history banner */}
       <div id="site-header" className="sticky top-0 z-50 no-print">
         {/* Top header */}
