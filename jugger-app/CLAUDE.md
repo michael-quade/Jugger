@@ -140,6 +140,8 @@ npm run build    # production build → dist/
 | react-to-print | 2.15 | Print scorecard layout |
 | recharts | 3.8 | Handicap history charts |
 | lucide-react | 0.395 | Icons |
+| vite-plugin-pwa | latest | PWA manifest + Workbox service worker generation |
+| jimp | 0.22 | devDep — icon generation script only (`scripts/gen-pwa-icons.cjs`) |
 
 ### Deployment
 
@@ -169,7 +171,11 @@ jugger-app/src/
     useTournamentStore.ts       # Zustand store v25 (all state + actions)
     useAuthStore.ts             # Auth state (admin/scorer/treasurer login)
   lib/supabase.ts               # Supabase client init (null if env vars absent)
-  hooks/useSupabaseSync.ts      # Real-time sync hook + useSyncStatus
+  lib/email.ts                  # Email send via Supabase Edge Function; buildComposeEmail
+                                #   formats HTML body; sendEmail posts to edge fn endpoint
+  hooks/useSupabaseSync.ts      # Real-time sync hook + useSyncStatus; sequential
+                                #   initial fetch (app_state first, then stale-year
+                                #   detection clears matches/teamScores before fetching)
   utils/
     auth.ts                     # SHA-256 password hash/verify (Web Crypto API)
     handicap.ts                 # Course HDCP formulas, stroke dots, Stableford;
@@ -186,13 +192,25 @@ jugger-app/src/
     analytics.ts                # Historical data computation: scoring profiles, H2H,
                                 #   partner records, team results, format/course stats,
                                 #   records, player format breakdowns; YearBundle type
+    sideBets.ts                 # Side bet settlement computation
   components/
     Layout.tsx                  # Sticky chrome (header + nav + history banner in one
-                                #   sticky wrapper), Outlet
+                                #   sticky wrapper), Outlet; renders PwaInstallBanner
+                                #   above chrome and "Event Planning in Progress" overlay
+                                #   when no pairings exist and user is not admin
     ScorecardCard.tsx           # Per-format scorecard display + score entry;
                                 #   reads gameConfig from store for dynamic labels
     AdminPanel.tsx              # Admin/scorer account management modal
     HeaderAdminWidget.tsx       # Header login/logout widget
+    PwaInstallBanner.tsx        # Mobile-only PWA install prompt; iOS shows Share→Add
+                                #   to Home Screen instructions; Android shows native
+                                #   Install button via beforeinstallprompt; dismissable
+                                #   30 days via localStorage
+    ComposeEmailModal.tsx       # Group email compose modal: recipient checkboxes per
+                                #   player (reads playerEmail), CC field, subject, body,
+                                #   file attachments; Ctrl+V anywhere in modal captures
+                                #   clipboard images as attachments; sends via lib/email.ts
+    TournamentSummaryModal.tsx  # Tournament summary email modal (end-of-year recap)
   pages/
     Dashboard.tsx               # Overview: champion hero, standings, schedule, rosters,
                                 #   award thumbnails, defending champs, finalize
@@ -235,6 +253,13 @@ jugger-app/src/
 - `2026 lodging.pdf` — Booking confirmation PDF
 - `CHECK IN AND RESORT INFORMATION.pdf` — Resort check-in instructions
 - `RULES AND REGULATIONS.pdf` — Resort rules document
+- `icon-180.png` — PWA apple-touch-icon (180×180, logo on `#1a3a2f` background)
+- `icon-192.png` — PWA manifest icon
+- `icon-512.png` — PWA manifest icon + maskable icon
+- Regenerate icons: `node scripts/gen-pwa-icons.cjs` (uses jimp, reads existing logo)
+
+### Scripts
+- `scripts/gen-pwa-icons.cjs` — one-time icon generator; composites logo onto dark-green square at 180/192/512px
 
 ---
 
@@ -249,6 +274,7 @@ Player {
   hdcpLocked: boolean
   hdcp2009gross?: number          // Round 2 quota base
   courseHdcpOverrides?: Record<string, number>   // courseId → override
+  playerEmail?: string            // used by ComposeEmailModal group email
   isSubstitute?: boolean          // single-year sub; reverts after finalizeYear
   originalName?: string           // original player name when subbed out
   originalHandicapIndex?: number  // original HDCP when subbed out
@@ -411,9 +437,9 @@ AdminCredential {
 
 ## State Management
 
-### Zustand Store (`useTournamentStore`) — version 25
+### Zustand Store (`useTournamentStore`) — version 31
 
-Persists to `localStorage` key `jugger-tournament-2026`. All 25 versions have migration functions.
+Persists to `localStorage` key `jugger-tournament-2026`. All 31 versions have migration functions. v31 migration unconditionally clears `matches` and `teamScores` to prevent stale prior-year data appearing in a new live year on devices that hadn't loaded Supabase yet.
 
 **Key actions:**
 - `setYear / lockHandicaps / setPairingsLocked / lockRound(round) / unlockRound(round)`
@@ -579,6 +605,16 @@ All accounts use SHA-256 password hashing via Web Crypto API. `useCanManagePayme
 - **Serif:** Playfair Display (headers, team names)
 - **Sans:** Source Sans 3 (body text)
 
+### Event Planning Banner
+When `matches.length === 0` and the viewer is not an admin (and not viewing history), a semi-transparent overlay covers the main content area of every page except Analytics. Text: "Event Planning in Progress" with a sub-line about the tournament being organized. Disappears automatically once admin generates pairings. Implemented as an `absolute inset-0` overlay inside `<main>` in `Layout.tsx`.
+
+### PWA Install Banner (`PwaInstallBanner.tsx`)
+Renders ABOVE the sticky chrome (not inside it) so it doesn't affect the sticky positioning or height measurements. Mobile-only (`lg:hidden`).
+- **iOS Safari**: shows "Tap Share → Add to Home Screen" instructions (no native prompt API on iOS)
+- **Android/Chrome**: captures `beforeinstallprompt` event, shows gold "Install" button that triggers the native browser install sheet
+- Dismissed for 30 days via `localStorage` key `jugger-pwa-dismiss`
+- Hidden when already installed (`display-mode: standalone` or `navigator.standalone`)
+
 ### Header Layout
 - Entire chrome (header + sub-nav + history banner) wrapped in one `sticky top-0 z-50` div — all three scroll as a unit and stay pinned
 - Header is a 3-zone flex row: **left** (logo + title, shrink-0) · **center** (weather strip, flex-1, `hidden md:flex`) · **right** (sync dot + admin widget, grouped together, shrink-0)
@@ -631,6 +667,7 @@ All accounts use SHA-256 password hashing via Web Crypto API. `useCanManagePayme
 ### Pairings (`/pairings`) — Admin only
 - Generate/Re-generate Pairings button (enforces partner rotation; minimizes opponent repeats)
 - Lock Pairings toggle (prevents edits)
+- **Clear All Pairings** button — visible when matches exist and pairings are unlocked; clears all matches + all team scores after confirmation; useful for resetting a new year without manually zeroing scores
 - Per-round match cards: team colors, player names, edit button (inline editor)
 - Regular matches and blind matches in separate columns
 - Scorecard link on every match card
@@ -762,6 +799,10 @@ Supabase-backed discussion thread list for players and admins.
 - **Par 3 CTP** — historical CTP winners and donation tracking
 
 Tab bar is sticky below the measured site header (uses `ResizeObserver` on `#site-header`).
+
+**H2H and Partnership record format coverage:**
+- `computeH2H` (All-Play Record Matrix): includes `team_match_play`, `points_round`, `individual_match` — both regular AND blind matches. Points round uses twosome best-ball result (same as team_match_play). All 4 cross-team pairs credited for twosome formats; two 1v1s for individual_match.
+- `computePartnerRecords` (Partnership Records): same 3 formats, includes blind matches. Excludes `texas_scramble` (same-team twosomes, not opponents) and `captains_choice` (team-of-4). Title no longer has "(best-ball twosome results)" subtitle since it spans multiple formats.
 
 ### Archive (`/archive`) — Admin only
 - Supabase Storage bucket `jugger-archive`
@@ -994,10 +1035,15 @@ computeScoringProfiles(bundles, courses, courseHistory)
   → per-player scoring distribution (eagle/birdie/par/bogey/double/worse counts + pcts)
 
 computeH2H(bundles, courses, courseHistory)
-  → W/L/T matrix for every player pair; twosome partner records
+  → W/L/T matrix for every player pair
+  → formats: team_match_play + points_round (twosome best-ball) + individual_match (1v1)
+  → includes blind matches; excludes texas_scramble and captains_choice
 
 computePartnerRecords(bundles, courses, courseHistory)
   → win/loss/tie stats for every partnership combination
+  → formats: team_match_play + points_round + individual_match
+  → includes blind matches (different opponents, valid additional data points)
+  → excludes texas_scramble (same-team twosomes) and captains_choice (team-of-4)
 
 computeTeamResults(bundles)
   → year-by-year points per round per team; podium finish counts
@@ -1050,11 +1096,51 @@ Match ID formats:
 
 ```typescript
 base: '/'                      // custom domain (juggerknockerinvitational.com)
-plugins: [react(), juggerHistoryPlugin()]
+plugins: [react(), juggerHistoryPlugin(), VitePWA({...})]
 server: { port: 5173, open: true }
 ```
 
 `juggerHistoryPlugin` is a dev-only middleware that serves `/api/history-files` (JSON tree) and `/api/history-file/:year/:filename` (stream) from the local `/JuggerHistory/` directory. Not available in production (replaced by Supabase Storage).
+
+`VitePWA` generates `dist/sw.js` and `dist/workbox-*.js` on every production build. Config:
+- `registerType: 'autoUpdate'` — SW updates silently when new version deployed
+- Manifest: name/short_name, `display: standalone`, `theme_color: #1a3a2f`, 192 + 512 icons
+- Workbox `globPatterns`: all JS/CSS/HTML/images precached
+- `navigateFallback: 'index.html'` — covers HashRouter routes offline
+- Runtime: `CacheFirst` for Google Fonts; `NetworkOnly` for all `*.supabase.co` URLs (live data never cached)
+
+---
+
+## PWA (Progressive Web App)
+
+The site is a fully installable PWA on both iOS and Android.
+
+### How to install
+- **iOS Safari**: tap Share → Add to Home Screen; app opens full-screen with `#1a3a2f` status bar
+- **Android Chrome**: tap the "Install" button in the install banner, or use browser menu → Install App
+
+### Install Banner (`PwaInstallBanner.tsx`)
+Shown to mobile users who haven't installed and haven't dismissed. Renders above the sticky site chrome. Auto-hides when already in standalone mode. Dismissed state stored in `localStorage` for 30 days.
+
+### Service Worker
+- Built by `vite-plugin-pwa` / Workbox on every `npm run build`
+- Precaches all static assets; navigations fall back to `index.html`
+- Supabase is always network-only — real-time scores are never served from cache
+- Updates automatically in background; no user action needed
+
+### Icons
+- Generated from `Juggerknocker Invitational logo.png` using `scripts/gen-pwa-icons.cjs`
+- Run `node scripts/gen-pwa-icons.cjs` to regenerate after logo changes
+- `icon-180.png` → apple-touch-icon; `icon-192.png` + `icon-512.png` → manifest icons
+
+### Group Email (`ComposeEmailModal.tsx`)
+Admin-accessible modal (Dashboard). Reads `player.playerEmail` for recipient list. Features:
+- Recipient checkboxes per player with team color dot; Select All / None
+- Additional recipients field (comma/space separated)
+- Subject + body textarea (blank line = paragraph break)
+- File attachments via file picker OR **Ctrl+V / Cmd+V** anywhere in the modal (captures clipboard images)
+- Attachment zone flashes green "Image added!" for 2s on successful paste
+- Sends via Supabase Edge Function (`lib/email.ts → sendEmail`)
 
 ---
 
