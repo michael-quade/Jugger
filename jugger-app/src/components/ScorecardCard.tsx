@@ -71,6 +71,10 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
 
   const front = playHoles.slice(0, 9)
   const back  = playHoles.slice(9, 18)
+  // When starting on hole 10 the first 9 played are the "In" nine (10-18), so swap labels
+  const startingHole = match.startingHole ?? 1
+  const midLabel = startingHole === 10 ? 'In'  : 'Out'
+  const endLabel = startingHole === 10 ? 'Out' : 'In'
   const frontPar = front.reduce((s, h) => s + h.par, 0)
   const backPar  = back.reduce((s, h) => s + h.par, 0)
   const frontYds = front.reduce((s, h) => s + (h.yardages[config.tee] ?? 0), 0)
@@ -143,9 +147,9 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           <tr>
             <th className="player-name">Hole</th>
             {front.map(h => <th key={h.number}>{h.number}</th>)}
-            <th className="hole-out">Out</th>
+            <th className="hole-out">{midLabel}</th>
             {back.map(h => <th key={h.number}>{h.number}</th>)}
-            <th className="hole-in">In</th>
+            <th className="hole-in">{endLabel}</th>
             <th className="hole-total">Tot</th>
           </tr>
         </thead>
