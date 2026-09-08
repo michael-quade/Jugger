@@ -1071,7 +1071,7 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
     const gross = teamHoleScores[h.number]
     const net   = result.holeNetScores[i]
     const run   = result.running[i]
-    const diff  = gross != null ? (net ?? gross) - h.par : 0
+    const diff  = gross != null ? gross - h.par : 0
     return (
       <td key={h.number} className={getStrokeDots(teamHdcp, h.hdcpOrder) ? 'dot-cell' : 'relative'}>
         {interactive && onTeamHoleScoreChange ? (
@@ -1084,7 +1084,7 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
                 className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
               >▲</button>
               {gross != null ? (
-                <ScoreShape value={gross} net={net} par={h.par} className="text-[11px] font-bold leading-none" />
+                <ScoreShape value={gross} par={h.par} className="text-[11px] font-bold leading-none" />
               ) : (
                 <span className="text-[11px] font-bold leading-none text-gray-300">·</span>
               )}
@@ -1114,13 +1114,13 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
             </div>
             {/* Print */}
             <div className="hidden print:flex flex-col items-center leading-none">
-              {gross != null && <ScoreShape value={gross} net={net} par={h.par} className="font-bold leading-none" />}
+              {gross != null && <ScoreShape value={gross} par={h.par} className="font-bold leading-none" />}
               {net != null && <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>}
             </div>
           </>
         ) : gross != null ? (
           <div className="flex flex-col items-center leading-none">
-            <ScoreShape value={gross} net={net} par={h.par} className="leading-none" />
+            <ScoreShape value={gross} par={h.par} className="leading-none" />
             {net != null && (
               <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
             )}
@@ -1174,25 +1174,27 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
 
 // ─── Score Shape ─────────────────────────────────────────────────────────────
 // Wraps the GROSS score in a traditional golf scorecard geometric marker.
-// Shape type is determined by net vs par (falls back to gross vs par when no strokes).
+// Shape type is always based on GROSS vs par (never net) so the displayed number
+// and its shape are always consistent.
 // Eagle+: double circle  Birdie: single circle  Par: plain  Bogey: square  Double+: double square
 
-function ScoreShape({ value, net, par, className = '' }: { value: number; net?: number | null; par: number; className?: string }) {
-  const diff = (net ?? value) - par
+function ScoreShape({ value, par, className = '' }: { value: number; par: number; className?: string }) {
+  const diff = value - par
   const base: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }
-  if (diff <= -2) return <span style={{ ...base, border: '1px solid #059669', borderRadius: '50%', outline: '1px solid #059669', outlineOffset: '1.5px', padding: '0 1.5px' }} className={className}>{value}</span>
+  // Double shapes use box-shadow for the outer ring — more reliable in tight table cells than outline
+  if (diff <= -2) return <span style={{ ...base, border: '1px solid #059669', borderRadius: '50%', boxShadow: '0 0 0 1.5px #fff, 0 0 0 3px #059669', padding: '0 1.5px' }} className={className}>{value}</span>
   if (diff === -1) return <span style={{ ...base, border: '1px solid #059669', borderRadius: '50%', padding: '0 1.5px' }} className={className}>{value}</span>
   if (diff === 1)  return <span style={{ ...base, border: '1px solid #9ca3af', padding: '0 1px' }} className={className}>{value}</span>
-  if (diff >= 2)   return <span style={{ ...base, border: '1px solid #dc2626', outline: '1px solid #dc2626', outlineOffset: '1.5px', padding: '0 1px' }} className={className}>{value}</span>
+  if (diff >= 2)   return <span style={{ ...base, border: '1px solid #dc2626', boxShadow: '0 0 0 1.5px #fff, 0 0 0 3px #dc2626', padding: '0 1px' }} className={className}>{value}</span>
   return <span style={base} className={className}>{value}</span>
 }
 
 // Returns just the shape border style for wrapping non-span elements (e.g. desktop input)
 function holeShapeStyle(diff: number): React.CSSProperties {
-  if (diff <= -2) return { border: '1px solid #059669', borderRadius: '50%', outline: '1px solid #059669', outlineOffset: '1.5px' }
+  if (diff <= -2) return { border: '1px solid #059669', borderRadius: '50%', boxShadow: '0 0 0 1.5px #fff, 0 0 0 3px #059669' }
   if (diff === -1) return { border: '1px solid #059669', borderRadius: '50%' }
   if (diff === 1)  return { border: '1px solid #9ca3af' }
-  if (diff >= 2)   return { border: '1px solid #dc2626', outline: '1px solid #dc2626', outlineOffset: '1.5px' }
+  if (diff >= 2)   return { border: '1px solid #dc2626', boxShadow: '0 0 0 1.5px #fff, 0 0 0 3px #dc2626' }
   return {}
 }
 
@@ -1327,7 +1329,7 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
     const strokes = holeStrokes(h)
     const score   = playerScores[h.number]
     const net     = score != null && strokes > 0 ? score - strokes : null
-    const diff    = score != null ? (net ?? score) - h.par : 0
+    const diff    = score != null ? score - h.par : 0
     return (
       <td key={h.number} className={dots ? 'dot-cell' : 'relative'}>
         {interactive && onScoreChange ? (
@@ -1340,7 +1342,7 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
                 className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
               >▲</button>
               {score != null ? (
-                <ScoreShape value={score} net={net} par={h.par} className="text-[11px] font-bold leading-none" />
+                <ScoreShape value={score} par={h.par} className="text-[11px] font-bold leading-none" />
               ) : (
                 <span className="text-[11px] font-bold leading-none text-gray-300">·</span>
               )}
@@ -1373,13 +1375,13 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
             </div>
             {/* Print */}
             <div className="hidden print:flex flex-col items-center leading-none">
-              {score != null && <ScoreShape value={score} net={net} par={h.par} className="font-bold leading-none" />}
+              {score != null && <ScoreShape value={score} par={h.par} className="font-bold leading-none" />}
               {net != null && <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>}
             </div>
           </>
         ) : score != null ? (
           <div className="flex flex-col items-center leading-none">
-            <ScoreShape value={score} net={net} par={h.par} className="leading-none" />
+            <ScoreShape value={score} par={h.par} className="leading-none" />
             {net != null && (
               <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>
             )}
