@@ -142,12 +142,9 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
         <thead>
           <tr>
             <th className="player-name">Hole</th>
-            {playHoles.map((h, i) => (
-              <th key={h.number} className={i === 8 || i === 17 ? 'hole-out' : ''}>
-                {h.number}
-              </th>
-            ))}
+            {front.map(h => <th key={h.number}>{h.number}</th>)}
             <th className="hole-out">Out</th>
+            {back.map(h => <th key={h.number}>{h.number}</th>)}
             <th className="hole-in">In</th>
             <th className="hole-total">Tot</th>
           </tr>
@@ -156,8 +153,9 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           {/* Par row */}
           <tr className="row-par">
             <td className="player-name text-gray-500">Par</td>
-            {playHoles.map(h => <td key={h.number}>{h.par}</td>)}
+            {front.map(h => <td key={h.number}>{h.par}</td>)}
             <td className="hole-out">{frontPar}</td>
+            {back.map(h => <td key={h.number}>{h.par}</td>)}
             <td className="hole-in">{backPar}</td>
             <td className="hole-total">{frontPar + backPar}</td>
           </tr>
@@ -165,8 +163,9 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           {/* Yardage row */}
           <tr>
             <td className="player-name text-gray-400">{teeData.name} {teeData.rating}/{teeData.slope}</td>
-            {playHoles.map(h => <td key={h.number} className="text-gray-500">{h.yardages[config.tee] ?? '–'}</td>)}
+            {front.map(h => <td key={h.number} className="text-gray-500">{h.yardages[config.tee] ?? '–'}</td>)}
             <td className="hole-out text-gray-500">{frontYds || '–'}</td>
+            {back.map(h => <td key={h.number} className="text-gray-500">{h.yardages[config.tee] ?? '–'}</td>)}
             <td className="hole-in text-gray-500">{backYds || '–'}</td>
             <td className="hole-total text-gray-500">{frontYds + backYds || '–'}</td>
           </tr>
@@ -174,8 +173,10 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
           {/* HDCP order row */}
           <tr className="row-hdcp">
             <td className="player-name">HDCP</td>
-            {playHoles.map(h => <td key={h.number}>{h.hdcpOrder}</td>)}
-            <td /><td /><td />
+            {front.map(h => <td key={h.number}>{h.hdcpOrder}</td>)}
+            <td />
+            {back.map(h => <td key={h.number}>{h.hdcpOrder}</td>)}
+            <td /><td />
           </tr>
 
           {isCaptainsChoice ? (
@@ -476,10 +477,13 @@ function Individual2v2ResultRow({ result, match, course, teams }: {
       <td className="player-name text-[9px] font-semibold" style={{ color: t1Color }}>
         {t1Init} v {t2Init}
       </td>
-      {course.holes.map((h, i) => (
+      {course.holes.slice(0, 9).map((h, i) => (
         <td key={h.number}>{cellContent(i)}</td>
       ))}
       <td className="hole-out">{frontRunning !== undefined && standingChip(frontRunning)}</td>
+      {course.holes.slice(9).map((h, i) => (
+        <td key={h.number}>{cellContent(9 + i)}</td>
+      ))}
       <td className="hole-in" />
       <td className="hole-total">{totDisplay}</td>
     </tr>
@@ -556,12 +560,15 @@ function MatchPlayResultRow({ perspective, result, course, twosome, teams, rowLa
       <td className="player-name text-[9px] font-semibold" style={{ color }}>
         {rowLabel ?? `${team?.name ?? ''} +/−`}
       </td>
-      {course.holes.map((h, i) => (
+      {course.holes.slice(0, 9).map((h, i) => (
         <td key={h.number}>{cellContent(i)}</td>
       ))}
       <td className="hole-out">
         {frontRunning !== undefined && runningDisplay(frontRunning)}
       </td>
+      {course.holes.slice(9).map((h, i) => (
+        <td key={h.number}>{cellContent(9 + i)}</td>
+      ))}
       <td className="hole-in" />
       <td className="hole-total">{totDisplay}</td>
     </tr>
@@ -676,12 +683,15 @@ function IndividualMatch1v1ResultRow({ result, p1Id, p2Id, course, teams }: Indi
       <td className="player-name text-[9px] font-semibold" style={{ color: p1Color }}>
         {p1Last} v {p2Last}
       </td>
-      {course.holes.map((h, i) => (
+      {course.holes.slice(0, 9).map((h, i) => (
         <td key={h.number}>{cellContent(i)}</td>
       ))}
       <td className="hole-out">
         {frontRunning !== undefined && standingChip(frontRunning)}
       </td>
+      {course.holes.slice(9).map((h, i) => (
+        <td key={h.number}>{cellContent(9 + i)}</td>
+      ))}
       <td className="hole-in" />
       <td className="hole-total">{totDisplay}</td>
     </tr>
@@ -745,46 +755,43 @@ function VegasResultRow({ perspective, result, course, twosome, teams }: VegasRe
   const frontRunning = result.holeResults[8]?.finalPts !== null ? myRunning(8) : undefined
   const myTotal = perspective === 'twosome1' ? result.total1 : result.total2
 
+  function vegasHoleCell(h: Course['holes'][number], i: number) {
+    const hr = result.holeResults[i]
+    if (!hr || hr.t1Vegas === null) return <td key={h.number} />
+    const myVegas = perspective === 'twosome1' ? hr.t1Vegas : hr.t2Vegas
+    const signedPts = perspective === 'twosome1' ? (hr.finalPts ?? 0) : -(hr.finalPts ?? 0)
+    const iWin = signedPts > 0
+    const iLose = signedPts < 0
+    const tied = signedPts === 0
+    const cum = myRunning(i)
+    return (
+      <td key={h.number}>
+        <div className="flex flex-col items-center gap-[1px]">
+          <span className={`text-[8px] font-bold leading-none ${iWin ? '' : iLose ? 'text-gray-400' : 'text-gray-500'}`}
+            style={iWin ? { color } : undefined}>
+            {myVegas}
+          </span>
+          {!tied && (
+            <span className={`text-[7px] font-semibold leading-none ${iWin ? 'text-masters-green' : 'text-red-400'}`}>
+              {iWin ? `+${Math.abs(signedPts)}` : `-${Math.abs(signedPts)}`}
+              {hr.multiplier > 1 && <span className="text-masters-gold">{hr.multiplier}×</span>}
+            </span>
+          )}
+          <span className={`text-[6px] leading-none ${cum > 0 ? 'text-masters-green' : cum < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+            {cum > 0 ? `+${cum}` : cum}
+          </span>
+        </div>
+      </td>
+    )
+  }
+
   return (
     <tr className="row-result">
       <td className="player-name">
         <div className="text-[9px] font-semibold" style={{ color }}>{team?.name ?? ''}</div>
         <div className="text-[8px] text-gray-400">Vegas pts</div>
       </td>
-      {course.holes.map((h, i) => {
-        const hr = result.holeResults[i]
-        if (!hr || hr.t1Vegas === null) return <td key={h.number} />
-
-        const myVegas = perspective === 'twosome1' ? hr.t1Vegas : hr.t2Vegas
-        const signedPts = perspective === 'twosome1' ? (hr.finalPts ?? 0) : -(hr.finalPts ?? 0)
-        const iWin = signedPts > 0
-        const iLose = signedPts < 0
-        const tied = signedPts === 0
-        const cum = myRunning(i)
-
-        return (
-          <td key={h.number}>
-            <div className="flex flex-col items-center gap-[1px]">
-              {/* Vegas number */}
-              <span className={`text-[8px] font-bold leading-none ${iWin ? '' : iLose ? 'text-gray-400' : 'text-gray-500'}`}
-                style={iWin ? { color } : undefined}>
-                {myVegas}
-              </span>
-              {/* Hole pts with multiplier badge */}
-              {!tied && (
-                <span className={`text-[7px] font-semibold leading-none ${iWin ? 'text-masters-green' : 'text-red-400'}`}>
-                  {iWin ? `+${Math.abs(signedPts)}` : `-${Math.abs(signedPts)}`}
-                  {hr.multiplier > 1 && <span className="text-masters-gold">{hr.multiplier}×</span>}
-                </span>
-              )}
-              {/* Running cumulative */}
-              <span className={`text-[6px] leading-none ${cum > 0 ? 'text-masters-green' : cum < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                {cum > 0 ? `+${cum}` : cum}
-              </span>
-            </div>
-          </td>
-        )
-      })}
+      {course.holes.slice(0, 9).map((h, i) => vegasHoleCell(h, i))}
       <td className="hole-out">
         {frontRunning !== undefined && (
           <span className={`text-[8px] font-bold leading-none ${frontRunning > 0 ? 'text-masters-green' : frontRunning < 0 ? 'text-red-500' : 'text-gray-400'}`}>
@@ -792,6 +799,7 @@ function VegasResultRow({ perspective, result, course, twosome, teams }: VegasRe
           </span>
         )}
       </td>
+      {course.holes.slice(9).map((h, i) => vegasHoleCell(h, 9 + i))}
       <td className="hole-in" />
       <td className="hole-total">
         {myTotal > 0 && (
@@ -862,6 +870,24 @@ function PointsRoundRow({ perspective, result, course, twosome, teams, hasMagicB
   const vsQuota  = total - quota
   const metQuota = total >= quota
 
+  function prHoleCell(h: Course['holes'][number], i: number) {
+    const pts = holePoints[i]
+    if (pts === null) return <td key={h.number} />
+    const run = running[i]
+    return (
+      <td key={h.number}>
+        <div className="flex flex-col items-center gap-[1px]">
+          <span className={`text-[8px] font-bold leading-none ${pts === 0 ? 'text-gray-300' : 'text-masters-dark'}`}>
+            {fmtPts(pts)}
+          </span>
+          <span className={`text-[7px] font-semibold leading-none ${run >= quota ? 'text-masters-green' : 'text-gray-500'}`}>
+            {run}
+          </span>
+        </div>
+      </td>
+    )
+  }
+
   return (
     <tr className="row-result">
       <td className="player-name">
@@ -871,28 +897,13 @@ function PointsRoundRow({ perspective, result, course, twosome, teams, hasMagicB
         </div>
         <div className="text-[10px] font-semibold text-gray-500">Quota: {quota}</div>
       </td>
-      {course.holes.map((h, i) => {
-        const pts = holePoints[i]
-        if (pts === null) return <td key={h.number} />
-        const run = running[i]
-        return (
-          <td key={h.number}>
-            <div className="flex flex-col items-center gap-[1px]">
-              <span className={`text-[8px] font-bold leading-none ${pts === 0 ? 'text-gray-300' : 'text-masters-dark'}`}>
-                {fmtPts(pts)}
-              </span>
-              <span className={`text-[7px] font-semibold leading-none ${run >= quota ? 'text-masters-green' : 'text-gray-500'}`}>
-                {run}
-              </span>
-            </div>
-          </td>
-        )
-      })}
+      {course.holes.slice(0, 9).map((h, i) => prHoleCell(h, i))}
       <td className="hole-out">
         {hasAnyFront && (
           <span className="text-[8px] font-bold text-masters-dark">{fmtPts(frontPts)}</span>
         )}
       </td>
+      {course.holes.slice(9).map((h, i) => prHoleCell(h, 9 + i))}
       <td className="hole-in">
         {hasAnyBack && (
           <span className="text-[8px] font-bold text-masters-dark">{fmtPts(backPts)}</span>
@@ -976,8 +987,28 @@ function CaptainsChoicePlayerRow({ twosome, index, teams, course, match, interac
   const minMet = usedCount >= 3
   const countColor = minMet ? 'text-masters-green font-bold' : allHolesSelected ? 'text-red-500 font-bold' : 'text-gray-400'
 
-  const frontCount = course.holes.slice(0, 9).filter(h => teeShotsUsed[h.number] === pid).length
-  const backCount  = course.holes.slice(9).filter(h => teeShotsUsed[h.number] === pid).length
+  const frontHoles = course.holes.slice(0, 9)
+  const backHoles  = course.holes.slice(9)
+  const frontCount = frontHoles.filter(h => teeShotsUsed[h.number] === pid).length
+  const backCount  = backHoles.filter(h => teeShotsUsed[h.number] === pid).length
+
+  function teeCell(h: Course['holes'][number]) {
+    const selected = teeShotsUsed[h.number] === pid
+    return (
+      <td
+        key={h.number}
+        onClick={() => {
+          if (!interactive || !onTeeShotChange) return
+          onTeeShotChange(h.number, selected ? null : pid)
+        }}
+        className={`text-center ${interactive ? 'cursor-pointer hover:bg-masters-light' : ''}`}
+      >
+        {selected && (
+          <span className="text-[9px] font-bold" style={{ color: team?.color ?? '#006747' }}>●</span>
+        )}
+      </td>
+    )
+  }
 
   return (
     <tr className="row-player">
@@ -988,26 +1019,11 @@ function CaptainsChoicePlayerRow({ twosome, index, teams, course, match, interac
         <span className={`ml-1 text-[9px] ${countColor}`}>{usedCount}/3</span>
         {minMet && <span className="ml-0.5 text-masters-green text-[9px]">✓</span>}
       </td>
-      {course.holes.map(h => {
-        const selected = teeShotsUsed[h.number] === pid
-        return (
-          <td
-            key={h.number}
-            onClick={() => {
-              if (!interactive || !onTeeShotChange) return
-              onTeeShotChange(h.number, selected ? null : pid)
-            }}
-            className={`text-center ${interactive ? 'cursor-pointer hover:bg-masters-light' : ''}`}
-          >
-            {selected && (
-              <span className="text-[9px] font-bold" style={{ color: team?.color ?? '#006747' }}>●</span>
-            )}
-          </td>
-        )
-      })}
+      {frontHoles.map(h => teeCell(h))}
       <td className="hole-out">
         {frontCount > 0 && <span className={`text-[8px] font-bold ${frontCount >= 3 ? 'text-masters-green' : 'text-gray-500'}`}>{frontCount}</span>}
       </td>
+      {backHoles.map(h => teeCell(h))}
       <td className="hole-in">
         {backCount > 0 && <span className={`text-[8px] font-bold ${backCount >= 3 ? 'text-masters-green' : 'text-gray-500'}`}>{backCount}</span>}
       </td>
@@ -1033,17 +1049,76 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
   const color = team?.color ?? '#006747'
   const teamHoleScores = match.teamHoleScores ?? {}
 
-  const frontGross = course.holes.slice(0, 9).reduce((s, h) => s + (teamHoleScores[h.number] ?? 0), 0)
-  const backGross  = course.holes.slice(9).reduce((s, h) => s + (teamHoleScores[h.number] ?? 0), 0)
+  const frontHoles = course.holes.slice(0, 9)
+  const backHoles  = course.holes.slice(9)
+  const frontGross = frontHoles.reduce((s, h) => s + (teamHoleScores[h.number] ?? 0), 0)
+  const backGross  = backHoles.reduce((s, h) => s + (teamHoleScores[h.number] ?? 0), 0)
   const frontNet   = result.holeNetScores.slice(0, 9).reduce<number>((s, v) => s + (v ?? 0), 0)
   const backNet    = result.holeNetScores.slice(9).reduce<number>((s, v) => s + (v ?? 0), 0)
-  const hasAnyFront = course.holes.slice(0, 9).some(h => teamHoleScores[h.number] != null)
-  const hasAnyBack  = course.holes.slice(9).some(h => teamHoleScores[h.number] != null)
+  const hasAnyFront = frontHoles.some(h => teamHoleScores[h.number] != null)
+  const hasAnyBack  = backHoles.some(h => teamHoleScores[h.number] != null)
 
   // Check all-players min tee shots met
   const teeShotsUsed = match.teeShotsUsed ?? {}
   const allPids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
   const minTeesMet = allPids.every(pid => Object.values(teeShotsUsed).filter(p => p === pid).length >= 3)
+
+  function ccHoleCell(h: Course['holes'][number], i: number) {
+    const gross = teamHoleScores[h.number]
+    const net   = result.holeNetScores[i]
+    const run   = result.running[i]
+    return (
+      <td key={h.number} className={getStrokeDots(teamHdcp, h.hdcpOrder) ? 'dot-cell' : 'relative'}>
+        {interactive && onTeamHoleScoreChange ? (
+          <>
+            {/* Mobile: ▲/value/▼ stepper */}
+            <div className="flex flex-col items-center lg:hidden print:hidden select-none">
+              <button
+                type="button"
+                onClick={() => onTeamHoleScoreChange(h.number, gross == null ? h.par : Math.min(12, gross + 1))}
+                className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+              >▲</button>
+              <span className={`text-[11px] font-bold leading-none ${gross == null ? 'text-gray-300' : ''}`}>
+                {gross ?? '·'}
+              </span>
+              <button
+                type="button"
+                onClick={() => onTeamHoleScoreChange(h.number, gross == null ? h.par : Math.max(1, gross - 1))}
+                className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+              >▼</button>
+              {net != null && <NetShape net={net} par={h.par} className="text-[6px] leading-none" />}
+            </div>
+            {/* Desktop: number input */}
+            <div className="hidden lg:flex flex-col items-center leading-none print:hidden">
+              <input
+                type="number" inputMode="numeric" min={1} max={12}
+                value={gross ?? ''}
+                onChange={e => {
+                  const v = e.target.value === '' ? null : parseInt(e.target.value)
+                  onTeamHoleScoreChange(h.number, v)
+                }}
+                className="w-full border-none text-center text-xs bg-transparent"
+              />
+              {net != null && <NetShape net={net} par={h.par} className="text-[7px] leading-none" />}
+            </div>
+            {/* Print */}
+            <div className="hidden print:flex flex-col items-center leading-none">
+              {gross != null && <span>{gross}</span>}
+              {net != null && <NetShape net={net} par={h.par} className="text-[7px] leading-none" />}
+            </div>
+          </>
+        ) : gross != null ? (
+          <div className="flex flex-col items-center leading-none">
+            <span>{gross}</span>
+            {net != null && <NetShape net={net} par={h.par} className="text-[7px] leading-none" />}
+          </div>
+        ) : null}
+        {getStrokeDots(teamHdcp, h.hdcpOrder) && (
+          <span className="dot-indicator">{getStrokeDots(teamHdcp, h.hdcpOrder)}</span>
+        )}
+      </td>
+    )
+  }
 
   return (
     <tr className="row-result">
@@ -1054,66 +1129,7 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
           <div className="text-[8px] text-masters-green font-semibold">✓ Min tees met</div>
         )}
       </td>
-      {course.holes.map((h, i) => {
-        const gross = teamHoleScores[h.number]
-        const net   = result.holeNetScores[i]
-        const run   = result.running[i]
-        return (
-          <td key={h.number} className={getStrokeDots(teamHdcp, h.hdcpOrder) ? 'dot-cell' : 'relative'}>
-            {interactive && onTeamHoleScoreChange ? (
-              <>
-                {/* Mobile: ▲/value/▼ stepper */}
-                <div className="flex flex-col items-center lg:hidden print:hidden select-none">
-                  <button
-                    type="button"
-                    onClick={() => onTeamHoleScoreChange(h.number, gross == null ? h.par : Math.min(12, gross + 1))}
-                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
-                  >▲</button>
-                  <span className={`text-[11px] font-bold leading-none ${gross == null ? 'text-gray-300' : ''}`}>
-                    {gross ?? '·'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onTeamHoleScoreChange(h.number, gross == null ? h.par : Math.max(1, gross - 1))}
-                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
-                  >▼</button>
-                  {net != null && <span className="text-[6px] font-semibold leading-none text-gray-400">{run}</span>}
-                </div>
-                {/* Desktop: number input */}
-                <div className="hidden lg:flex flex-col items-center leading-none print:hidden">
-                  <input
-                    type="number" inputMode="numeric" min={1} max={12}
-                    value={gross ?? ''}
-                    onChange={e => {
-                      const v = e.target.value === '' ? null : parseInt(e.target.value)
-                      onTeamHoleScoreChange(h.number, v)
-                    }}
-                    className="w-full border-none text-center text-xs bg-transparent"
-                  />
-                  {net != null && (
-                    <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
-                  )}
-                </div>
-                {/* Print */}
-                <div className="hidden print:flex flex-col items-center leading-none">
-                  {gross != null && <span>{gross}</span>}
-                  {net != null && <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>}
-                </div>
-              </>
-            ) : gross != null ? (
-              <div className="flex flex-col items-center leading-none">
-                <span>{gross}</span>
-                {net != null && (
-                  <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
-                )}
-              </div>
-            ) : null}
-            {getStrokeDots(teamHdcp, h.hdcpOrder) && (
-              <span className="dot-indicator">{getStrokeDots(teamHdcp, h.hdcpOrder)}</span>
-            )}
-          </td>
-        )
-      })}
+      {frontHoles.map((h, i) => ccHoleCell(h, i))}
       <td className="hole-out">
         {hasAnyFront && (
           <div className="flex flex-col items-center leading-none">
@@ -1122,6 +1138,7 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
           </div>
         )}
       </td>
+      {backHoles.map((h, i) => ccHoleCell(h, 9 + i))}
       <td className="hole-in">
         {hasAnyBack && (
           <div className="flex flex-col items-center leading-none">
@@ -1142,6 +1159,28 @@ function CaptainsChoiceTeamRow({ result, course, match, teams, teamHdcp, interac
   )
 }
 
+// ─── Net Score Shape ─────────────────────────────────────────────────────────
+// Traditional golf scorecard geometric markers on net hole scores.
+// Eagle+: double circle  Birdie: single circle  Par: plain  Bogey: square  Double+: double square
+
+function NetShape({ net, par, className = '' }: { net: number; par: number; className?: string }) {
+  const diff = net - par
+  const base: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }
+  if (diff <= -2) {
+    return <span style={{ ...base, border: '1px solid #059669', borderRadius: '50%', outline: '1px solid #059669', outlineOffset: '1.5px', color: '#059669', fontWeight: 700, padding: '0 1.5px' }} className={className}>{net}</span>
+  }
+  if (diff === -1) {
+    return <span style={{ ...base, border: '1px solid #059669', borderRadius: '50%', color: '#059669', fontWeight: 700, padding: '0 1.5px' }} className={className}>{net}</span>
+  }
+  if (diff === 1) {
+    return <span style={{ ...base, border: '1px solid #9ca3af', color: '#6b7280', padding: '0 1px' }} className={className}>{net}</span>
+  }
+  if (diff >= 2) {
+    return <span style={{ ...base, border: '1px solid #dc2626', outline: '1px solid #dc2626', outlineOffset: '1.5px', color: '#dc2626', fontWeight: 700, padding: '0 1px' }} className={className}>{net}</span>
+  }
+  return <span style={{ ...base, color: '#059669', fontWeight: 700 }} className={className}>{net}</span>
+}
+
 // ─── Scramble Rows ───────────────────────────────────────────────────────────
 
 const BALL_COUNT_COLORS: Record<number, string> = {
@@ -1152,18 +1191,25 @@ const BALL_COUNT_COLORS: Record<number, string> = {
 }
 
 function ScrambleBallCountRow({ holes }: { holes: Course['holes'] }) {
-  const frontTotal = holes.slice(0, 9).reduce((s, h) => s + (h.number <= 6 ? 1 : h.number <= 12 ? 2 : 3), 0)
-  const backTotal  = holes.slice(9).reduce((s, h) => s + (h.number <= 12 ? 2 : h.number <= 15 ? 3 : 4), 0)
+  const front = holes.slice(0, 9)
+  const back  = holes.slice(9)
+  const frontTotal = front.reduce((s, h) => s + (h.number <= 6 ? 1 : h.number <= 12 ? 2 : 3), 0)
+  const backTotal  = back.reduce((s, h) => s + (h.number <= 12 ? 2 : h.number <= 15 ? 3 : 4), 0)
+  function ballCount(h: Course['holes'][number]) {
+    return h.number <= 6 ? 1 : h.number <= 12 ? 2 : h.number <= 15 ? 3 : 4
+  }
   return (
     <tr>
       <td className="player-name text-[9px] text-gray-400 italic">Best Balls</td>
-      {holes.map(h => {
-        const n = h.number <= 6 ? 1 : h.number <= 12 ? 2 : h.number <= 15 ? 3 : 4
-        return (
-          <td key={h.number} className={`text-[8px] font-bold text-center ${BALL_COUNT_COLORS[n]}`}>{n}</td>
-        )
+      {front.map(h => {
+        const n = ballCount(h)
+        return <td key={h.number} className={`text-[8px] font-bold text-center ${BALL_COUNT_COLORS[n]}`}>{n}</td>
       })}
       <td className="hole-out text-[8px] text-gray-400">{frontTotal}</td>
+      {back.map(h => {
+        const n = ballCount(h)
+        return <td key={h.number} className={`text-[8px] font-bold text-center ${BALL_COUNT_COLORS[n]}`}>{n}</td>
+      })}
       <td className="hole-in text-[8px] text-gray-400">{backTotal}</td>
       <td className="hole-total text-[8px] text-gray-400">{frontTotal + backTotal}</td>
     </tr>
@@ -1173,11 +1219,27 @@ function ScrambleBallCountRow({ holes }: { holes: Course['holes'] }) {
 function ScrambleTeamRow({ result, course, match, teams }: { result: ScrambleResult; course: Course; match: Match; teams: Team[] }) {
   const team = teams.find(t => t.id === match.twosome1.teamId)
   const color = team?.color ?? '#006747'
+  const front = course.holes.slice(0, 9)
+  const back  = course.holes.slice(9)
 
   const frontScore = result.holeScores.slice(0, 9).reduce<number>((s, v) => s + (v ?? 0), 0)
   const backScore  = result.holeScores.slice(9).reduce<number>((s, v) => s + (v ?? 0), 0)
   const hasAnyFront = result.holeScores.slice(0, 9).some(v => v !== null)
   const hasAnyBack  = result.holeScores.slice(9).some(v => v !== null)
+
+  function scrambleCell(h: Course['holes'][number], i: number) {
+    const score = result.holeScores[i]
+    if (score === null) return <td key={h.number} />
+    const run = result.running[i]
+    return (
+      <td key={h.number}>
+        <div className="flex flex-col items-center gap-[1px]">
+          <NetShape net={score} par={h.par} className="text-[8px] leading-none" />
+          <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
+        </div>
+      </td>
+    )
+  }
 
   return (
     <tr className="row-result">
@@ -1187,22 +1249,11 @@ function ScrambleTeamRow({ result, course, match, teams }: { result: ScrambleRes
           <div className="text-[9px] font-bold" style={{ color }}>{result.total}</div>
         )}
       </td>
-      {course.holes.map((h, i) => {
-        const score = result.holeScores[i]
-        if (score === null) return <td key={h.number} />
-        const run = result.running[i]
-        return (
-          <td key={h.number}>
-            <div className="flex flex-col items-center gap-[1px]">
-              <span className="text-[8px] font-bold leading-none text-masters-dark">{score}</span>
-              <span className="text-[7px] font-semibold leading-none text-gray-500">{run}</span>
-            </div>
-          </td>
-        )
-      })}
+      {front.map((h, i) => scrambleCell(h, i))}
       <td className="hole-out">
         {hasAnyFront && <span className="text-[8px] font-bold text-masters-dark">{frontScore}</span>}
       </td>
+      {back.map((h, i) => scrambleCell(h, 9 + i))}
       <td className="hole-in">
         {hasAnyBack && <span className="text-[8px] font-bold text-masters-dark">{backScore}</span>}
       </td>
@@ -1253,6 +1304,67 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
   const backStrokes  = backHoles.reduce((s, h) => s + holeStrokes(h), 0)
   const frontNet     = frontGross ? frontGross - frontStrokes : 0
   const backNet      = backGross  ? backGross  - backStrokes  : 0
+  const frontPar     = frontHoles.reduce((s, h) => s + h.par, 0)
+  const backPar      = backHoles.reduce((s, h) => s + h.par, 0)
+
+  function playerHoleCell(h: Course['holes'][number]) {
+    const dots    = noPerHoleStrokes ? '' : getStrokeDots(hdcp, h.hdcpOrder)
+    const strokes = holeStrokes(h)
+    const score   = playerScores[h.number]
+    const net     = score != null && strokes > 0 ? score - strokes : null
+    return (
+      <td key={h.number} className={dots ? 'dot-cell' : 'relative'}>
+        {interactive && onScoreChange ? (
+          <>
+            {/* Mobile: ▲/value/▼ stepper — no keyboard required */}
+            <div className="flex flex-col items-center lg:hidden print:hidden select-none">
+              <button
+                type="button"
+                onClick={() => onScoreChange(pid, h.number, score == null ? h.par : Math.min(12, score + 1))}
+                className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+              >▲</button>
+              <span className={`text-[11px] font-bold leading-none ${score == null ? 'text-gray-300' : ''}`}>
+                {score ?? '·'}
+              </span>
+              <button
+                type="button"
+                onClick={() => onScoreChange(pid, h.number, score == null ? h.par : Math.max(1, score - 1))}
+                className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
+              >▼</button>
+              {net != null && <NetShape net={net} par={h.par} className="text-[6px] leading-none" />}
+            </div>
+            {/* Desktop: number input */}
+            <div className="hidden lg:flex flex-col items-center leading-none print:hidden">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={12}
+                value={score ?? ''}
+                onChange={e => {
+                  const v = e.target.value === '' ? null : parseInt(e.target.value)
+                  onScoreChange(pid, h.number, v)
+                }}
+                className="w-full border-none text-center text-xs bg-transparent"
+              />
+              {net != null && <NetShape net={net} par={h.par} className="text-[8px] leading-none" />}
+            </div>
+            {/* Print */}
+            <div className="hidden print:flex flex-col items-center leading-none">
+              {score != null && <span>{score}</span>}
+              {net != null && <NetShape net={net} par={h.par} className="text-[8px] leading-none" />}
+            </div>
+          </>
+        ) : score != null ? (
+          <div className="flex flex-col items-center leading-none">
+            <span>{score}</span>
+            {net != null && <NetShape net={net} par={h.par} className="text-[8px] leading-none" />}
+          </div>
+        ) : null}
+        {dots && <span className="dot-indicator">{dots}</span>}
+      </td>
+    )
+  }
 
   return (
     <tr className="row-player">
@@ -1262,82 +1374,21 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
         </span>
         <span className="text-gray-500 ml-1">({hdcp})</span>
       </td>
-      {course.holes.map(h => {
-        const dots    = noPerHoleStrokes ? '' : getStrokeDots(hdcp, h.hdcpOrder)
-        const strokes = holeStrokes(h)
-        const score   = playerScores[h.number]
-        const net     = score != null && strokes > 0 ? score - strokes : null
-
-        return (
-          <td key={h.number} className={dots ? 'dot-cell' : 'relative'}>
-            {interactive && onScoreChange ? (
-              <>
-                {/* Mobile: ▲/value/▼ stepper — no keyboard required */}
-                <div className="flex flex-col items-center lg:hidden print:hidden select-none">
-                  <button
-                    type="button"
-                    onClick={() => onScoreChange(pid, h.number, score == null ? h.par : Math.min(12, score + 1))}
-                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
-                  >▲</button>
-                  <span className={`text-[11px] font-bold leading-none ${score == null ? 'text-gray-300' : ''}`}>
-                    {score ?? '·'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onScoreChange(pid, h.number, score == null ? h.par : Math.max(1, score - 1))}
-                    className="w-full text-[8px] text-gray-300 active:text-masters-green leading-none py-[2px]"
-                  >▼</button>
-                  {net != null && <span className="text-[6px] font-bold text-masters-green leading-none">{net}</span>}
-                </div>
-                {/* Desktop: number input */}
-                <div className="hidden lg:flex flex-col items-center leading-none print:hidden">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={12}
-                    value={score ?? ''}
-                    onChange={e => {
-                      const v = e.target.value === '' ? null : parseInt(e.target.value)
-                      onScoreChange(pid, h.number, v)
-                    }}
-                    className="w-full border-none text-center text-xs bg-transparent"
-                  />
-                  {net != null && (
-                    <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>
-                  )}
-                </div>
-                {/* Print */}
-                <div className="hidden print:flex flex-col items-center leading-none">
-                  {score != null && <span>{score}</span>}
-                  {net != null && <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>}
-                </div>
-              </>
-            ) : score != null ? (
-              <div className="flex flex-col items-center leading-none">
-                <span>{score}</span>
-                {net != null && (
-                  <span className="text-[8px] font-bold text-masters-green leading-none">{net}</span>
-                )}
-              </div>
-            ) : null}
-            {dots && <span className="dot-indicator">{dots}</span>}
-          </td>
-        )
-      })}
+      {frontHoles.map(h => playerHoleCell(h))}
       <td className="hole-out">
         {frontGross ? (
           <div className="flex flex-col items-center leading-none">
             <span>{frontGross}</span>
-            {frontStrokes > 0 && <span className="text-[8px] font-bold text-masters-green leading-none">{frontNet}</span>}
+            {frontStrokes > 0 && <NetShape net={frontNet} par={frontPar} className="text-[8px] leading-none" />}
           </div>
         ) : ''}
       </td>
+      {backHoles.map(h => playerHoleCell(h))}
       <td className="hole-in">
         {backGross ? (
           <div className="flex flex-col items-center leading-none">
             <span>{backGross}</span>
-            {backStrokes > 0 && <span className="text-[8px] font-bold text-masters-green leading-none">{backNet}</span>}
+            {backStrokes > 0 && <NetShape net={backNet} par={backPar} className="text-[8px] leading-none" />}
           </div>
         ) : ''}
       </td>
@@ -1346,7 +1397,7 @@ function PlayerRow({ twosome, index, playerHdcps, course, config, teams, match, 
           <div className="flex flex-col items-center leading-none">
             <span>{frontGross + backGross}</span>
             {(frontStrokes + backStrokes) > 0 && (
-              <span className="text-[8px] font-bold text-masters-green leading-none">{frontNet + backNet}</span>
+              <NetShape net={frontNet + backNet} par={frontPar + backPar} className="text-[8px] leading-none" />
             )}
           </div>
         ) : ''}
