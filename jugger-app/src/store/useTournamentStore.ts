@@ -925,6 +925,22 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     {
       name: 'jugger-tournament-2026',
       version: 31,
+      // Keep localStorage lean: exclude large blobs that live in Supabase.
+      // archivedYears and liveCache are fetched from Supabase on load.
+      // Base64 image/photo data is synced via APP_STATE_KEYS and restored
+      // on first Supabase fetch, so stripping it here prevents quota exhaustion.
+      partialize: (state) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { archivedYears: _ay, liveCache: _lc, ...rest } = state
+        return {
+          ...rest,
+          courses: rest.courses.map(({ imageData: _i, scorecardImageData: _s, ...c }) => c),
+          courseHistory: rest.courseHistory.map(({ imageData: _i, scorecardImageData: _s, ...c }) => c),
+          holeInOnes: rest.holeInOnes.map(({ photoData: _p, ...h }) => h),
+        // Zustand's persist type requires TournamentState but partialize may
+        // return a subset; archivedYears and liveCache live only in Supabase.
+        } as unknown as TournamentState & Actions
+      },
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<TournamentState>
         const base = { ...DEFAULT_STATE, ...state }
@@ -1059,45 +1075,6 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           if (b.gameConfig.vegasBlindMatchPts === undefined) b.gameConfig.vegasBlindMatchPts = 1
           if (b.gameConfig.vegasEnableBlinds === undefined) b.gameConfig.vegasEnableBlinds = true
         }
-        if (fromVersion < 23) {
-          const b = base as any
-          if (!b.lodgingConfig) b.lodgingConfig = DEFAULT_LODGING_CONFIG
-        }
-        if (fromVersion < 24) {
-          const b = base as any
-          if (!b.sideBets) b.sideBets = []
-        }
-        if (fromVersion < 25) {
-          const b = base as any
-          if (!b.ctpTeamIds) b.ctpTeamIds = {}
-        }
-        if (fromVersion < 29) {
-          const b = base as any
-          if (!b.ctpMatchIds) b.ctpMatchIds = {}
-        }
-        if (fromVersion < 31) {
-          // Clear matches + teamScores unconditionally — Supabase is authoritative
-          // and will re-populate the correct year's data on initial fetch. This
-          // runs for any device still on v29 OR v30 (which only cleared when year
-          // > 2026, missing the default year:2026 case).
-          const b = base as any
-          b.matches = []
-          b.teamScores = []
-        }
-        if (fromVersion < 27) {
-          // Reset any active side bets with missing acceptances back to pending
-          // so the acceptance flow is enforced for pre-feature bets
-          const b = base as any
-          if (b.sideBets) {
-            b.sideBets = b.sideBets.map((bet: any) => {
-              if (bet.status !== 'active') return bet
-              const acceptances = bet.acceptances ?? {}
-              const allAccepted = (bet.participants ?? []).every((p: any) => acceptances[p.playerId] === 'accepted')
-              if (allAccepted) return bet
-              return { ...bet, status: 'pending' }
-            })
-          }
-        }
         if (fromVersion < 22) {
           // Remove duplicate HIO and CTP donation records created by pre-fix Sync/Add-player behavior
           const b = base as any
@@ -1126,6 +1103,45 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           }
           if (b.hioDonations) b.hioDonations = dedupDonations(b.hioDonations)
           if (b.ctpDonations) b.ctpDonations = dedupDonations(b.ctpDonations)
+        }
+        if (fromVersion < 23) {
+          const b = base as any
+          if (!b.lodgingConfig) b.lodgingConfig = DEFAULT_LODGING_CONFIG
+        }
+        if (fromVersion < 24) {
+          const b = base as any
+          if (!b.sideBets) b.sideBets = []
+        }
+        if (fromVersion < 25) {
+          const b = base as any
+          if (!b.ctpTeamIds) b.ctpTeamIds = {}
+        }
+        if (fromVersion < 27) {
+          // Reset any active side bets with missing acceptances back to pending
+          // so the acceptance flow is enforced for pre-feature bets
+          const b = base as any
+          if (b.sideBets) {
+            b.sideBets = b.sideBets.map((bet: any) => {
+              if (bet.status !== 'active') return bet
+              const acceptances = bet.acceptances ?? {}
+              const allAccepted = (bet.participants ?? []).every((p: any) => acceptances[p.playerId] === 'accepted')
+              if (allAccepted) return bet
+              return { ...bet, status: 'pending' }
+            })
+          }
+        }
+        if (fromVersion < 29) {
+          const b = base as any
+          if (!b.ctpMatchIds) b.ctpMatchIds = {}
+        }
+        if (fromVersion < 31) {
+          // Clear matches + teamScores unconditionally — Supabase is authoritative
+          // and will re-populate the correct year's data on initial fetch. This
+          // runs for any device still on v29 OR v30 (which only cleared when year
+          // > 2026, missing the default year:2026 case).
+          const b = base as any
+          b.matches = []
+          b.teamScores = []
         }
         return base as TournamentState
       },

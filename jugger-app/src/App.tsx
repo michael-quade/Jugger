@@ -1,33 +1,36 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useSupabaseSync } from './hooks/useSupabaseSync'
 import Dashboard from './pages/Dashboard'
-import Teams from './pages/Teams'
-import Courses from './pages/Courses'
-import CourseHistory from './pages/CourseHistory'
-import Stats from './pages/Stats'
-import Analytics from './pages/Analytics'
-import FileArchive from './pages/FileArchive'
-import Schedule from './pages/Schedule'
-import Pairings from './pages/Pairings'
-import ScorecardView from './pages/ScorecardView'
-import Results from './pages/Results'
-import HoleInOne from './pages/HoleInOne'
-import PrintAll from './pages/PrintAll'
-import SkidmoreHdcp from './pages/SkidmoreHdcp'
-import RoundGames from './pages/RoundGames'
-import CtpPage from './pages/CtpPage'
-import Lodging from './pages/Lodging'
-import MessageBoard from './pages/MessageBoard'
-import MessageBoardThread from './pages/MessageBoardThread'
-import SideBets from './pages/SideBets'
-import SideBetCreate from './pages/SideBetCreate'
-import SideBetDetail from './pages/SideBetDetail'
-// --- MOBILE SCORING FEATURE (remove this import + the route below to revert) ---
-import MobileScoring from './pages/MobileScoring'
+
+// Lazy-loaded pages — each becomes its own JS chunk at build time.
+// Dashboard stays eager so the initial route renders without delay.
+const Teams           = lazy(() => import('./pages/Teams'))
+const Courses         = lazy(() => import('./pages/Courses'))
+const CourseHistory   = lazy(() => import('./pages/CourseHistory'))
+const Stats           = lazy(() => import('./pages/Stats'))
+const Analytics       = lazy(() => import('./pages/Analytics'))
+const FileArchive     = lazy(() => import('./pages/FileArchive'))
+const Schedule        = lazy(() => import('./pages/Schedule'))
+const Pairings        = lazy(() => import('./pages/Pairings'))
+const ScorecardView   = lazy(() => import('./pages/ScorecardView'))
+const Results         = lazy(() => import('./pages/Results'))
+const HoleInOne       = lazy(() => import('./pages/HoleInOne'))
+const PrintAll        = lazy(() => import('./pages/PrintAll'))
+const SkidmoreHdcp    = lazy(() => import('./pages/SkidmoreHdcp'))
+const RoundGames      = lazy(() => import('./pages/RoundGames'))
+const CtpPage         = lazy(() => import('./pages/CtpPage'))
+const Lodging         = lazy(() => import('./pages/Lodging'))
+const MessageBoard    = lazy(() => import('./pages/MessageBoard'))
+const MessageBoardThread = lazy(() => import('./pages/MessageBoardThread'))
+const SideBets        = lazy(() => import('./pages/SideBets'))
+const SideBetCreate   = lazy(() => import('./pages/SideBetCreate'))
+const SideBetDetail   = lazy(() => import('./pages/SideBetDetail'))
+// --- MOBILE SCORING FEATURE (remove this lazy + the route below to revert) ---
+const MobileScoring   = lazy(() => import('./pages/MobileScoring'))
 // --- END MOBILE SCORING ---
-import Summary from './pages/Summary'
+const Summary         = lazy(() => import('./pages/Summary'))
 import { useTournamentStore } from './store/useTournamentStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hashPassword, DEFAULT_PASSWORD, generateUsername } from './utils/auth'
@@ -130,6 +133,12 @@ export default function App() {
   }, [teams])
 
   return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f5f5f0' }}>
+        <div style={{ width: 32, height: 32, border: '3px solid #e8f0ec', borderTopColor: '#006747', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    }>
     <Routes>
       {/* --- MOBILE SCORING FEATURE (remove this route + import above to revert) --- */}
       <Route path="/scorecards/:matchId/mobile" element={<MobileScoring />} />
@@ -161,5 +170,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </Suspense>
   )
 }

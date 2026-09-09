@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { Match, Team, Course, RoundConfig, Player } from '../types'
 import { getPlayerCourseHdcp, getStrokeDots, tournamentHdcp, getPlayOrderHoles } from '../utils/handicap'
 import { getPlayerName } from '../utils/pairings'
@@ -22,16 +23,15 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
   const scrPct = Math.round(gc.texasScrambleHdcpPct * 100)
   const ccPct  = Math.round(gc.captainsChoiceHdcpPct * 100)
   const minTees = gc.captainsChoiceMinTeeBalls
-  const formatLabel: Record<string, string> = {
+  const formatLabel = useMemo<Record<string, string>>(() => ({
     team_match_play:  'Team Match Play · Two vs Two · Best Ball Net',
     points_round:     `Points Round · Gross Stableford · Bogey=${gc.stablefordBogey} Par=${gc.stablefordPar} Birdie=${gc.stablefordBirdie} Eagle=${gc.stablefordEagle} Albatross=${gc.stablefordAlbatross} · Closest to Quota wins`,
     texas_scramble:   `Texas Scramble · ${scrPct}% HDCP · Best 1/2/3/4 balls by hole range`,
     individual_match: 'Individual Match Play · Net Scoring · Each match = 1pt',
     captains_choice:  `Captain's Choice · ${ccPct}% Team HDCP${minTees > 0 ? ` · Min ${minTees} tee balls per player` : ''}`,
     vegas:            `Vegas · Net Two-Digit Numbers · Birdie=${gc.vegasBirdieMultiplier}× Eagle=${gc.vegasEagleMultiplier}× Albatross=${gc.vegasAlbatrossMultiplier}×`,
-  }
+  }), [gc.stablefordBogey, gc.stablefordPar, gc.stablefordBirdie, gc.stablefordEagle, gc.stablefordAlbatross, scrPct, ccPct, minTees, gc.vegasBirdieMultiplier, gc.vegasEagleMultiplier, gc.vegasAlbatrossMultiplier])
 
-  const allPlayers = teams.flatMap(t => t.players)
   const teeData = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
 
   const allPlayerIds = [
@@ -39,29 +39,33 @@ export default function ScorecardCard({ match, teams, course, config, interactiv
     ...match.twosome2.playerIds,
   ]
 
-  // Use all 12 tournament players for minIndex netting
-  const playerHdcps: Record<string, number> = {}
-  allPlayerIds.forEach(pid => {
-    const player = allPlayers.find(p => p.id === pid)
-    if (player) {
-      playerHdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPlayers, config.format)
+  // Memoized: HDCPs depend on player indices, course, and config — not on scores.
+  // Using player ID strings as deps avoids false invalidation when the match object
+  // gets a new reference due to a score update.
+  const t1ids = match.twosome1.playerIds.join(',')
+  const t2ids = match.twosome2.playerIds.join(',')
+  const playerHdcps = useMemo<Record<string, number>>(() => {
+    const allPl = teams.flatMap(t => t.players)
+    const ids = [...match.twosome1.playerIds, ...match.twosome2.playerIds]
+    const hdcps: Record<string, number> = {}
+    ids.forEach(pid => {
+      const player = allPl.find(p => p.id === pid)
+      if (player) hdcps[pid] = getPlayerCourseHdcp(player, course, config.tee, config.round, allPl, config.format)
+    })
+    // R5: all 4 players share a single team HDCP = round(Σ individual HDCPs × captainsChoicePct)
+    if (config.format === 'captains_choice') {
+      const td = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
+      const minIdx = allPl.length > 0 ? Math.min(...allPl.map(p => p.handicapIndex)) : 0
+      const r5Sum = ids
+        .map(pid => allPl.find(p => p.id === pid))
+        .filter((p): p is Player => !!p)
+        .reduce((s, p) => s + tournamentHdcp(p.handicapIndex, td.slope ?? 113, td.rating ?? course.par, course.par, minIdx, false), 0)
+      const teamHdcp = Math.round(r5Sum * gc.captainsChoiceHdcpPct)
+      ids.forEach(pid => { hdcps[pid] = teamHdcp })
     }
-  })
-
-  // R5 (Captain's Choice): all 4 match players share the team HDCP = round(Σ individual R5 HDCPs × 15%)
-  if (config.format === 'captains_choice') {
-    const teeData = course.tees.find(t => t.name === config.tee) ?? course.tees[0]
-    const minIndex = allPlayers.length > 0 ? Math.min(...allPlayers.map(p => p.handicapIndex)) : 0
-    const matchPlayerList = allPlayerIds
-      .map(pid => allPlayers.find(p => p.id === pid))
-      .filter((p): p is Player => !!p)
-    const r5Sum = matchPlayerList.reduce(
-      (s, p) => s + tournamentHdcp(p.handicapIndex, teeData.slope ?? 113, teeData.rating ?? course.par, course.par, minIndex, false),
-      0,
-    )
-    const teamHdcp = Math.round(r5Sum * gc.captainsChoiceHdcpPct)
-    allPlayerIds.forEach(pid => { playerHdcps[pid] = teamHdcp })
-  }
+    return hdcps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t1ids, t2ids, teams, course, config.tee, config.round, config.format, gc.captainsChoiceHdcpPct])
 
   // Holes in play order — for split-tee starts (startingHole=10) this reorders
   // the array so computations and table columns both follow the actual play sequence.

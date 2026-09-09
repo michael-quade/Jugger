@@ -93,9 +93,12 @@ export default function Analytics() {
 
   const liveTeams = isViewingHistory ? (liveCache?.teams ?? teams) : teams
 
-  const courseHistoryTyped: CourseLike[] = courseHistory
+  // Memoized so the 6 analytics useMemos that depend on it don't invalidate on every render.
+  const courseHistoryTyped = useMemo<CourseLike[]>(() => courseHistory
     .filter(c => Array.isArray(c.holes) && c.holes.length > 0 && c.par != null && Array.isArray(c.tees) && c.tees.length > 0)
-    .map(c => ({ id: c.id, name: c.name, par: c.par!, tees: c.tees!, holes: c.holes! }))
+    .map(c => ({ id: c.id, name: c.name, par: c.par!, tees: c.tees!, holes: c.holes! })),
+    [courseHistory]
+  )
 
   // Build unified year bundles (archived + live)
   const bundles = useMemo((): YearBundle[] => {

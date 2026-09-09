@@ -143,4 +143,17 @@ export default defineConfig({
     }),
   ],
   server:  { port: 5173, open: true },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Recharts pulls in several d3 packages — keep them together
+          // in a single chunk so they don't get duplicated across lazy pages.
+          if (id.includes('recharts') || id.includes('node_modules/d3-') || id.includes('node_modules/victory-')) {
+            return 'recharts'
+          }
+        },
+      },
+    },
+  },
 })
