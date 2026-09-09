@@ -49,7 +49,7 @@ export default function App() {
   // Bootstrap default quade admin on first load
   useEffect(() => {
     if (admins.length === 0) {
-      hashPassword('8675309#').then(hash => {
+      hashPassword(import.meta.env.VITE_ADMIN_BOOTSTRAP_PASSWORD ?? '8675309#').then(hash => {
         addAdmin({ username: 'quade', passwordHash: hash })
       })
     }

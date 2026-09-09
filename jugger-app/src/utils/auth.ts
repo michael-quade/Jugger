@@ -1,4 +1,4 @@
-export const DEFAULT_PASSWORD = '123456789!'
+export const DEFAULT_PASSWORD = import.meta.env.VITE_DEFAULT_PLAYER_PASSWORD ?? '123456789!'
 
 // Pure-JS SHA-256 fallback for environments where crypto.subtle is unavailable
 // (e.g. iOS in-app browsers opened from iMessage/email). Produces identical
