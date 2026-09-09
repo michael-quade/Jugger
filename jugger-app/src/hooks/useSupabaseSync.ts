@@ -103,6 +103,31 @@ export function useSupabaseSync() {
       }
     }
 
+    // Merge CTP entries: for each entry, winner fields from `authoritative` win
+    // over `base` when they carry data. Used to recover winner data that was only
+    // saved to the old year's Supabase row before finalization rolled the year.
+    function mergeCtpEntries(
+      base: import('../types').CtpEntry[],
+      authoritative: import('../types').CtpEntry[],
+    ): import('../types').CtpEntry[] {
+      const authById = new Map(authoritative.map(e => [e.id, e]))
+      const merged = base.map(e => {
+        const a = authById.get(e.id)
+        if (!a) return e
+        return {
+          ...e,
+          winnerName:        a.winnerName        ?? e.winnerName,
+          winnerPaid:        a.winnerPaid        ?? e.winnerPaid,
+          donatedToHio:      a.donatedToHio      ?? e.donatedToHio,
+          hioDonationAmount: a.hioDonationAmount ?? e.hioDonationAmount,
+        }
+      })
+      for (const a of authoritative) {
+        if (!base.find(e => e.id === a.id)) merged.push(a)
+      }
+      return merged
+    }
+
     function applyMatch(match: Match) {
       if (useTournamentStore.getState().isViewingHistory) return
       if (match.id && useTournamentStore.getState().year !== currentYear) return
@@ -275,6 +300,30 @@ export function useSupabaseSync() {
             .eq('tournament_year', currentYear).eq('team_id', score.teamId).eq('round', score.round)
             .then(({ error }) => { if (error) console.error('[supabase] team_score delete:', error.message) })
         }
+      }
+
+      // When year increments (finalizeYear just ran), fetch the old year's ctpEntries
+      // from Supabase and merge winner data into the store before the outbound push.
+      // Without this, a device whose ctpEntries were stubs at finalization time would
+      // overwrite the winner data in the new year's row.
+      if (newState.year > (prevState.year ?? 0)) {
+        const prevYear = prevState.year
+        ;(async () => {
+          const { data } = await db.from('app_state')
+            .select('state').eq('id', `jugger-${prevYear}`).maybeSingle()
+          const raw = (data?.state as any)?.ctpEntries
+          if (!raw) return
+          const remoteEntries: import('../types').CtpEntry[] = Array.isArray(raw)
+            ? raw : (typeof raw === 'string' ? JSON.parse(raw) : [])
+          if (remoteEntries.length === 0) return
+          const current = useTournamentStore.getState().ctpEntries
+          const merged = mergeCtpEntries(current, remoteEntries)
+          if (merged === current) return
+          remoteDepth++
+          useTournamentStore.setState({ ctpEntries: merged })
+          prevState = useTournamentStore.getState()
+          remoteDepth--
+        })().catch(err => console.error('[supabase] ctp merge on finalize:', err))
       }
 
       // Debounce app state (teams, configs, etc.) — changes are infrequent
