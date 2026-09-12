@@ -929,11 +929,14 @@ export const useTournamentStore = create<TournamentState & Actions>()(
       // archivedYears and liveCache are fetched from Supabase on load.
       // Base64 image/photo data is synced via APP_STATE_KEYS and restored
       // on first Supabase fetch, so stripping it here prevents quota exhaustion.
+      // isViewingHistory is excluded so a page refresh always starts at the live
+      // year; year is saved as liveYear when in history mode for the same reason.
       partialize: (state) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { archivedYears: _ay, liveCache: _lc, ...rest } = state
+        const { archivedYears: _ay, liveCache: _lc, isViewingHistory: _ih, ...rest } = state
         return {
           ...rest,
+          year: state.isViewingHistory ? state.liveYear : state.year,
           courses: rest.courses.map(({ imageData: _i, scorecardImageData: _s, ...c }) => c),
           courseHistory: rest.courseHistory.map(({ imageData: _i, scorecardImageData: _s, ...c }) => c),
           holeInOnes: rest.holeInOnes.map(({ photoData: _p, ...h }) => h),
