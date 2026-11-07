@@ -11,6 +11,7 @@ export interface Player {
   originalName?: string
   originalHandicapIndex?: number
   originalGhinNumber?: string
+  originalPlayerEmail?: string
   isPermanentReplacement?: boolean
   replacedPlayerName?: string
 }

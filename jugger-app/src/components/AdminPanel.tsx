@@ -36,6 +36,7 @@ export default function AdminPanel({ onClose }: Props) {
   // Add-account forms
   const [newEmail,  setNewEmail]  = useState('')
   const [newName,   setNewName]   = useState('')
+  const [newPlayerId, setNewPlayerId] = useState('')
   const [addingAccount, setAddingAccount] = useState(false)
   const [addError, setAddError] = useState('')
   const [addNotice, setAddNotice] = useState('')
@@ -48,7 +49,7 @@ export default function AdminPanel({ onClose }: Props) {
   const [editEmailFor, setEditEmailFor] = useState<string | null>(null)
   const [editEmailVal, setEditEmailVal] = useState('')
 
-  const allPlayers = teams.flatMap(t => t.players)
+  const allPlayers = teams.flatMap(t => t.players.map(p => ({ ...p, teamId: t.id, teamName: t.name })))
 
   const loadProfiles = useCallback(async () => {
     if (!supabase) return
@@ -63,6 +64,23 @@ export default function AdminPanel({ onClose }: Props) {
   }, [])
 
   useEffect(() => { loadProfiles() }, [loadProfiles])
+
+  // A substitute's roster slot can hold two accounts: the sub and the benched original.
+  type LinkOption = { key: string; playerId: string; isSub: boolean; label: string; player: typeof allPlayers[number] }
+  const linkOptions: LinkOption[] = allPlayers.flatMap(p => {
+    const current = { key: `${p.id}|cur`, playerId: p.id, isSub: !!p.isSubstitute, player: p,
+      label: `${p.name} · ${p.teamName}${p.isSubstitute ? ' (SUB)' : ''}` }
+    if (!p.isSubstitute) return [current]
+    return [current, { key: `${p.id}|orig`, playerId: p.id, isSub: false, player: p,
+      label: `${p.originalName ?? 'Original player'} · ${p.teamName} (benched)` }]
+  })
+  const openLinkOptions = linkOptions.filter(o =>
+    !profiles.some(pr => pr.player_id === o.playerId && pr.is_sub_account === o.isSub))
+
+  // True when this account belongs to whoever currently plays in the roster slot.
+  function isActiveLink(profile: Profile, player: { isSubstitute?: boolean }) {
+    return profile.is_sub_account === !!player.isSubstitute
+  }
 
   const playerAccounts = profiles.filter(p => p.role === 'player')
   const adminAccounts  = profiles.filter(p => p.role === 'admin')
@@ -89,11 +107,22 @@ export default function AdminPanel({ onClose }: Props) {
     const email = newEmail.trim().toLowerCase()
     if (!email) return
     setAddingAccount(true); setAddError('')
-    const result = await callEdge({ action: 'invite', email, displayName: newName.trim() || undefined, role })
+    const opt = linkOptions.find(o => o.key === newPlayerId)
+    const result = await callEdge({
+      action: 'invite',
+      email,
+      displayName: newName.trim() || undefined,
+      role,
+      playerId: opt?.playerId,
+      isSubAccount: opt?.isSub ?? false,
+    })
     setAddingAccount(false)
     if (result.error) { setAddError(result.error); return }
+    if (opt && opt.isSub === !!opt.player.isSubstitute && !opt.player.playerEmail) {
+      updatePlayer(opt.player.teamId, opt.playerId, { playerEmail: email })
+    }
     setAddNotice(`Added ${email}. They sign in at juggerknockerinvitational.com with that email and a 6-digit code.`)
-    setNewEmail(''); setNewName(''); setAddSection(null)
+    setNewEmail(''); setNewName(''); setNewPlayerId(''); setAddSection(null)
     await loadProfiles()
   }
 
@@ -124,12 +153,60 @@ export default function AdminPanel({ onClose }: Props) {
     setProfiles(ps => ps.map(p => p.id === profile.id ? { ...p, can_treasure: newVal } : p))
   }
 
+  async function setLink(profile: Profile, optKey: string | null) {
+    if (!supabase) return
+    const opt = optKey ? linkOptions.find(o => o.key === optKey) : undefined
+    const patch = { player_id: opt?.playerId ?? null, is_sub_account: opt?.isSub ?? false }
+    setWorking(w => ({ ...w, [profile.id]: 'link' }))
+    const { error: err } = await supabase.from('profiles').update(patch).eq('id', profile.id)
+    setWorking(w => { const n = { ...w }; delete n[profile.id]; return n })
+    if (err) { alert(err.message); return }
+    setProfiles(ps => ps.map(p => p.id === profile.id ? { ...p, ...patch } : p))
+    if (opt && opt.isSub === !!opt.player.isSubstitute && !opt.player.playerEmail) {
+      updatePlayer(opt.player.teamId, opt.playerId, { playerEmail: profile.email })
+    }
+  }
+
+  function RosterLink({ profile }: { profile: Profile }) {
+    const linked = allPlayers.find(p => p.id === profile.player_id)
+    if (linked) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-masters-light text-masters-dark">
+          Roster: {isActiveLink(profile, linked)
+            ? linked.name
+            : profile.is_sub_account
+              ? 'former sub'
+              : `${linked.originalName ?? linked.name} (benched)`} · {linked.teamName}
+          <button
+            onClick={() => setLink(profile, null)}
+            disabled={!!working[profile.id]}
+            title="Unlink from roster"
+            className="text-gray-400 hover:text-red-500"
+          >
+            <X size={10} />
+          </button>
+        </span>
+      )
+    }
+    return (
+      <select
+        className="input text-[11px] py-0.5 px-1 w-auto"
+        value=""
+        disabled={!!working[profile.id]}
+        onChange={e => e.target.value && setLink(profile, e.target.value)}
+      >
+        <option value="">Link to roster…</option>
+        {openLinkOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+      </select>
+    )
+  }
+
   function handleSaveEmail(profile: Profile) {
     const pid = profile.player_id
     if (!pid) return
-    const team = teams.find(t => t.players.some(p => p.id === pid))
-    if (!team) return
-    updatePlayer(team.id, pid, { playerEmail: editEmailVal.trim() || undefined })
+    const rosterPlayer = allPlayers.find(p => p.id === pid)
+    if (!rosterPlayer) return
+    updatePlayer(rosterPlayer.teamId, pid, { playerEmail: editEmailVal.trim() || undefined })
     setEditEmailFor(null)
   }
 
@@ -137,6 +214,7 @@ export default function AdminPanel({ onClose }: Props) {
     const busy = !!working[profile.id]
     const linkedPlayer = allPlayers.find(p => p.id === profile.player_id)
     const playerEmail = linkedPlayer?.playerEmail
+    const canEditGroupEmail = !!linkedPlayer && isActiveLink(profile, linkedPlayer)
 
     return (
       <div className="border-b last:border-0 pb-2 last:pb-0 pt-2">
@@ -147,6 +225,7 @@ export default function AdminPanel({ onClose }: Props) {
           {profile.is_sub_account && (
             <span className="badge bg-amber-100 text-amber-700 text-[10px]">SUB</span>
           )}
+          {RosterLink({ profile })}
         </div>
         {/* Row 2: actions */}
         <div className="flex flex-wrap gap-1.5 items-center">
@@ -175,7 +254,7 @@ export default function AdminPanel({ onClose }: Props) {
             Treasurer
           </button>
           {/* Email edit for group compose */}
-          {profile.player_id && (
+          {canEditGroupEmail && (
             editEmailFor === profile.id ? (
               <div className="flex items-center gap-1">
                 <input
@@ -191,11 +270,11 @@ export default function AdminPanel({ onClose }: Props) {
             ) : (
               <button
                 onClick={() => { setEditEmailFor(profile.id); setEditEmailVal(playerEmail ?? '') }}
-                title="Set email for group compose"
+                title="Email used for Group Email (separate from sign-in email)"
                 className="flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors"
               >
                 <Mail size={11} />
-                {playerEmail ? 'Edit email' : 'Set email'}
+                {playerEmail ? 'Group email' : 'Set group email'}
               </button>
             )
           )}
@@ -222,6 +301,7 @@ export default function AdminPanel({ onClose }: Props) {
         <div className="flex-1 min-w-0">
           <span className="text-sm font-medium text-masters-dark">{profile.display_name || profile.username}</span>
           <span className="text-xs text-gray-400 ml-2 truncate">{profile.email}</span>
+          <div className="mt-1">{RosterLink({ profile })}</div>
         </div>
         {!isSelf && (
           <button
@@ -242,6 +322,30 @@ export default function AdminPanel({ onClose }: Props) {
       <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
         <p className="text-xs font-semibold text-gray-600 mb-2">Add {label}</p>
         <div className="space-y-2">
+          {role !== 'scorer' && (
+            <div>
+              <label className="label">Roster player <span className="text-gray-400 font-normal">(optional)</span></label>
+              <select
+                className="input w-full text-sm"
+                value={newPlayerId}
+                onChange={e => {
+                  const key = e.target.value
+                  setNewPlayerId(key)
+                  const opt = linkOptions.find(o => o.key === key)
+                  if (opt) {
+                    const active = opt.isSub === !!opt.player.isSubstitute
+                    setNewName(active ? opt.player.name : (opt.player.originalName ?? opt.player.name))
+                    const email = active ? opt.player.playerEmail : opt.player.originalPlayerEmail
+                    if (email) setNewEmail(email)
+                  }
+                  setAddError('')
+                }}
+              >
+                <option value="">Not on the roster</option>
+                {openLinkOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="label">Email</label>
             <input
@@ -271,7 +375,7 @@ export default function AdminPanel({ onClose }: Props) {
               <Send size={12} />
               {addingAccount ? 'Adding…' : 'Add Account'}
             </button>
-            <button onClick={() => { setAddSection(null); setAddError('') }} className="btn-ghost text-sm">Cancel</button>
+            <button onClick={() => { setAddSection(null); setAddError(''); setNewPlayerId('') }} className="btn-ghost text-sm">Cancel</button>
           </div>
         </div>
       </div>
@@ -324,7 +428,7 @@ export default function AdminPanel({ onClose }: Props) {
               ? AddForm({ role: 'player', label: 'Player' })
               : (
                 <button
-                  onClick={() => { setAddSection('player'); setAddNotice('') }}
+                  onClick={() => { setAddSection('player'); setAddNotice(''); setNewPlayerId(''); setNewEmail(''); setNewName('') }}
                   className="mt-2 flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark transition-colors"
                 >
                   <Plus size={13} /> Add Player Account
@@ -347,7 +451,7 @@ export default function AdminPanel({ onClose }: Props) {
               ? AddForm({ role: 'admin', label: 'Admin' })
               : (
                 <button
-                  onClick={() => { setAddSection('admin'); setAddNotice('') }}
+                  onClick={() => { setAddSection('admin'); setAddNotice(''); setNewPlayerId(''); setNewEmail(''); setNewName('') }}
                   className="mt-2 flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark transition-colors"
                 >
                   <Plus size={13} /> Add Admin Account
@@ -370,7 +474,7 @@ export default function AdminPanel({ onClose }: Props) {
               ? AddForm({ role: 'scorer', label: 'Scorer' })
               : (
                 <button
-                  onClick={() => { setAddSection('scorer'); setAddNotice('') }}
+                  onClick={() => { setAddSection('scorer'); setAddNotice(''); setNewPlayerId(''); setNewEmail(''); setNewName('') }}
                   className="mt-2 flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark transition-colors"
                 >
                   <Plus size={13} /> Add Scorer Account

@@ -285,6 +285,8 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   originalName: p.isSubstitute ? p.originalName : p.name,
                   originalHandicapIndex: p.isSubstitute ? p.originalHandicapIndex : p.handicapIndex,
                   originalGhinNumber: p.isSubstitute ? p.originalGhinNumber : p.ghinNumber,
+                  playerEmail: undefined,
+                  originalPlayerEmail: p.isSubstitute ? p.originalPlayerEmail : p.playerEmail,
                 }
               ),
             }
@@ -302,10 +304,12 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   name: p.originalName ?? p.name,
                   handicapIndex: p.originalHandicapIndex ?? p.handicapIndex,
                   ghinNumber: p.originalGhinNumber,
+                  playerEmail: p.originalPlayerEmail,
                   isSubstitute: false,
                   originalName: undefined,
                   originalHandicapIndex: undefined,
                   originalGhinNumber: undefined,
+                  originalPlayerEmail: undefined,
                 }
               ),
             }
@@ -324,11 +328,14 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   name: newName,
                   handicapIndex: newHdcp,
                   ghinNumber: newGhin ?? undefined,
+                  playerEmail: undefined,
                   isPermanentReplacement: true,
                   replacedPlayerName: p.replacedPlayerName ?? p.name,
                   isSubstitute: false,
                   originalName: undefined,
                   originalHandicapIndex: undefined,
+                  originalGhinNumber: undefined,
+                  originalPlayerEmail: undefined,
                 }
               ),
             }
@@ -349,6 +356,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                   originalName: undefined,
                   originalHandicapIndex: undefined,
                   originalGhinNumber: undefined,
+                  originalPlayerEmail: undefined,
                 }
               ),
             }
@@ -843,7 +851,18 @@ export const useTournamentStore = create<TournamentState & Actions>()(
                 }
                 if (p.isSubstitute) {
                   // Single-year sub: revert to original player for next year's template
-                  return { ...p, name: p.originalName!, handicapIndex: p.originalHandicapIndex!, isSubstitute: false, originalName: undefined, originalHandicapIndex: undefined }
+                  return {
+                    ...p,
+                    name: p.originalName!,
+                    handicapIndex: p.originalHandicapIndex!,
+                    ghinNumber: p.originalGhinNumber,
+                    playerEmail: p.originalPlayerEmail,
+                    isSubstitute: false,
+                    originalName: undefined,
+                    originalHandicapIndex: undefined,
+                    originalGhinNumber: undefined,
+                    originalPlayerEmail: undefined,
+                  }
                 }
                 return p
               }),
