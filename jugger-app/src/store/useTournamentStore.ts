@@ -924,7 +924,7 @@ export const useTournamentStore = create<TournamentState & Actions>()(
     }),
     {
       name: 'jugger-tournament-2026',
-      version: 31,
+      version: 32,
       // Keep localStorage lean: exclude large blobs that live in Supabase.
       // archivedYears and liveCache are fetched from Supabase on load.
       // Base64 image/photo data is synced via APP_STATE_KEYS and restored
@@ -1145,6 +1145,12 @@ export const useTournamentStore = create<TournamentState & Actions>()(
           const b = base as any
           b.matches = []
           b.teamScores = []
+        }
+        if (fromVersion < 32) {
+          // Auth moved to Supabase Auth + profiles table; admins[] is no longer
+          // synced or used. Clear it from persisted state on all devices.
+          const b = base as any
+          b.admins = []
         }
         return base as TournamentState
       },

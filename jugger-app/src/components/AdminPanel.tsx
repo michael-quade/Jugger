@@ -1,53 +1,131 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTournamentStore } from '../store/useTournamentStore'
 import { useAuthStore } from '../store/useAuthStore'
-import { hashPassword, DEFAULT_PASSWORD } from '../utils/auth'
+import { supabase } from '../lib/supabase'
 import {
-  X, Plus, Trash2, KeyRound, Eye, EyeOff, Shield, ClipboardList,
-  Users, RotateCcw, ClipboardCheck, ClipboardX, Wallet, Mail,
+  X, Plus, Trash2, Shield, ClipboardList,
+  Users, Mail, Send, RefreshCw, ClipboardCheck, ClipboardX, Wallet,
 } from 'lucide-react'
-import type { AdminCredential } from '../types'
 import ComposeEmailModal from './ComposeEmailModal'
 
 interface Props {
   onClose: () => void
 }
 
+interface Profile {
+  id: string
+  email: string
+  username: string
+  display_name: string | null
+  role: 'admin' | 'scorer' | 'player' | 'treasurer'
+  can_score: boolean
+  can_treasure: boolean
+  player_id: string | null
+  is_sub_account: boolean
+  created_at: string
+}
+
 export default function AdminPanel({ onClose }: Props) {
-  const { admins, addAdmin, removeAdmin, updateAdmin, promotePlayerToScorer, demotePlayerFromScorer, promotePlayerToTreasurer, demotePlayerFromTreasurer, resetPlayerPassword, teams, updatePlayer } = useTournamentStore()
+  const { teams, updatePlayer } = useTournamentStore()
   const { currentAdmin } = useAuthStore()
 
-  const adminAccounts  = admins.filter(a => !a.role || a.role === 'admin')
-  const scorerAccounts = admins.filter(a => a.role === 'scorer')
-  const playerAccounts = admins.filter(a => a.role === 'player')
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState('')
 
-  // Shared change-password state (only one row open at a time)
-  const [changePwFor, setChangePwFor] = useState<string | null>(null)
-  const [changePwVal, setChangePwVal] = useState('')
-  const [showChangePw, setShowChangePw] = useState(false)
-  const [saving, setSaving] = useState(false)
+  // Add-account forms
+  const [newEmail,  setNewEmail]  = useState('')
+  const [newName,   setNewName]   = useState('')
+  const [addingAccount, setAddingAccount] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [addNotice, setAddNotice] = useState('')
+  const [addSection, setAddSection] = useState<'player' | 'admin' | 'scorer' | null>(null)
 
-  // Admin add form
-  const [newAdminUser, setNewAdminUser] = useState('')
-  const [newAdminPw,   setNewAdminPw]   = useState('')
-  const [showAdminPw,  setShowAdminPw]  = useState(false)
-  const [addingAdmin,  setAddingAdmin]  = useState(false)
+  // Per-row working state
+  const [working, setWorking] = useState<Record<string, string>>({})  // profileId → action string
 
-  // Scorer add form
-  const [newScorerUser, setNewScorerUser] = useState('')
-  const [newScorerPw,   setNewScorerPw]   = useState('')
-  const [showScorerPw,  setShowScorerPw]  = useState(false)
-  const [addingScorer,  setAddingScorer]  = useState(false)
-
-  const [resettingPw, setResettingPw] = useState<string | null>(null)
-  const [showCompose, setShowCompose] = useState(false)
+  const [showCompose,  setShowCompose]  = useState(false)
   const [editEmailFor, setEditEmailFor] = useState<string | null>(null)
   const [editEmailVal, setEditEmailVal] = useState('')
 
   const allPlayers = teams.flatMap(t => t.players)
 
-  function handleSaveEmail(cred: AdminCredential) {
-    const pid = cred.playerId ?? (cred.subForPlayerId)
+  const loadProfiles = useCallback(async () => {
+    if (!supabase) return
+    setLoading(true)
+    const { data, error: err } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at')
+    setLoading(false)
+    if (err) { setError(err.message); return }
+    setProfiles((data ?? []) as Profile[])
+  }, [])
+
+  useEffect(() => { loadProfiles() }, [loadProfiles])
+
+  const playerAccounts = profiles.filter(p => p.role === 'player')
+  const adminAccounts  = profiles.filter(p => p.role === 'admin')
+  const scorerAccounts = profiles.filter(p => p.role === 'scorer')
+
+  async function callEdge(body: Record<string, unknown>): Promise<{ error?: string }> {
+    if (!supabase) return { error: 'Not connected' }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { error: 'Not authenticated' }
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    return json
+  }
+
+  async function handleInvite(role: 'player' | 'admin' | 'scorer') {
+    const email = newEmail.trim().toLowerCase()
+    if (!email) return
+    setAddingAccount(true); setAddError('')
+    const result = await callEdge({ action: 'invite', email, displayName: newName.trim() || undefined, role })
+    setAddingAccount(false)
+    if (result.error) { setAddError(result.error); return }
+    setAddNotice(`Added ${email}. They sign in at juggerknockerinvitational.com with that email and a 6-digit code.`)
+    setNewEmail(''); setNewName(''); setAddSection(null)
+    await loadProfiles()
+  }
+
+  async function handleDelete(profile: Profile) {
+    if (!confirm(`Delete account for ${profile.display_name || profile.email}? This cannot be undone.`)) return
+    setWorking(w => ({ ...w, [profile.id]: 'delete' }))
+    const result = await callEdge({ action: 'delete', userId: profile.id })
+    if (result.error) { alert(result.error) }
+    setWorking(w => { const n = { ...w }; delete n[profile.id]; return n })
+    await loadProfiles()
+  }
+
+  async function toggleScorer(profile: Profile) {
+    if (!supabase) return
+    const newVal = !profile.can_score
+    setWorking(w => ({ ...w, [profile.id]: 'scorer' }))
+    await supabase.from('profiles').update({ can_score: newVal }).eq('id', profile.id)
+    setWorking(w => { const n = { ...w }; delete n[profile.id]; return n })
+    setProfiles(ps => ps.map(p => p.id === profile.id ? { ...p, can_score: newVal } : p))
+  }
+
+  async function toggleTreasurer(profile: Profile) {
+    if (!supabase) return
+    const newVal = !profile.can_treasure
+    setWorking(w => ({ ...w, [profile.id]: 'treasurer' }))
+    await supabase.from('profiles').update({ can_treasure: newVal }).eq('id', profile.id)
+    setWorking(w => { const n = { ...w }; delete n[profile.id]; return n })
+    setProfiles(ps => ps.map(p => p.id === profile.id ? { ...p, can_treasure: newVal } : p))
+  }
+
+  function handleSaveEmail(profile: Profile) {
+    const pid = profile.player_id
     if (!pid) return
     const team = teams.find(t => t.players.some(p => p.id === pid))
     if (!team) return
@@ -55,185 +133,147 @@ export default function AdminPanel({ onClose }: Props) {
     setEditEmailFor(null)
   }
 
-  async function handleAdd(username: string, password: string, role: AdminCredential['role'],
-    setAdding: (v: boolean) => void, resetForm: () => void) {
-    if (!username.trim() || !password) return
-    if (admins.some(a => a.username.toLowerCase() === username.trim().toLowerCase())) return
-    setAdding(true)
-    const hash = await hashPassword(password)
-    addAdmin({ username: username.trim(), passwordHash: hash, role })
-    resetForm()
-    setAdding(false)
+  function PlayerRow({ profile }: { profile: Profile }) {
+    const busy = !!working[profile.id]
+    const linkedPlayer = allPlayers.find(p => p.id === profile.player_id)
+    const playerEmail = linkedPlayer?.playerEmail
+
+    return (
+      <div className="border-b last:border-0 pb-2 last:pb-0 pt-2">
+        {/* Row 1: identity */}
+        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+          <span className="text-sm font-semibold text-masters-dark">{profile.display_name || profile.username}</span>
+          <span className="text-xs text-gray-400">{profile.email}</span>
+          {profile.is_sub_account && (
+            <span className="badge bg-amber-100 text-amber-700 text-[10px]">SUB</span>
+          )}
+        </div>
+        {/* Row 2: actions */}
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <button
+            onClick={() => toggleScorer(profile)}
+            disabled={busy}
+            className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors ${
+              profile.can_score
+                ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {profile.can_score ? <ClipboardCheck size={11} /> : <ClipboardX size={11} />}
+            Scorer
+          </button>
+          <button
+            onClick={() => toggleTreasurer(profile)}
+            disabled={busy}
+            className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors ${
+              profile.can_treasure
+                ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+                : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <Wallet size={11} />
+            Treasurer
+          </button>
+          {/* Email edit for group compose */}
+          {profile.player_id && (
+            editEmailFor === profile.id ? (
+              <div className="flex items-center gap-1">
+                <input
+                  className="input text-xs py-0.5 w-40"
+                  placeholder="player@email.com"
+                  value={editEmailVal}
+                  onChange={e => setEditEmailVal(e.target.value)}
+                  autoFocus
+                />
+                <button onClick={() => handleSaveEmail(profile)} className="btn-primary text-xs py-0.5 px-2">Save</button>
+                <button onClick={() => setEditEmailFor(null)} className="btn-ghost text-xs py-0.5 px-1">×</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setEditEmailFor(profile.id); setEditEmailVal(playerEmail ?? '') }}
+                title="Set email for group compose"
+                className="flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                <Mail size={11} />
+                {playerEmail ? 'Edit email' : 'Set email'}
+              </button>
+            )
+          )}
+          <button
+            onClick={() => handleDelete(profile)}
+            disabled={busy}
+            title="Delete account"
+            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors ml-auto"
+          >
+            <Trash2 size={11} />
+            {working[profile.id] === 'delete' ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </div>
+    )
   }
 
-  async function handleChangePassword(username: string) {
-    if (!changePwVal) return
-    setSaving(true)
-    const hash = await hashPassword(changePwVal)
-    updateAdmin(username, { passwordHash: hash })
-    setChangePwFor(null)
-    setChangePwVal('')
-    setSaving(false)
-  }
+  function AdminRow({ profile }: { profile: Profile }) {
+    const busy = !!working[profile.id]
+    const isSelf = profile.display_name === currentAdmin || profile.username === currentAdmin
 
-  async function handleResetPlayerPassword(username: string) {
-    setResettingPw(username)
-    const hash = await hashPassword(DEFAULT_PASSWORD)
-    resetPlayerPassword(username, hash)
-    setResettingPw(null)
-  }
-
-  function openChangePw(username: string) {
-    setChangePwFor(username)
-    setChangePwVal('')
-    setShowChangePw(false)
-  }
-
-  function CredentialRow({ cred }: { cred: AdminCredential }) {
     return (
       <div className="flex items-center gap-2 py-2 border-b last:border-0">
-        <span className="flex-1 text-sm font-medium text-masters-dark">{cred.username}</span>
-        {changePwFor === cred.username ? (
-          <div className="flex items-center gap-1">
-            <div className="relative">
-              <input
-                className="input w-32 pr-7 text-xs"
-                type={showChangePw ? 'text' : 'password'}
-                placeholder="New password"
-                value={changePwVal}
-                onChange={e => setChangePwVal(e.target.value)}
-                autoFocus
-              />
-              <button
-                type="button"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400"
-                onClick={() => setShowChangePw(v => !v)}
-                tabIndex={-1}
-              >
-                {showChangePw ? <EyeOff size={11} /> : <Eye size={11} />}
-              </button>
-            </div>
-            <button
-              className="btn-primary text-xs py-1"
-              disabled={!changePwVal || saving}
-              onClick={() => handleChangePassword(cred.username)}
-            >
-              {saving ? '…' : 'Save'}
-            </button>
-            <button className="btn-ghost text-xs py-1" onClick={() => setChangePwFor(null)}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1">
-            <button
-              className="btn-ghost text-xs flex items-center gap-1"
-              onClick={() => openChangePw(cred.username)}
-            >
-              <KeyRound size={12} /> Change PW
-            </button>
-            <button
-              className="text-red-400 hover:text-red-600 p-1 rounded transition-colors disabled:opacity-30"
-              title="Remove account"
-              disabled={cred.username === currentAdmin}
-              onClick={() => removeAdmin(cred.username)}
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium text-masters-dark">{profile.display_name || profile.username}</span>
+          <span className="text-xs text-gray-400 ml-2 truncate">{profile.email}</span>
+        </div>
+        {!isSelf && (
+          <button
+            onClick={() => handleDelete(profile)}
+            disabled={busy}
+            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={11} />
+            {working[profile.id] === 'delete' ? '…' : 'Delete'}
+          </button>
         )}
       </div>
     )
   }
 
-  function PlayerRow({ cred }: { cred: AdminCredential }) {
+  function AddForm({ role, label }: { role: 'player' | 'admin' | 'scorer'; label: string }) {
     return (
-      <div className="py-2.5 border-b last:border-0 space-y-1.5">
-        {/* Row 1: name + username + badges — wraps cleanly, no collision with buttons */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm font-medium text-masters-dark leading-tight">
-            {cred.displayName ?? cred.username}
-          </span>
-          <span className="text-xs text-gray-400">({cred.username})</span>
-          {cred.isSubAccount && (
-            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded px-1.5 py-0.5 leading-none">
-              SUB
-            </span>
-          )}
-          {cred.isDefaultPassword && (
-            <span className="text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 leading-none">
-              PW: {DEFAULT_PASSWORD}
-            </span>
-          )}
-        </div>
-        {/* Row 2: action buttons — consistent pill style, state shown by color + icon */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition-colors ${
-              cred.canScore
-                ? 'text-masters-green border-masters-green/40 bg-green-50 hover:text-red-500 hover:border-red-300 hover:bg-red-50'
-                : 'text-gray-400 border-gray-200 hover:text-masters-green hover:border-masters-green/40'
-            }`}
-            title={cred.canScore ? 'Revoke scorer rights' : 'Grant scorer rights'}
-            onClick={() => cred.canScore ? demotePlayerFromScorer(cred.username) : promotePlayerToScorer(cred.username)}
-          >
-            {cred.canScore ? <ClipboardX size={11} /> : <ClipboardCheck size={11} />}
-            Scorer{cred.canScore ? ' ✓' : ''}
-          </button>
-          <button
-            className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition-colors ${
-              cred.canTreasure
-                ? 'text-amber-600 border-amber-300 bg-amber-50 hover:text-red-500 hover:border-red-300 hover:bg-red-50'
-                : 'text-gray-400 border-gray-200 hover:text-amber-600 hover:border-amber-300'
-            }`}
-            title={cred.canTreasure ? 'Revoke treasurer rights' : 'Grant treasurer rights — can mark CTP and HIO payments as paid'}
-            onClick={() => cred.canTreasure ? demotePlayerFromTreasurer(cred.username) : promotePlayerToTreasurer(cred.username)}
-          >
-            <Wallet size={11} />
-            Treasurer{cred.canTreasure ? ' ✓' : ''}
-          </button>
-          <button
-            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-gray-200 text-gray-400 hover:text-masters-dark hover:border-gray-400 transition-colors ml-auto"
-            title="Reset to default password"
-            disabled={resettingPw === cred.username}
-            onClick={() => handleResetPlayerPassword(cred.username)}
-          >
-            <RotateCcw size={11} />
-            Reset PW
-          </button>
-        </div>
-        {/* Row 3: email field */}
-        {(() => {
-          const pid = cred.playerId ?? cred.subForPlayerId
-          const player = pid ? allPlayers.find(p => p.id === pid) : null
-          const currentEmail = player?.playerEmail ?? ''
-          if (editEmailFor === cred.username) {
-            return (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <input
-                  type="email"
-                  className="input text-xs flex-1 py-0.5"
-                  placeholder="Email address"
-                  value={editEmailVal}
-                  onChange={e => setEditEmailVal(e.target.value)}
-                  autoFocus
-                />
-                <button className="btn-primary text-xs py-1" onClick={() => handleSaveEmail(cred)}>Save</button>
-                <button className="btn-ghost text-xs py-1" onClick={() => setEditEmailFor(null)}>Cancel</button>
-              </div>
-            )
-          }
-          return (
+      <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <p className="text-xs font-semibold text-gray-600 mb-2">Add {label}</p>
+        <div className="space-y-2">
+          <div>
+            <label className="label">Email</label>
+            <input
+              className="input w-full text-sm"
+              type="email"
+              placeholder="golfer@email.com"
+              value={newEmail}
+              onChange={e => { setNewEmail(e.target.value); setAddError('') }}
+            />
+          </div>
+          <div>
+            <label className="label">Display Name <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input
+              className="input w-full text-sm"
+              placeholder="First Last"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+            />
+          </div>
+          {addError && <p className="text-red-500 text-xs">{addError}</p>}
+          <div className="flex gap-2">
             <button
-              className="text-[10px] text-gray-400 hover:text-masters-green transition-colors flex items-center gap-1 mt-0.5"
-              onClick={() => { setEditEmailFor(cred.username); setEditEmailVal(currentEmail) }}
+              onClick={() => handleInvite(role)}
+              disabled={addingAccount || !newEmail.trim()}
+              className="btn-primary text-sm flex items-center gap-1 flex-1"
             >
-              {currentEmail
-                ? <span className="truncate max-w-[200px]">✉ {currentEmail}</span>
-                : <span>+ Add email</span>}
+              <Send size={12} />
+              {addingAccount ? 'Adding…' : 'Add Account'}
             </button>
-          )
-        })()}
+            <button onClick={() => { setAddSection(null); setAddError('') }} className="btn-ghost text-sm">Cancel</button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -241,148 +281,115 @@ export default function AdminPanel({ onClose }: Props) {
   return (
     <>
     {showCompose && <ComposeEmailModal teams={teams} onClose={() => setShowCompose(false)} />}
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
-          <h2 className="font-serif font-bold text-lg text-masters-dark">Manage Accounts</h2>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center gap-2">
+            <Shield size={18} className="text-masters-green" />
+            <h2 className="font-semibold text-masters-dark">Manage Accounts</h2>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowCompose(true)}
-              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded px-2.5 py-1.5 transition-colors"
-              title="Send email to all players"
+              className="flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark transition-colors"
             >
-              <Mail size={12} /> Send Group Email
+              <Mail size={13} />
+              <span className="hidden sm:inline">Group Email</span>
             </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
               <X size={18} />
             </button>
           </div>
         </div>
 
-        <div className="p-5 space-y-6">
-          {/* Players section */}
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Users size={14} className="text-blue-500" />
-              <h3 className="text-sm font-bold text-masters-dark uppercase tracking-wide">Players</h3>
-            </div>
-            <p className="text-xs text-gray-400 mb-2">
-              Auto-created from roster. Subs labeled <span className="font-bold text-amber-700">SUB</span> — grant scorer rights individually. Default password shown until changed.
-            </p>
-            <div className="space-y-0">
-              {playerAccounts.length === 0 && (
-                <p className="text-sm text-gray-400 py-2">No player accounts yet.</p>
-              )}
-              {playerAccounts.map(a => <PlayerRow key={a.username} cred={a} />)}
-            </div>
-          </div>
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-5">
+          {error && <p className="text-red-500 text-sm bg-red-50 p-2 rounded">{error}</p>}
+          {addNotice && <p className="text-green-700 text-sm bg-green-50 p-2 rounded">{addNotice}</p>}
+          {loading && <p className="text-gray-400 text-sm text-center py-4">Loading accounts…</p>}
 
-          {/* Admins section */}
-          <div>
+          {/* ── Players ─────────────────────────────────────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-2">
+              <Users size={14} className="text-masters-green" />
+              <h3 className="section-header text-sm">Players</h3>
+              <span className="text-xs text-gray-400 ml-auto">{playerAccounts.length} accounts</span>
+            </div>
+            {playerAccounts.length === 0 && !loading && (
+              <p className="text-gray-400 text-xs py-2">No player accounts yet.</p>
+            )}
+            {playerAccounts.map(p => <div key={p.id}>{PlayerRow({ profile: p })}</div>)}
+            {addSection === 'player'
+              ? AddForm({ role: 'player', label: 'Player' })
+              : (
+                <button
+                  onClick={() => { setAddSection('player'); setAddNotice('') }}
+                  className="mt-2 flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark transition-colors"
+                >
+                  <Plus size={13} /> Add Player Account
+                </button>
+              )
+            }
+          </section>
+
+          {/* ── Admins ──────────────────────────────────────────────────────── */}
+          <section>
             <div className="flex items-center gap-2 mb-2">
               <Shield size={14} className="text-masters-green" />
-              <h3 className="text-sm font-bold text-masters-dark uppercase tracking-wide">Admins</h3>
+              <h3 className="section-header text-sm">Admins</h3>
             </div>
-            <div className="space-y-0">
-              {adminAccounts.length === 0 && (
-                <p className="text-sm text-gray-400 py-2">No admins configured.</p>
-              )}
-              {adminAccounts.map(a => <CredentialRow key={a.username} cred={a} />)}
-            </div>
-            <form
-              className="space-y-2 pt-3 mt-2 border-t"
-              onSubmit={e => { e.preventDefault(); handleAdd(newAdminUser, newAdminPw, 'admin', setAddingAdmin, () => { setNewAdminUser(''); setNewAdminPw('') }) }}
-            >
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add Admin</p>
-              <div className="flex gap-2 flex-wrap">
-                <input
-                  className="input flex-1 min-w-28"
-                  placeholder="Username"
-                  value={newAdminUser}
-                  onChange={e => setNewAdminUser(e.target.value)}
-                />
-                <div className="relative">
-                  <input
-                    className="input w-36 pr-7"
-                    type={showAdminPw ? 'text' : 'password'}
-                    placeholder="Password"
-                    value={newAdminPw}
-                    onChange={e => setNewAdminPw(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                    onClick={() => setShowAdminPw(v => !v)}
-                    tabIndex={-1}
-                  >
-                    {showAdminPw ? <EyeOff size={12} /> : <Eye size={12} />}
-                  </button>
-                </div>
+            {adminAccounts.length === 0 && !loading && (
+              <p className="text-gray-400 text-xs py-2">No admin accounts.</p>
+            )}
+            {adminAccounts.map(p => <div key={p.id}>{AdminRow({ profile: p })}</div>)}
+            {addSection === 'admin'
+              ? AddForm({ role: 'admin', label: 'Admin' })
+              : (
                 <button
-                  type="submit"
-                  className="btn-primary flex items-center gap-1"
-                  disabled={addingAdmin || !newAdminUser.trim() || !newAdminPw}
+                  onClick={() => { setAddSection('admin'); setAddNotice('') }}
+                  className="mt-2 flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark transition-colors"
                 >
-                  <Plus size={14} />
-                  {addingAdmin ? 'Adding…' : 'Add'}
+                  <Plus size={13} /> Add Admin Account
                 </button>
-              </div>
-            </form>
-          </div>
+              )
+            }
+          </section>
 
-          {/* Scorers section */}
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <ClipboardList size={14} className="text-masters-gold" />
-              <h3 className="text-sm font-bold text-masters-dark uppercase tracking-wide">Scorers</h3>
+          {/* ── Scorers ─────────────────────────────────────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardList size={14} className="text-masters-green" />
+              <h3 className="section-header text-sm">Scorers</h3>
             </div>
-            <p className="text-xs text-gray-400 mb-2">Standalone scorer accounts (non-player volunteers).</p>
-            <div className="space-y-0">
-              {scorerAccounts.length === 0 && (
-                <p className="text-sm text-gray-400 py-2">No scorer accounts yet.</p>
-              )}
-              {scorerAccounts.map(a => <CredentialRow key={a.username} cred={a} />)}
-            </div>
-            <form
-              className="space-y-2 pt-3 mt-2 border-t"
-              onSubmit={e => { e.preventDefault(); handleAdd(newScorerUser, newScorerPw, 'scorer', setAddingScorer, () => { setNewScorerUser(''); setNewScorerPw('') }) }}
-            >
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add Scorer</p>
-              <div className="flex gap-2 flex-wrap">
-                <input
-                  className="input flex-1 min-w-28"
-                  placeholder="Username"
-                  value={newScorerUser}
-                  onChange={e => setNewScorerUser(e.target.value)}
-                />
-                <div className="relative">
-                  <input
-                    className="input w-36 pr-7"
-                    type={showScorerPw ? 'text' : 'password'}
-                    placeholder="Password"
-                    value={newScorerPw}
-                    onChange={e => setNewScorerPw(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                    onClick={() => setShowScorerPw(v => !v)}
-                    tabIndex={-1}
-                  >
-                    {showScorerPw ? <EyeOff size={12} /> : <Eye size={12} />}
-                  </button>
-                </div>
+            {scorerAccounts.length === 0 && !loading && (
+              <p className="text-gray-400 text-xs py-2">No scorer accounts.</p>
+            )}
+            {scorerAccounts.map(p => <div key={p.id}>{AdminRow({ profile: p })}</div>)}
+            {addSection === 'scorer'
+              ? AddForm({ role: 'scorer', label: 'Scorer' })
+              : (
                 <button
-                  type="submit"
-                  className="btn-primary flex items-center gap-1"
-                  disabled={addingScorer || !newScorerUser.trim() || !newScorerPw}
+                  onClick={() => { setAddSection('scorer'); setAddNotice('') }}
+                  className="mt-2 flex items-center gap-1 text-xs text-masters-green hover:text-masters-dark transition-colors"
                 >
-                  <Plus size={14} />
-                  {addingScorer ? 'Adding…' : 'Add'}
+                  <Plus size={13} /> Add Scorer Account
                 </button>
-              </div>
-            </form>
-          </div>
+              )
+            }
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t p-3 flex justify-between items-center">
+          <button
+            onClick={loadProfiles}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <RefreshCw size={12} />
+            Refresh
+          </button>
+          <button onClick={onClose} className="btn-secondary text-sm">Done</button>
         </div>
       </div>
     </div>

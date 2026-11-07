@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
+import AuthGate from './components/AuthGate'
 import { useSupabaseSync } from './hooks/useSupabaseSync'
 import Dashboard from './pages/Dashboard'
 
@@ -31,108 +32,16 @@ const SideBetDetail   = lazy(() => import('./pages/SideBetDetail'))
 const MobileScoring   = lazy(() => import('./pages/MobileScoring'))
 // --- END MOBILE SCORING ---
 const Summary         = lazy(() => import('./pages/Summary'))
-import { useTournamentStore } from './store/useTournamentStore'
-import { useAuthStore } from './store/useAuthStore'
-import { hashPassword, DEFAULT_PASSWORD, generateUsername } from './utils/auth'
+function SupabaseSync() {
+  useSupabaseSync()
+  return null
+}
 
 export default function App() {
-  const { admins, addAdmin, teams } = useTournamentStore()
-  const checkSessionTimeout = useAuthStore(s => s.checkSessionTimeout)
-  useSupabaseSync()
-
-  // Hard 12-hour session timeout — checked every minute
-  useEffect(() => {
-    const id = setInterval(checkSessionTimeout, 60_000)
-    return () => clearInterval(id)
-  }, [checkSessionTimeout])
-
-  // Bootstrap default quade admin on first load
-  useEffect(() => {
-    if (admins.length === 0) {
-      hashPassword(import.meta.env.VITE_ADMIN_BOOTSTRAP_PASSWORD ?? '8675309#').then(hash => {
-        addAdmin({ username: 'quade', passwordHash: hash })
-      })
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Auto-create player accounts for all roster members and active subs
-  useEffect(() => {
-    async function ensurePlayerAccounts() {
-      const { admins: currentAdmins, addAdmin: doAddAdmin } = useTournamentStore.getState()
-      const defaultHash = await hashPassword(DEFAULT_PASSWORD)
-
-      for (const team of teams) {
-        for (const player of team.players) {
-          if (player.isSubstitute) {
-            // Sub slot: create a temporary sub account if one doesn't exist
-            const hasSubAccount = currentAdmins.some(
-              a => a.subForPlayerId === player.id && a.isSubAccount
-            )
-            if (!hasSubAccount) {
-              const existing = useTournamentStore.getState().admins.map(a => a.username)
-              const username = generateUsername(player.name, existing)
-              doAddAdmin({
-                username,
-                passwordHash: defaultHash,
-                role: 'player',
-                canScore: false,
-                isDefaultPassword: true,
-                mustChangePassword: true,
-                subForPlayerId: player.id,
-                isSubAccount: true,
-                displayName: player.name,
-              })
-            }
-            // Also ensure the benched original player has a permanent account
-            const originalName = player.originalName
-            if (originalName) {
-              const hasOriginalAccount = useTournamentStore.getState().admins.some(
-                a => a.playerId === player.id && !a.isSubAccount
-              )
-              if (!hasOriginalAccount) {
-                const existing = useTournamentStore.getState().admins.map(a => a.username)
-                const username = generateUsername(originalName, existing)
-                doAddAdmin({
-                  username,
-                  passwordHash: defaultHash,
-                  role: 'player',
-                  canScore: false,
-                  isDefaultPassword: true,
-                  mustChangePassword: true,
-                  playerId: player.id,
-                  displayName: originalName,
-                })
-              }
-            }
-          } else {
-            // Regular or permanent-replacement slot: create account if none exists
-            const hasAccount = currentAdmins.some(
-              a => a.playerId === player.id && !a.isSubAccount
-            )
-            if (!hasAccount) {
-              const existing = useTournamentStore.getState().admins.map(a => a.username)
-              const username = generateUsername(player.name, existing)
-              doAddAdmin({
-                username,
-                passwordHash: defaultHash,
-                role: 'player',
-                canScore: false,
-                isDefaultPassword: true,
-                mustChangePassword: true,
-                playerId: player.id,
-                displayName: player.name,
-              })
-            }
-          }
-        }
-      }
-    }
-    ensurePlayerAccounts()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teams])
 
   return (
+    <AuthGate>
+    <SupabaseSync />
     <Suspense fallback={
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f5f5f0' }}>
         <div style={{ width: 32, height: 32, border: '3px solid #e8f0ec', borderTopColor: '#006747', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
@@ -171,5 +80,6 @@ export default function App() {
       </Route>
     </Routes>
     </Suspense>
+    </AuthGate>
   )
 }
