@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,23 @@ serve(async (req) => {
   }
 
   try {
+    // The public anon key also passes the gateway's JWT check, so require a real signed-in user.
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      {
+        auth: { persistSession: false },
+        global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+      }
+    )
+    const { data: { user } } = await userClient.auth.getUser()
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'Sign in to send email' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { subject, html, recipients, attachments } = await req.json()
 
     if (!subject || !html || !Array.isArray(recipients) || recipients.length === 0) {

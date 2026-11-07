@@ -19,12 +19,15 @@ jobs:
             exit 1
           fi
           echo "URL length: ${#SUPABASE_URL}, starts with: ${SUPABASE_URL:0:8}"
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "$SUPABASE_URL/rest/v1/" \
-            -H "apikey: $SUPABASE_KEY")
+          # Calls public.ping() — a real database query, and the one thing anon may still run.
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "$SUPABASE_URL/rest/v1/rpc/ping" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}')
           echo "Supabase responded with HTTP $HTTP_STATUS"
-          if [ "$HTTP_STATUS" = "000" ]; then
-            echo "Network failure — could not reach Supabase"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Ping failed"
             exit 1
           fi
           echo "Ping successful"
