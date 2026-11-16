@@ -2,7 +2,9 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: '0 12 * * MON'   # Monday noon UTC — well within the 7-day inactivity window
+    # Daily: GitHub often starts scheduled runs hours late, so a weekly run left
+    # gaps just over Supabase's 7-day pause threshold. Off-hour minute = less queueing.
+    - cron: '37 12 * * *'
   workflow_dispatch:          # Allow manual trigger
 
 jobs:
